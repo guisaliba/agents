@@ -59,8 +59,8 @@ OS: Linux and WSL2
 When the user asks to commit or finish work:
 
 - Use Conventional Commits.
+- Use Conventional Branches.
 - Keep commits atomic.
-- Use conventional branch names in kebab-case.
 - Do not mix unrelated edits in one commit.
 
 ## Constraints
