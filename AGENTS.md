@@ -127,4 +127,5 @@ These should be available in every coding-agent session when the harness support
 - rtk for shell/tool safety and command rewriting.
 - grill-me for requirement discovery.
 - grill-with-docs for requirement discovery grounded in repo docs.
+- find-skills for discovering installable skills.
 - tdd for red-green-refactor implementation.

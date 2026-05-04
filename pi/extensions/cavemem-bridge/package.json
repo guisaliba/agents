@@ -1,0 +1,9 @@
+{
+  "name": "pi-cavemem-bridge",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "typebox": "^1.0.0"
+  }
+}

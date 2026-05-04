@@ -1,0 +1,9 @@
+personality = "pragmatic"
+model = "gpt-5.5"
+sandbox_mode = "workspace-write"
+
+[features]
+shell_snapshot = true
+
+[windows]
+sandbox = "elevated"
