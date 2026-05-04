@@ -22,8 +22,6 @@
     "redactSecrets": true
   },
   "ides": {
-    "claude-code": true,
-    "cursor": true,
     "codex": true,
     "opencode": true
   }
