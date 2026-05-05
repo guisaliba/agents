@@ -22,6 +22,26 @@ Chezmoi materializes those files to:
 ~/.agents/skills/<skill-name>/
 ```
 
+Pi also has a Pi-local skill target for skills installed by the Skills CLI with `-a pi`:
+
+```text
+~/.pi/agent/skills/<skill-name>/
+```
+
+Those Pi-local managed skills are tracked under:
+
+```text
+chezmoi/dot_pi/agent/skills/<skill-name>/
+```
+
+## Skill visibility across agents
+
+Codex, OpenCode, and Pi all read the shared `~/.agents/skills` path in this setup, so a skill copied there is available to all three harnesses after their next reload/start, assuming the harness supports shared skill discovery.
+
+Agent-specific `npx skills add ... -a <agent>` commands may also write harness-specific metadata or locations. Use them when the Skills CLI supports the target agent and you want that agent's native installer behavior.
+
+For replication to other machines, commit the skill payload under `chezmoi/dot_agents/skills/` and, if Pi needs a Pi-local copy, under `chezmoi/dot_pi/agent/skills/`.
+
 ## Managed skills
 
 | Skill | Source | Purpose |
@@ -57,6 +77,6 @@ npx -y skills update -g
 npx -y skills remove <skill-name> -g -y
 ```
 
-After installing or updating a managed skill, copy the resulting skill directory into `chezmoi/dot_agents/skills/` so it is replicated on other machines.
+After installing or updating a managed skill, copy the resulting shared skill directory into `chezmoi/dot_agents/skills/` so it is replicated on other machines.
 
 The global AGENTS instructions expect agents to use these skills for requirement discovery, concise output, skill discovery, and TDD-oriented implementation.
