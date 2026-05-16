@@ -10,6 +10,7 @@ Pi uses:
 Managed integrations:
 
 * caveman through `pi-caveman`
+* caveman autostart through `~/.pi/agent/extensions/caveman-autostart`
 * rtk through a Pi extension that rewrites bash tool commands with `rtk rewrite`
 * cavemem through a Pi extension bridge that exposes custom tools backed by `cavemem mcp`
 

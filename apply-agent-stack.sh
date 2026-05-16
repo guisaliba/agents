@@ -102,6 +102,7 @@ data["skills"] = uniq(list(data.get("skills", [])) + [
     "~/.pi/agent/skills",
 ])
 data["extensions"] = uniq(list(data.get("extensions", [])) + [
+    "~/.pi/agent/extensions/caveman-autostart",
     "~/.pi/agent/extensions/rtk",
     "~/.pi/agent/extensions/cavemem-bridge",
 ])
@@ -151,13 +152,18 @@ backup_existing_targets() {
   for p in \
     "$HOME/.codex/AGENTS.md" \
     "$HOME/.codex/config.toml" \
+    "$HOME/.codex/hooks.json" \
     "$HOME/.config/opencode/AGENTS.md" \
+    "$HOME/.config/opencode/opencode.json" \
+    "$HOME/.config/opencode/commands" \
+    "$HOME/.config/opencode/plugins/caveman" \
     "$HOME/.config/opencode/.gitignore" \
     "$HOME/.config/opencode/bun.lock" \
     "$HOME/.config/opencode/package.json" \
     "$HOME/.opencode/AGENTS.md" \
     "$HOME/.opencode/plugins/rtk.ts" \
     "$HOME/.pi/agent/AGENTS.md" \
+    "$HOME/.pi/agent/extensions/caveman-autostart" \
     "$HOME/.pi/agent/settings.json"
   do
     backup_path_if_present "$p" "$backup"
@@ -210,6 +216,7 @@ write_chezmoi_source() {
 
   write_file "$CHEZMOI_SRC/dot_codex/AGENTS.md.tmpl" <<'EOF'
 {{ include ".chezmoitemplates/agents/AGENTS.md" }}
+@{{ .chezmoi.homeDir }}/.codex/RTK.md
 EOF
 
   write_file "$CHEZMOI_SRC/dot_config/opencode/AGENTS.md.tmpl" <<'EOF'
@@ -411,6 +418,19 @@ EOF
   done
 }
 
+write_pi_caveman_autostart_extension() {
+  log "Writing Pi caveman autostart extension"
+
+  local source="$DOTFILES_DIR/agents/pi/extensions/caveman-autostart"
+  local dst="$HOME/.pi/agent/extensions/caveman-autostart"
+  local src="$CHEZMOI_SRC/dot_pi/agent/extensions/caveman-autostart"
+
+  [[ -d "$source" ]] || die "Missing Pi caveman autostart extension source: $source"
+
+  copy_dir_clean "$source" "$dst"
+  copy_dir_clean "$source" "$src"
+}
+
 write_pi_cavemem_bridge_extension() {
   log "Writing Pi cavemem MCP bridge extension"
 
@@ -560,6 +580,7 @@ main() {
   install_external_tools
 
   write_pi_rtk_extension
+  write_pi_caveman_autostart_extension
   write_pi_cavemem_bridge_extension
   write_pi_settings
 
