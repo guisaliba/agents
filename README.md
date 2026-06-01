@@ -1,4 +1,3 @@
-
 # Agents
 
 This folder contains shared coding-agent configuration.
