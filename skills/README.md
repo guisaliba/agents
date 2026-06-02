@@ -51,7 +51,10 @@ For replication to other machines, commit the skill payload under `chezmoi/dot_a
 | `find-skills` | local dotfiles skill tracked at `chezmoi/dot_agents/skills/find-skills` | Discover and install skills from the open agent skills ecosystem. |
 | `grill-me` | `mattpocock/skills@productivity/grill-me` | Requirement discovery. |
 | `grill-with-docs` | `mattpocock/skills@engineering/grill-with-docs` | Requirement discovery grounded in repo docs. |
+| `handoff` | `mattpocock/skills@productivity/handoff` | Compact the conversation into a handoff document for the next agent. |
+| `prototype` | `mattpocock/skills@engineering/prototype` | Build a throwaway prototype (runnable app or toggleable UI variations) to flesh out a design before committing. |
 | `tdd` | `mattpocock/skills@engineering/tdd` | Red-green-refactor implementation workflow. |
+| `write-a-skill` | `mattpocock/skills@productivity/write-a-skill` | Author new agent skills with proper structure and progressive disclosure. |
 
 ## Installing skills
 
