@@ -29,6 +29,7 @@ COMMIT="${COMMIT:-0}"
 PUSH="${PUSH:-0}"
 CREATE_BRANCH="${CREATE_BRANCH:-0}"
 RTK_VERSION="${RTK_VERSION:-v0.38.0}"
+PLANNOTATOR_VERSION="${PLANNOTATOR_VERSION:-latest}"
 
 log() {
   printf '\n==> %s\n' "$*"
@@ -107,6 +108,17 @@ data["extensions"] = uniq(list(data.get("extensions", [])) + [
     "~/.pi/agent/extensions/cavemem-bridge",
 ])
 
+packages = list(data.get("packages", []))
+plannotator_pkg = {"source": "npm:@plannotator/pi-extension", "skills": []}
+has_plannotator = any(
+    (isinstance(p, dict) and p.get("source", "").startswith("npm:@plannotator/pi-extension"))
+    or (isinstance(p, str) and p.startswith("npm:@plannotator/pi-extension"))
+    for p in packages
+)
+if not has_plannotator:
+    packages.append(plannotator_pkg)
+data["packages"] = packages
+
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2)
     f.write("\n")
@@ -152,7 +164,9 @@ backup_existing_targets() {
   for p in \
     "$HOME/.codex/AGENTS.md" \
     "$HOME/.codex/config.toml" \
+    "$HOME/.codex/config.json" \
     "$HOME/.codex/hooks.json" \
+    "$HOME/.codex/skills" \
     "$HOME/.config/opencode/AGENTS.md" \
     "$HOME/.config/opencode/opencode.json" \
     "$HOME/.config/opencode/commands" \
@@ -164,7 +178,10 @@ backup_existing_targets() {
     "$HOME/.opencode/plugins/rtk.ts" \
     "$HOME/.pi/agent/AGENTS.md" \
     "$HOME/.pi/agent/extensions/caveman-autostart" \
-    "$HOME/.pi/agent/settings.json"
+    "$HOME/.pi/agent/settings.json" \
+    "$HOME/.agents/skills/plannotator-compound" \
+    "$HOME/.agents/skills/plannotator-setup-goal" \
+    "$HOME/.agents/skills/plannotator-visual-explainer"
   do
     backup_path_if_present "$p" "$backup"
   done
@@ -226,11 +243,6 @@ EOF
   write_file "$CHEZMOI_SRC/dot_pi/agent/AGENTS.md.tmpl" <<'EOF'
 {{ include ".chezmoitemplates/agents/AGENTS.md" }}
 EOF
-
-  if [[ -f "$DOTFILES_DIR/agents/codex/config.toml" ]]; then
-    mkdir -p "$CHEZMOI_SRC/dot_codex"
-    cp "$DOTFILES_DIR/agents/codex/config.toml" "$CHEZMOI_SRC/dot_codex/config.toml"
-  fi
 }
 
 materialize_agent_targets() {
@@ -242,8 +254,8 @@ materialize_agent_targets() {
   copy_file_replace_symlink "$DOTFILES_DIR/agents/AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
   copy_file_replace_symlink "$DOTFILES_DIR/agents/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"
 
-  if [[ -f "$DOTFILES_DIR/agents/codex/config.toml" ]]; then
-    copy_file_replace_symlink "$DOTFILES_DIR/agents/codex/config.toml" "$HOME/.codex/config.toml"
+  if [[ -f "$CHEZMOI_SRC/dot_codex/config.toml" ]]; then
+    copy_file_replace_symlink "$CHEZMOI_SRC/dot_codex/config.toml" "$HOME/.codex/config.toml"
   fi
 }
 
@@ -367,9 +379,95 @@ install_external_tools() {
 
   if have pi; then
     pi install git:github.com/v2nic/pi-caveman || warn "pi-caveman install failed"
+    pi install npm:@plannotator/pi-extension || warn "pi-plannotator install failed"
   else
     warn "pi not found. Pi-specific extension files will still be written."
   fi
+}
+
+install_plannotator_if_missing() {
+  log "Checking plannotator binary"
+
+  if have plannotator; then
+    log "plannotator already installed. Skipping installer."
+    return
+  fi
+
+  if [[ "$PLANNOTATOR_VERSION" == "latest" ]]; then
+    curl -fsSL https://plannotator.ai/install.sh | bash || warn "plannotator install failed"
+  else
+    curl -fsSL https://plannotator.ai/install.sh | bash -s -- --version "$PLANNOTATOR_VERSION" || warn "plannotator install failed"
+  fi
+
+  export PATH="$HOME/.local/bin:$PATH"
+
+  have plannotator || warn "plannotator install did not put plannotator on PATH"
+}
+
+install_plannotator_skills() {
+  log "Installing plannotator skills"
+
+  have git || die "git is required"
+  mkdir -p "$HOME/.agents/skills"
+  mkdir -p "$CHEZMOI_SRC/dot_agents/skills"
+  mkdir -p "$HOME/.codex/skills"
+  mkdir -p "$CHEZMOI_SRC/dot_codex/skills"
+
+  local tmp tmp_quoted
+  tmp="$(mktemp -d)"
+  printf -v tmp_quoted '%q' "$tmp"
+  trap "rm -rf $tmp_quoted" EXIT
+
+  local tag
+  if [[ "$PLANNOTATOR_VERSION" == "latest" ]]; then
+    tag="$(curl -fsSL "https://api.github.com/repos/backnotprop/plannotator/releases/latest" | grep '"tag_name"' | cut -d'"' -f4)"
+  else
+    case "$PLANNOTATOR_VERSION" in
+      v*) tag="$PLANNOTATOR_VERSION" ;;
+      *)  tag="v$PLANNOTATOR_VERSION" ;;
+    esac
+  fi
+
+  if [[ -z "$tag" ]]; then
+    warn "Could not resolve plannotator version tag. Skipping skills install."
+    rm -rf "$tmp"
+    trap - EXIT
+    return
+  fi
+
+  (
+    cd "$tmp"
+    git clone --depth 1 --filter=blob:none --sparse \
+      "https://github.com/backnotprop/plannotator.git" --branch "$tag" repo 2>/dev/null
+    cd repo
+    git sparse-checkout set apps/skills 2>/dev/null
+  ) || {
+    warn "plannotator skills clone failed"
+    rm -rf "$tmp"
+    trap - EXIT
+    return
+  }
+
+  for skill in plannotator-compound plannotator-setup-goal plannotator-visual-explainer; do
+    if [[ -d "$tmp/repo/apps/skills/$skill" ]]; then
+      copy_dir_clean "$tmp/repo/apps/skills/$skill" "$HOME/.agents/skills/$skill"
+      copy_dir_clean "$tmp/repo/apps/skills/$skill" "$CHEZMOI_SRC/dot_agents/skills/$skill"
+    else
+      warn "plannotator shared skill not found: $skill"
+    fi
+  done
+
+  for skill in plannotator-review plannotator-annotate plannotator-last; do
+    if [[ -d "$tmp/repo/apps/skills/$skill" ]]; then
+      copy_dir_clean "$tmp/repo/apps/skills/$skill" "$HOME/.codex/skills/$skill"
+      copy_dir_clean "$tmp/repo/apps/skills/$skill" "$CHEZMOI_SRC/dot_codex/skills/$skill"
+    else
+      warn "plannotator codex skill not found: $skill"
+    fi
+  done
+
+  rm -rf "$tmp"
+  trap - EXIT
 }
 
 write_pi_rtk_extension() {
@@ -574,15 +672,19 @@ main() {
   materialize_agent_targets
 
   install_chezmoi_if_missing
-  apply_chezmoi_source
+
+  install_plannotator_if_missing
 
   install_agent_skills
+  install_plannotator_skills
   install_external_tools
 
   write_pi_rtk_extension
   write_pi_caveman_autostart_extension
   write_pi_cavemem_bridge_extension
   write_pi_settings
+
+  apply_chezmoi_source
 
   write_docs
   invoke_pi_for_docs_and_bridge_review
