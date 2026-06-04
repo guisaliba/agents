@@ -71,6 +71,24 @@ rtk gain
 rtk <command>
 ```
 
+### Plannotator
+
+Plannotator is installed as the plan review and code review layer.
+
+* Binary: installed automatically when missing via the official installer. Pin with `PLANNOTATOR_VERSION=vX.Y.Z`.
+* Codex: `Stop` hook in `~/.codex/hooks.json` opens plan review UI. Command skills at `~/.codex/skills/plannotator-*`.
+* OpenCode: plugin `@plannotator/opencode@latest` in `~/.config/opencode/opencode.json`. Commands at `~/.config/opencode/commands/plannotator-*`.
+* Pi: package `npm:@plannotator/pi-extension` in `~/.pi/agent/settings.json`.
+* Shared skills: `plannotator-compound`, `plannotator-setup-goal`, `plannotator-visual-explainer` at `~/.agents/skills/`.
+
+Useful commands:
+
+```sh
+plannotator review [pr-url]
+plannotator annotate <file|url|folder>
+plannotator last
+```
+
 ## Apply
 
 From the repo root:

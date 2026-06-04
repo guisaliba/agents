@@ -52,6 +52,9 @@ For replication to other machines, commit the skill payload under `chezmoi/dot_a
 | `grill-me` | `mattpocock/skills@productivity/grill-me` | Requirement discovery. |
 | `grill-with-docs` | `mattpocock/skills@engineering/grill-with-docs` | Requirement discovery grounded in repo docs. |
 | `handoff` | `mattpocock/skills@productivity/handoff` | Compact the conversation into a handoff document for the next agent. |
+| `plannotator-compound` | `backnotprop/plannotator@apps/skills/plannotator-compound` | Analyze plan archive for denial patterns and produce an HTML dashboard report. |
+| `plannotator-setup-goal` | `backnotprop/plannotator@apps/skills/plannotator-setup-goal` | Turn an idea into a goal package through structured discovery and Plannotator review. |
+| `plannotator-visual-explainer` | `backnotprop/plannotator@apps/skills/plannotator-visual-explainer` | Generate self-contained HTML visualizations with Plannotator theming. |
 | `prototype` | `mattpocock/skills@engineering/prototype` | Build a throwaway prototype (runnable app or toggleable UI variations) to flesh out a design before committing. |
 | `tdd` | `mattpocock/skills@engineering/tdd` | Red-green-refactor implementation workflow. |
 | `write-a-skill` | `mattpocock/skills@productivity/write-a-skill` | Author new agent skills with proper structure and progressive disclosure. |
