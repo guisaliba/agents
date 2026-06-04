@@ -46,7 +46,7 @@ For replication to other machines, commit the skill payload under `chezmoi/dot_a
 
 | Skill | Source | Purpose |
 | --- | --- | --- |
-| `address-pr-review` | local dotfiles skill tracked at `chezmoi/dot_agents/skills/address-pr-review` | Work the post-open PR review loop: read unresolved reviewer (e.g. Copilot) comments, judge accept/reject, fix the valid ones, reply + resolve each thread citing the commit, then @-mention the reviewer for a re-review. |
+| `auto-pr-review` | local dotfiles skill tracked at `chezmoi/dot_agents/skills/auto-pr-review` | Work the post-open PR review loop: read unresolved reviewer (e.g. Copilot) comments, judge accept/reject, fix the valid ones, reply + resolve each thread citing the commit, then @-mention the reviewer for a re-review. |
 | `caveman` | `JuliusBrussee/caveman@caveman` | Concise agent output and token-efficient communication. |
 | `find-skills` | local dotfiles skill tracked at `chezmoi/dot_agents/skills/find-skills` | Discover and install skills from the open agent skills ecosystem. |
 | `grill-me` | `mattpocock/skills@productivity/grill-me` | Requirement discovery. |
