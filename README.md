@@ -13,48 +13,6 @@ This folder contains shared coding-agent configuration.
 
 ## Runtime Wiring
 
-### Caveman
-
-Caveman ultra is enabled by default in the canonical global instructions. Harness-specific lifecycle wiring reinforces it where supported:
-
-* Codex: `SessionStart` hook in `~/.codex/hooks.json`.
-* OpenCode: native plugin in `~/.config/opencode/plugins/caveman/`.
-* Pi: local extension in `~/.pi/agent/extensions/caveman-autostart/`.
-
-The default mode is also set for caveman-native integrations:
-
-```json
-{ "defaultMode": "ultra" }
-```
-
-Live path: `~/.config/caveman/config.json`.
-
-Useful commands:
-
-```sh
-/caveman ultra
-/caveman full
-stop caveman
-```
-
-### Cavemem
-
-Cavemem is installed as a shared memory layer.
-
-* Codex: MCP server registered in `~/.codex/config.json`.
-* OpenCode: MCP server registered in `~/.opencode/config.json`.
-* Pi: custom tools registered by `~/.pi/agent/extensions/cavemem-bridge/`.
-
-The embedding worker is configured with `autoStart: true`. `cavemem status` may show the worker stopped before first use; it starts on demand from hooks, MCP use, or viewer/search activity.
-
-Useful commands:
-
-```sh
-cavemem status
-cavemem search "query"
-cavemem viewer
-```
-
 ### RTK
 
 RTK is installed as the shell/tool-output compaction layer.

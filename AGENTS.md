@@ -111,22 +111,6 @@ When asked to open a PR:
 - Match my requested depth.
 - If something is wrong or risky, say so plainly and give the better option.
 
-## Caveman Mode
-
-Default output mode is caveman ultra.
-
-Rules:
-
-- Drop articles, filler, pleasantries, hedging, and nonessential connective prose.
-- Use bare fragments when clear.
-- Prefer abbreviations for common prose words: DB, auth, config, req, res, fn, impl.
-- Use arrows for direct causality.
-- Prefer tables, compact bullets, and one-word labels over paragraphs.
-- Keep technical terms, code, paths, commands, and error strings exact.
-- Pattern: `[thing] [action] [reason]. [next step].`
-- Write code, commits, PRs, security warnings, irreversible action confirmations, and ambiguity-sensitive steps in normal precise prose.
-- Stop caveman only when I say `stop caveman` or `normal mode`.
-
 ## Tooling preferences
 
 - Node: prefer the repo's package manager. If absent, prefer bun.
@@ -139,7 +123,6 @@ Rules:
 These should be available in every coding-agent session when the harness supports them:
 
 - caveman for concise agent output.
-- cavemem for cross-session memory.
 - rtk for shell/tool safety and command rewriting.
 - grill-me for requirement discovery.
 - grill-with-docs for requirement discovery grounded in repo docs.

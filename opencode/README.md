@@ -9,9 +9,6 @@ OpenCode uses:
 
 Managed integrations:
 
-* caveman via `npx skills add JuliusBrussee/caveman -g -a opencode -s caveman -y --copy`
-* caveman autostart via native OpenCode plugin at `~/.config/opencode/plugins/caveman/`
-* cavemem via tracked MCP config in `opencode.json`
 * rtk via `rtk init -g --opencode`
 * plannotator via plugin `@plannotator/opencode@latest` and commands at `~/.config/opencode/commands/plannotator-*`
 

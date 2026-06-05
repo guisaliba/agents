@@ -103,9 +103,7 @@ data["skills"] = uniq(list(data.get("skills", [])) + [
     "~/.pi/agent/skills",
 ])
 data["extensions"] = uniq(list(data.get("extensions", [])) + [
-    "~/.pi/agent/extensions/caveman-autostart",
     "~/.pi/agent/extensions/rtk",
-    "~/.pi/agent/extensions/cavemem-bridge",
 ])
 
 packages = list(data.get("packages", []))
@@ -178,6 +176,7 @@ backup_existing_targets() {
     "$HOME/.opencode/plugins/rtk.ts" \
     "$HOME/.pi/agent/AGENTS.md" \
     "$HOME/.pi/agent/extensions/caveman-autostart" \
+    "$HOME/.pi/agent/extensions/cavemem-bridge" \
     "$HOME/.pi/agent/settings.json" \
     "$HOME/.agents/skills/plannotator-compound" \
     "$HOME/.agents/skills/plannotator-setup-goal" \
@@ -320,44 +319,16 @@ install_agent_skills() {
 }
 
 install_external_tools() {
-  log "Installing cavemem, caveman, and rtk integrations where supported"
+  log "Installing rtk and plannotator integrations where supported"
 
   if have npm; then
-    if have cavemem; then
-      log "cavemem already available. Skipping global npm install."
-    else
-      mkdir -p "$HOME/.local"
-      npm install -g --prefix "$HOME/.local" cavemem || warn "Failed to install cavemem globally"
-      export PATH="$HOME/.local/bin:$PATH"
-    fi
-  else
-    warn "npm not found. Skipping npm-based installs: cavemem and caveman skills installer."
-  fi
-
-  if have cavemem; then
-    cavemem install --ide codex || warn "cavemem codex install failed"
-    cavemem install --ide opencode || warn "cavemem opencode install failed"
-    cavemem doctor || true
-    cavemem status || true
-  else
-    warn "cavemem not found. Skipping cavemem IDE wiring."
-  fi
-
-  if have npm; then
-    npx -y skills add JuliusBrussee/caveman -g -a codex -s caveman -y --copy || warn "caveman codex install failed"
-    npx -y skills add JuliusBrussee/caveman -g -a opencode -s caveman -y --copy || warn "caveman opencode install failed"
-
     if [[ -d "$CHEZMOI_SRC/dot_agents/skills/find-skills" ]]; then
       npx -y skills add "$CHEZMOI_SRC/dot_agents/skills/find-skills" -g -a codex -s find-skills -y --copy || warn "find-skills codex install failed"
       npx -y skills add "$CHEZMOI_SRC/dot_agents/skills/find-skills" -g -a opencode -s find-skills -y --copy || warn "find-skills opencode install failed"
       npx -y skills add "$CHEZMOI_SRC/dot_agents/skills/find-skills" -g -a pi -s find-skills -y --copy || warn "find-skills pi install failed"
     fi
-
-    if [[ -d "$HOME/.agents/skills/caveman" ]]; then
-      copy_dir_clean "$HOME/.agents/skills/caveman" "$CHEZMOI_SRC/dot_agents/skills/caveman"
-    else
-      warn "caveman skill was not found under ~/.agents/skills after install"
-    fi
+  else
+    warn "npm not found. Skipping npm-based skill installs."
   fi
 
   if ! have rtk; then
@@ -378,7 +349,6 @@ install_external_tools() {
   fi
 
   if have pi; then
-    pi install git:github.com/v2nic/pi-caveman || warn "pi-caveman install failed"
     pi install npm:@plannotator/pi-extension || warn "pi-plannotator install failed"
   else
     warn "pi not found. Pi-specific extension files will still be written."
@@ -516,38 +486,6 @@ EOF
   done
 }
 
-write_pi_caveman_autostart_extension() {
-  log "Writing Pi caveman autostart extension"
-
-  local source="$DOTFILES_DIR/agents/pi/extensions/caveman-autostart"
-  local dst="$HOME/.pi/agent/extensions/caveman-autostart"
-  local src="$CHEZMOI_SRC/dot_pi/agent/extensions/caveman-autostart"
-
-  [[ -d "$source" ]] || die "Missing Pi caveman autostart extension source: $source"
-
-  copy_dir_clean "$source" "$dst"
-  copy_dir_clean "$source" "$src"
-}
-
-write_pi_cavemem_bridge_extension() {
-  log "Writing Pi cavemem MCP bridge extension"
-
-  local source="$DOTFILES_DIR/agents/pi/extensions/cavemem-bridge"
-  local dst="$HOME/.pi/agent/extensions/cavemem-bridge"
-  local src="$CHEZMOI_SRC/dot_pi/agent/extensions/cavemem-bridge"
-
-  [[ -d "$source" ]] || die "Missing Pi cavemem bridge extension source: $source"
-
-  copy_dir_clean "$source" "$dst"
-  copy_dir_clean "$source" "$src"
-
-  if have npm; then
-    (cd "$dst" && npm install --omit=dev) || warn "npm install failed for Pi cavemem bridge"
-  else
-    warn "npm not found. Pi cavemem bridge dependency install skipped."
-  fi
-}
-
 write_pi_settings() {
   log "Updating Pi settings"
   json_update_pi_settings
@@ -585,7 +523,7 @@ invoke_pi_for_docs_and_bridge_review() {
     return
   fi
 
-  log "Invoking Pi to review docs and Pi cavemem bridge"
+  log "Invoking Pi to review docs"
 
   local prompt
   prompt="$(mktemp)"
@@ -616,14 +554,11 @@ Context:
 * Pi target: ~/.pi/agent/AGENTS.md
 * Shared skills target: ~/.agents/skills
 * Required skills: caveman, find-skills, grill-me, grill-with-docs, tdd.
-* Required tools: caveman, cavemem, rtk.
-* Cavemem exposes a stdio MCP server through `cavemem mcp`.
-* Pi does not have documented native MCP client config in this setup, so the repo scaffolds a Pi extension bridge that registers custom Pi tools and forwards to cavemem MCP.
+* Required tools: rtk, plannotator.
 * Do not invent unsupported claims.
 * Keep docs concise.
 * Do not remove the deterministic documentation structure unless there is a clear reason.
-* If the Pi cavemem bridge is wrong or fragile, fix it with the smallest coherent change.
-* After editing, run the closest relevant checks available, at least TypeScript/package install checks for the extension if practical.
+* After editing, run the closest relevant checks available.
 EOF
 
   (
@@ -680,8 +615,6 @@ main() {
   install_external_tools
 
   write_pi_rtk_extension
-  write_pi_caveman_autostart_extension
-  write_pi_cavemem_bridge_extension
   write_pi_settings
 
   apply_chezmoi_source
