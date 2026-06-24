@@ -175,12 +175,15 @@ backup_existing_targets() {
     "$HOME/.opencode/AGENTS.md" \
     "$HOME/.opencode/plugins/rtk.ts" \
     "$HOME/.pi/agent/AGENTS.md" \
-    "$HOME/.pi/agent/extensions/caveman-autostart" \
-    "$HOME/.pi/agent/extensions/cavemem-bridge" \
     "$HOME/.pi/agent/settings.json" \
+    "$HOME/.claude/CLAUDE.md" \
+    "$HOME/.claude/RTK.md" \
+    "$HOME/.claude/settings.json" \
+    "$HOME/.claude/skills" \
     "$HOME/.agents/skills/plannotator-compound" \
     "$HOME/.agents/skills/plannotator-setup-goal" \
-    "$HOME/.agents/skills/plannotator-visual-explainer"
+    "$HOME/.agents/skills/plannotator-visual-explainer" \
+    "$HOME/.agents/bin/ensure-agent-stack.sh"
   do
     backup_path_if_present "$p" "$backup"
   done
@@ -211,7 +214,7 @@ cleanup_deprecated_targets() {
   remove_if_legacy_opencode_repo_link "$HOME/.config/opencode/bun.lock"
   remove_if_legacy_opencode_repo_link "$HOME/.config/opencode/package.json"
 
-  find "$HOME/.codex" "$HOME/.config/opencode" "$HOME/.pi/agent" -xtype l -print -delete 2>/dev/null || true
+  find "$HOME/.codex" "$HOME/.config/opencode" "$HOME/.pi/agent" "$HOME/.claude" "$HOME/.agents" -xtype l -print -delete 2>/dev/null || true
 }
 
 sync_canonical_agents_md() {
@@ -242,20 +245,45 @@ EOF
   write_file "$CHEZMOI_SRC/dot_pi/agent/AGENTS.md.tmpl" <<'EOF'
 {{ include ".chezmoitemplates/agents/AGENTS.md" }}
 EOF
+
+  if [[ -f "$DOTFILES_DIR/agents/codex/config.toml" ]]; then
+    mkdir -p "$CHEZMOI_SRC/dot_codex"
+    cp "$DOTFILES_DIR/agents/codex/config.toml" "$CHEZMOI_SRC/dot_codex/config.toml"
+  fi
 }
 
 materialize_agent_targets() {
   log "Materializing AGENTS.md into global harness locations"
 
-  mkdir -p "$HOME/.codex" "$HOME/.config/opencode" "$HOME/.pi/agent"
+  mkdir -p "$HOME/.codex" "$HOME/.config/opencode" "$HOME/.pi/agent" "$HOME/.claude" "$HOME/.agents/bin"
 
   copy_file_replace_symlink "$DOTFILES_DIR/agents/AGENTS.md" "$HOME/.codex/AGENTS.md"
   copy_file_replace_symlink "$DOTFILES_DIR/agents/AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
   copy_file_replace_symlink "$DOTFILES_DIR/agents/AGENTS.md" "$HOME/.pi/agent/AGENTS.md"
+  copy_file_replace_symlink "$DOTFILES_DIR/agents/AGENTS.md" "$HOME/.claude/CLAUDE.md"
+  printf '\n@RTK.md\n' >> "$HOME/.claude/CLAUDE.md"
+  copy_file_replace_symlink "$DOTFILES_DIR/agents/hooks/ensure-agent-stack.sh" "$HOME/.agents/bin/ensure-agent-stack.sh"
+  chmod 755 "$HOME/.agents/bin/ensure-agent-stack.sh"
+
+  cp "$CHEZMOI_SRC/dot_claude/settings.json" "$HOME/.claude/settings.json"
 
   if [[ -f "$CHEZMOI_SRC/dot_codex/config.toml" ]]; then
     copy_file_replace_symlink "$CHEZMOI_SRC/dot_codex/config.toml" "$HOME/.codex/config.toml"
   fi
+}
+
+sync_claude_skills() {
+  log "Syncing shared skills into Claude Code skills"
+
+  mkdir -p "$HOME/.claude/skills" "$CHEZMOI_SRC/dot_claude/skills"
+
+  local skill_dir skill_name
+  for skill_dir in "$CHEZMOI_SRC"/dot_agents/skills/*; do
+    [[ -d "$skill_dir" ]] || continue
+    skill_name="$(basename "$skill_dir")"
+    copy_dir_clean "$skill_dir" "$HOME/.claude/skills/$skill_name"
+    copy_dir_clean "$skill_dir" "$CHEZMOI_SRC/dot_claude/skills/$skill_name"
+  done
 }
 
 install_chezmoi_if_missing() {
@@ -323,6 +351,7 @@ install_external_tools() {
 
   if have npm; then
     if [[ -d "$CHEZMOI_SRC/dot_agents/skills/find-skills" ]]; then
+      npx -y skills add "$CHEZMOI_SRC/dot_agents/skills/find-skills" -g -a claude-code -s find-skills -y --copy || warn "find-skills claude-code install failed"
       npx -y skills add "$CHEZMOI_SRC/dot_agents/skills/find-skills" -g -a codex -s find-skills -y --copy || warn "find-skills codex install failed"
       npx -y skills add "$CHEZMOI_SRC/dot_agents/skills/find-skills" -g -a opencode -s find-skills -y --copy || warn "find-skills opencode install failed"
       npx -y skills add "$CHEZMOI_SRC/dot_agents/skills/find-skills" -g -a pi -s find-skills -y --copy || warn "find-skills pi install failed"
@@ -337,8 +366,14 @@ install_external_tools() {
   fi
 
   if have rtk; then
+    rtk init -g --auto-patch || warn "rtk claude init failed"
     rtk init -g --codex || warn "rtk codex init failed"
     rtk init -g --opencode || warn "rtk opencode init failed"
+
+    if [[ -f "$HOME/.claude/RTK.md" ]]; then
+      mkdir -p "$CHEZMOI_SRC/dot_claude"
+      cp "$HOME/.claude/RTK.md" "$CHEZMOI_SRC/dot_claude/RTK.md"
+    fi
 
     if [[ -f "$HOME/.config/opencode/plugins/rtk.ts" ]]; then
       mkdir -p "$CHEZMOI_SRC/dot_config/opencode/plugins"
@@ -503,6 +538,7 @@ write_docs() {
     "$DOTFILES_DIR/agents/codex/README.md"
     "$DOTFILES_DIR/agents/opencode/README.md"
     "$DOTFILES_DIR/agents/pi/README.md"
+    "$DOTFILES_DIR/agents/claude/README.md"
     "$DOTFILES_DIR/agents/skills/README.md"
   )
 
@@ -613,6 +649,8 @@ main() {
   install_agent_skills
   install_plannotator_skills
   install_external_tools
+  sync_claude_skills
+  cp "$CHEZMOI_SRC/dot_claude/settings.json" "$HOME/.claude/settings.json"
 
   write_pi_rtk_extension
   write_pi_settings
