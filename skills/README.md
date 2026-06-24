@@ -36,7 +36,7 @@ chezmoi/dot_pi/agent/skills/<skill-name>/
 
 ## Skill visibility across agents
 
-Codex, OpenCode, and Pi all read the shared `~/.agents/skills` path in this setup, so a skill copied there is available to all three harnesses after their next reload/start, assuming the harness supports shared skill discovery.
+OpenCode and Pi both read the shared `~/.agents/skills` path in this setup, so a skill copied there is available to both harnesses after their next reload/start, assuming the harness supports shared skill discovery.
 
 Agent-specific `npx skills add ... -a <agent>` commands may also write harness-specific metadata or locations. Use them when the Skills CLI supports the target agent and you want that agent's native installer behavior.
 
@@ -70,8 +70,8 @@ npx -y skills add <owner/repo> -g -a <agent> -s <skill-name> -y --copy
 Examples:
 
 ```sh
-npx -y skills add JuliusBrussee/caveman -g -a codex -s caveman -y --copy
 npx -y skills add JuliusBrussee/caveman -g -a opencode -s caveman -y --copy
+npx -y skills add JuliusBrussee/caveman -g -a pi -s caveman -y --copy
 ```
 
 Useful commands:

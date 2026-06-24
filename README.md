@@ -4,12 +4,9 @@ This folder contains shared coding-agent configuration.
 
 ## Files
 
-- `AGENTS.md`: canonical global instructions used by Codex, OpenCode, Pi, and Claude Code.
+- `AGENTS.md`: canonical global instructions used by OpenCode and Pi.
 - `apply-agent-stack.sh`: applies the managed agent stack to the current machine.
-- `hooks/ensure-agent-stack.sh`: shared lifecycle reinforcement hook used by supported harnesses.
 - `test-agent-stack.sh`: deterministic local checks for managed harness wiring.
-- `claude/README.md`: Claude Code-specific notes.
-- `codex/README.md`: Codex-specific notes.
 - `opencode/README.md`: OpenCode-specific notes.
 - `pi/README.md`: Pi-specific notes.
 - `skills/README.md`: shared skills notes.
@@ -20,8 +17,6 @@ This folder contains shared coding-agent configuration.
 
 RTK is installed as the shell/tool-output compaction layer.
 
-- Claude Code: `~/.claude/CLAUDE.md` includes `~/.claude/RTK.md` and `~/.claude/settings.json` runs `rtk hook claude` before Bash tools.
-- Codex: `~/.codex/AGENTS.md` includes `~/.codex/RTK.md`.
 - OpenCode: command rewrite plugin installed at `~/.config/opencode/plugins/rtk.ts`.
 - Pi: command rewrite extension installed at `~/.pi/agent/extensions/rtk/`.
 
@@ -38,7 +33,6 @@ rtk <command>
 Plannotator is installed as the plan review and code review layer.
 
 - Binary: installed automatically when missing via the official installer. Pin with `PLANNOTATOR_VERSION=vX.Y.Z`.
-- Codex: `Stop` hook in `~/.codex/hooks.json` opens plan review UI. Command skills at `~/.codex/skills/plannotator-*`.
 - OpenCode: plugin `@plannotator/opencode@latest` in `~/.config/opencode/opencode.json`. Commands at `~/.config/opencode/commands/plannotator-*`.
 - Pi: package `npm:@plannotator/pi-extension` in `~/.pi/agent/settings.json`.
 - Shared skills: `plannotator-compound`, `plannotator-setup-goal`, `plannotator-visual-explainer` at `~/.agents/skills/`.

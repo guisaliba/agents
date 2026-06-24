@@ -78,89 +78,38 @@ require_no_broken_symlinks() {
   fi
 }
 
-require_hook_json_field() {
-  local path="$1"
-  local expr="$2"
-  local label="$3"
-
-  if python3 - "$path" "$expr" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-expr = sys.argv[2]
-raise SystemExit(0 if eval(expr, {}, {"data": data}) else 1)
-PY
-  then
-    ok "$label"
-  else
-    not_ok "$label"
-  fi
-}
-
 require_file "$DOTFILES_DIR/agents/AGENTS.md"
-require_file "$DOTFILES_DIR/agents/hooks/ensure-agent-stack.sh"
 require_file "$CHEZMOI_SRC/.chezmoitemplates/agents/AGENTS.md"
-require_file "$CHEZMOI_SRC/dot_agents/bin/ensure-agent-stack.sh"
-require_file "$CHEZMOI_SRC/dot_codex/AGENTS.md.tmpl"
 require_file "$CHEZMOI_SRC/dot_config/opencode/AGENTS.md.tmpl"
 require_file "$CHEZMOI_SRC/dot_pi/agent/AGENTS.md.tmpl"
-require_file "$CHEZMOI_SRC/dot_claude/CLAUDE.md.tmpl"
-require_file "$CHEZMOI_SRC/dot_claude/settings.json"
 
-require_json "$CHEZMOI_SRC/dot_claude/settings.json"
-require_json "$CHEZMOI_SRC/dot_codex/hooks.json"
 require_json "$CHEZMOI_SRC/dot_config/opencode/opencode.json"
 
-require_contains "$CHEZMOI_SRC/dot_claude/CLAUDE.md.tmpl" "{{ include \".chezmoitemplates/agents/AGENTS.md\" }}"
-require_contains "$CHEZMOI_SRC/dot_claude/settings.json" "ensure-agent-stack.sh"
-require_contains "$CHEZMOI_SRC/dot_claude/settings.json" "rtk hook claude"
-require_contains "$CHEZMOI_SRC/dot_codex/hooks.json" "ensure-agent-stack.sh"
-
-require_hook_json_field "$CHEZMOI_SRC/dot_claude/settings.json" "'SessionStart' in data.get('hooks', {})" "claude SessionStart hook configured"
-require_hook_json_field "$CHEZMOI_SRC/dot_claude/settings.json" "'UserPromptSubmit' in data.get('hooks', {})" "claude UserPromptSubmit hook configured"
-require_hook_json_field "$CHEZMOI_SRC/dot_claude/settings.json" "'PreToolUse' in data.get('hooks', {})" "claude PreToolUse hook configured"
-require_hook_json_field "$CHEZMOI_SRC/dot_codex/hooks.json" "'SessionStart' in data.get('hooks', {})" "codex SessionStart hook configured"
-
 for target in \
-  "$HOME/.codex/AGENTS.md" \
   "$HOME/.config/opencode/AGENTS.md" \
   "$HOME/.pi/agent/AGENTS.md" \
-  "$HOME/.claude/CLAUDE.md" \
-  "$HOME/.agents/bin/ensure-agent-stack.sh" \
-  "$HOME/.claude/settings.json" \
   "$HOME/.config/caveman/config.json"
 do
   require_file "$target"
 done
 
 require_dir "$HOME/.agents/skills/caveman"
-require_dir "$HOME/.claude/skills/caveman"
 require_dir "$HOME/.pi/agent/extensions/caveman-autostart"
 
-require_contains "$HOME/.codex/AGENTS.md" "Required global capabilities"
 require_contains "$HOME/.config/opencode/AGENTS.md" "Required global capabilities"
 require_contains "$HOME/.pi/agent/AGENTS.md" "Required global capabilities"
-require_contains "$HOME/.claude/CLAUDE.md" "Required global capabilities"
 
-require_command claude
-require_command codex
 require_command opencode
 require_command pi
 require_command rtk
 
-claude --help >/dev/null 2>&1 && ok "claude help runs" || not_ok "claude help failed"
-codex --help >/dev/null 2>&1 && ok "codex help runs" || not_ok "codex help failed"
 opencode --help >/dev/null 2>&1 && ok "opencode help runs" || not_ok "opencode help failed"
 pi --help >/dev/null 2>&1 && ok "pi help runs" || not_ok "pi help failed"
 rewritten="$(rtk rewrite "git status --short" 2>/dev/null || true)"
 [[ "$rewritten" == "rtk git status --short" ]] && ok "rtk rewrite runs" || not_ok "rtk rewrite failed"
 
-require_no_broken_symlinks "$HOME/.codex"
 require_no_broken_symlinks "$HOME/.config/opencode"
 require_no_broken_symlinks "$HOME/.pi/agent"
-require_no_broken_symlinks "$HOME/.claude"
 require_no_broken_symlinks "$HOME/.agents"
 
 if [[ "$failures" -gt 0 ]]; then
