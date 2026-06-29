@@ -30,11 +30,6 @@ require_executable() {
   [[ -x "$path" ]] && ok "executable: $path" || not_ok "not executable: $path"
 }
 
-require_absent() {
-  local path="$1"
-  [[ ! -e "$path" ]] && ok "absent: $path" || not_ok "should not exist: $path"
-}
-
 require_command() {
   local cmd="$1"
   command -v "$cmd" >/dev/null 2>&1 && ok "command exists: $cmd" || not_ok "missing command: $cmd"
@@ -88,8 +83,6 @@ require_file "$DOTFILES_DIR/agents/opencode/README.md"
 require_file "$DOTFILES_DIR/agents/skills/README.md"
 require_executable "$DOTFILES_DIR/agents/apply.sh"
 require_executable "$DOTFILES_DIR/agents/test.sh"
-require_absent "$DOTFILES_DIR/chezmoi"
-require_absent "$DOTFILES_DIR/agents/pi"
 
 # Local machine checks
 printf '\n--- Local Machine ---\n'

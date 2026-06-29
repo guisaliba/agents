@@ -103,6 +103,11 @@ with open(path, "w", encoding="utf-8") as f:
 PY
 }
 
+setup_opencode() {
+  copy_agents_md
+  merge_opencode_json
+}
+
 install_rtk() {
   if have rtk; then
     log "RTK already installed, skipping"
@@ -133,6 +138,12 @@ install_plannotator() {
   npx -y skills add backnotprop/plannotator/apps/skills/extra -g -a opencode -y --copy || die "Plannotator extras install failed"
 }
 
+install_plugins() {
+  log "Installing plugins"
+  install_rtk
+  install_plannotator
+}
+
 install_skill() {
   local source="$1"
   local name="$2"
@@ -153,6 +164,7 @@ install_local_skill() {
   mkdir -p "$(dirname "$dst")"
   cp -a "$src_dir" "$dst"
 }
+
 
 install_required_skills() {
   log "Installing/updating required skills"
@@ -176,10 +188,8 @@ main() {
 
   check_prerequisites
   install_opencode
-  copy_agents_md
-  merge_opencode_json
-  install_rtk
-  install_plannotator
+  setup_opencode
+  install_plugins
   install_required_skills
 
   log "Setup complete. Run ./agents/test.sh to verify."
