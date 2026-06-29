@@ -176,6 +176,7 @@ install_required_skills() {
   install_skill "mattpocock/skills@engineering/grill-with-docs" "grill-with-docs"
   install_skill "mattpocock/skills@productivity/handoff" "handoff"
   install_skill "mattpocock/skills@engineering/tdd" "tdd"
+  install_skill "mattpocock/skills@engineering/zoom-out" "zoom-out"
   install_skill "mattpocock/skills@productivity/teach" "teach"
   install_skill "mattpocock/skills@productivity/writing-great-skills" "writing-great-skills"
   install_skill "shadcn/improve" "improve"

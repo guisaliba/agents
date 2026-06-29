@@ -60,16 +60,6 @@ When asked to create branches or commits, follow Conventional Branches and Conve
 
 Keep commits atomic. Do not mix unrelated edits.
 
-## Communication
-
-Be direct, practical, and precise.
-
-No filler, flattery, theater, emojis, or em dashes.
-
-Prefer concise answers. Match requested depth.
-
-If something is wrong or risky, say so plainly and give the better option.
-
 ## Tooling
 
 Follow the repo's existing package manager, test runner, formatter, and conventions.

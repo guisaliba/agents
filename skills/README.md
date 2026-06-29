@@ -28,6 +28,7 @@ Skills installed live by `agents/apply.sh`:
 | `grill-with-docs` | `mattpocock/skills@engineering/grill-with-docs` | Requirement discovery grounded in repo docs. |
 | `handoff` | `mattpocock/skills@productivity/handoff` | Compact the conversation into a handoff document for the next agent. |
 | `improve` | `shadcn/improve` | Improve codebase architecture. |
+| `zoom-out` | `mattpocock/skills@engineering/zoom-out` | Zoom out for broader context or higher-level perspective. |
 | `plannotator-review` | Plannotator installer | Review uncommitted changes or PRs. |
 | `plannotator-annotate` | Plannotator installer | Annotate markdown files, folders, or URLs. |
 | `plannotator-last` | Plannotator installer | Annotate the agent's last message. |

@@ -72,9 +72,7 @@ require_json() {
 }
 
 # Repo structure checks
-log_repo() {
-  printf '\n--- Repo Structure ---\n'
-}
+printf '\n--- Repo Structure ---\n'
 
 require_file "$DOTFILES_DIR/agents/AGENTS.md"
 require_file "$DOTFILES_DIR/agents/apply.sh"
@@ -115,6 +113,7 @@ for skill in \
   teach \
   writing-great-skills \
   improve \
+  zoom-out \
   plannotator-review \
   plannotator-annotate \
   plannotator-last \
