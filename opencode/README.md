@@ -2,16 +2,16 @@
 
 OpenCode uses:
 
-* global instructions: `~/.config/opencode/AGENTS.md`
-* runtime config: `~/.config/opencode/opencode.json`, tracked at `chezmoi/dot_config/opencode/opencode.json`
-* commands: `~/.config/opencode/commands/`, tracked at `chezmoi/dot_config/opencode/commands/`
-* shared skills: `~/.agents/skills`
+- global instructions: `~/.config/opencode/AGENTS.md`
+- runtime config: `~/.config/opencode/opencode.json`
+- commands: `~/.config/opencode/commands/`
+- shared skills: `~/.agents/skills`
 
 Managed integrations:
 
-* rtk via `rtk init -g --opencode`
-* plannotator via plugin `@plannotator/opencode@latest` and commands at `~/.config/opencode/commands/plannotator-*`
+- rtk via `rtk init -g --opencode`
+- plannotator via plugin `@plannotator/opencode@latest` and commands at `~/.config/opencode/commands/plannotator-*`
 
-OpenCode also reads `~/.agents/skills`, so shared skills stay in the same source tree used by Pi.
+OpenCode reads `~/.agents/skills/*/SKILL.md` for global skill discovery.
 
 OpenCode should follow the shared workflow in `agents/AGENTS.md`: clarify, plan, use TDD, verify, commit atomically when asked.

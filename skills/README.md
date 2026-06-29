@@ -8,70 +8,48 @@ Shared skills are installed into:
 
 ## Architecture
 
-This directory is documentation only. Do not vendor skill payloads under `agents/skills/`.
+Most skills are installed live from upstream sources by `agents/apply.sh`. Do not vendor skill payloads under `agents/skills/` unless the skill has no upstream source.
 
-Managed skill payloads live in the chezmoi source tree:
+Local skill exceptions are tracked directly under `agents/skills/<skill-name>/`. These are manual-install only and not part of the automated setup script.
 
-```text
-chezmoi/dot_agents/skills/<skill-name>/
-```
+## Skill discovery
 
-Chezmoi materializes those files to:
-
-```text
-~/.agents/skills/<skill-name>/
-```
-
-Pi also has a Pi-local skill target for skills installed by the Skills CLI with `-a pi`:
-
-```text
-~/.pi/agent/skills/<skill-name>/
-```
-
-Those Pi-local managed skills are tracked under:
-
-```text
-chezmoi/dot_pi/agent/skills/<skill-name>/
-```
-
-## Skill visibility across agents
-
-OpenCode and Pi both read the shared `~/.agents/skills` path in this setup, so a skill copied there is available to both harnesses after their next reload/start, assuming the harness supports shared skill discovery.
-
-Agent-specific `npx skills add ... -a <agent>` commands may also write harness-specific metadata or locations. Use them when the Skills CLI supports the target agent and you want that agent's native installer behavior.
-
-For replication to other machines, commit the skill payload under `chezmoi/dot_agents/skills/` and, if Pi needs a Pi-local copy, under `chezmoi/dot_pi/agent/skills/`.
+OpenCode discovers global skills from `~/.agents/skills/*/SKILL.md` automatically. No extra path config is needed.
 
 ## Managed skills
 
+Skills installed live by `agents/apply.sh`:
+
 | Skill | Source | Purpose |
 | --- | --- | --- |
-| `auto-pr-review` | local dotfiles skill tracked at `chezmoi/dot_agents/skills/auto-pr-review` | Work the post-open PR review loop: read unresolved reviewer (e.g. Copilot) comments, judge accept/reject, fix the valid ones, reply + resolve each thread citing the commit, then @-mention the reviewer for a re-review. |
-| `caveman` | `JuliusBrussee/caveman@caveman` | Opt-in concise agent output and token-efficient communication. Invoke with `/caveman` or natural language. |
-| `find-skills` | local dotfiles skill tracked at `chezmoi/dot_agents/skills/find-skills` | Discover and install skills from the open agent skills ecosystem. |
+| `caveman` | `JuliusBrussee/caveman@caveman` | Opt-in concise agent output and token-efficient communication. |
+| `find-skills` | local at `agents/skills/find-skills` | Discover and install skills from the open agent skills ecosystem. |
 | `grill-me` | `mattpocock/skills@productivity/grill-me` | Requirement discovery. |
 | `grill-with-docs` | `mattpocock/skills@engineering/grill-with-docs` | Requirement discovery grounded in repo docs. |
 | `handoff` | `mattpocock/skills@productivity/handoff` | Compact the conversation into a handoff document for the next agent. |
-| `plannotator-compound` | `backnotprop/plannotator@apps/skills/plannotator-compound` | Analyze plan archive for denial patterns and produce an HTML dashboard report. |
-| `plannotator-setup-goal` | `backnotprop/plannotator@apps/skills/plannotator-setup-goal` | Turn an idea into a goal package through structured discovery and Plannotator review. |
-| `plannotator-visual-explainer` | `backnotprop/plannotator@apps/skills/plannotator-visual-explainer` | Generate self-contained HTML visualizations with Plannotator theming. |
-| `prototype` | `mattpocock/skills@engineering/prototype` | Build a throwaway prototype (runnable app or toggleable UI variations) to flesh out a design before committing. |
+| `improve` | `shadcn/improve` | Improve codebase architecture. |
+| `plannotator-review` | Plannotator installer | Review uncommitted changes or PRs. |
+| `plannotator-annotate` | Plannotator installer | Annotate markdown files, folders, or URLs. |
+| `plannotator-last` | Plannotator installer | Annotate the agent's last message. |
+| `plannotator-compound` | Plannotator installer (extras) | Analyze plan archive for denial patterns and produce an HTML dashboard report. |
+| `plannotator-setup-goal` | Plannotator installer (extras) | Turn an idea into a goal package through structured discovery and Plannotator review. |
+| `plannotator-visual-explainer` | Plannotator installer (extras) | Generate self-contained HTML visualizations with Plannotator theming. |
 | `tdd` | `mattpocock/skills@engineering/tdd` | Red-green-refactor implementation workflow. |
-| `write-a-skill` | `mattpocock/skills@productivity/write-a-skill` | Author new agent skills with proper structure and progressive disclosure. |
+| `teach` | `mattpocock/skills@productivity/teach` | Teach a concept, workflow, tool, or codebase area. |
+| `writing-great-skills` | `mattpocock/skills@productivity/writing-great-skills` | Author new agent skills with proper structure and progressive disclosure. |
+
+Local-only skills (manual install):
+
+| Skill | Source | Purpose |
+| --- | --- | --- |
+| `auto-pr-review` | local at `agents/skills/auto-pr-review` | Work the post-open PR review loop: read unresolved reviewer comments, judge accept/reject, fix the valid ones, reply and resolve each thread citing the commit, then @-mention the reviewer for a re-review. |
 
 ## Installing skills
 
 Preferred global install pattern:
 
 ```sh
-npx -y skills add <owner/repo> -g -a <agent> -s <skill-name> -y --copy
-```
-
-Examples:
-
-```sh
-npx -y skills add JuliusBrussee/caveman -g -a opencode -s caveman -y --copy
-npx -y skills add JuliusBrussee/caveman -g -a pi -s caveman -y --copy
+npx -y skills add <owner/repo> -g -a opencode -s <skill-name> -y --copy
 ```
 
 Useful commands:
@@ -83,7 +61,5 @@ npx -y skills ls -g
 npx -y skills update -g
 npx -y skills remove <skill-name> -g -y
 ```
-
-After installing or updating a managed skill, copy the resulting shared skill directory into `chezmoi/dot_agents/skills/` so it is replicated on other machines.
 
 The global AGENTS instructions expect agents to use these skills for requirement discovery, concise output, skill discovery, and TDD-oriented implementation.

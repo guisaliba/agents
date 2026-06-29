@@ -1,14 +1,13 @@
 # Agents
 
-This folder contains shared coding-agent configuration.
+This folder contains OpenCode agent setup configuration.
 
 ## Files
 
-- `AGENTS.md`: canonical global instructions used by OpenCode and Pi.
-- `apply-agent-stack.sh`: applies the managed agent stack to the current machine.
-- `test-agent-stack.sh`: deterministic local checks for managed harness wiring.
+- `AGENTS.md`: canonical global instructions used by OpenCode.
+- `apply.sh`: installs and configures OpenCode, RTK, Plannotator, and required skills.
+- `test.sh`: deterministic local checks for harness wiring.
 - `opencode/README.md`: OpenCode-specific notes.
-- `pi/README.md`: Pi-specific notes.
 - `skills/README.md`: shared skills notes.
 
 ## Runtime Wiring
@@ -18,7 +17,6 @@ This folder contains shared coding-agent configuration.
 RTK is installed as the shell/tool-output compaction layer.
 
 - OpenCode: command rewrite plugin installed at `~/.config/opencode/plugins/rtk.ts`.
-- Pi: command rewrite extension installed at `~/.pi/agent/extensions/rtk/`.
 
 Useful commands:
 
@@ -32,9 +30,8 @@ rtk <command>
 
 Plannotator is installed as the plan review and code review layer.
 
-- Binary: installed automatically when missing via the official installer. Pin with `PLANNOTATOR_VERSION=vX.Y.Z`.
+- Binary: installed automatically when missing via the official installer.
 - OpenCode: plugin `@plannotator/opencode@latest` in `~/.config/opencode/opencode.json`. Commands at `~/.config/opencode/commands/plannotator-*`.
-- Pi: package `npm:@plannotator/pi-extension` in `~/.pi/agent/settings.json`.
 - Shared skills: `plannotator-compound`, `plannotator-setup-goal`, `plannotator-visual-explainer` at `~/.agents/skills/`.
 
 Useful commands:
@@ -50,20 +47,16 @@ plannotator last
 From the repo root:
 
 ```sh
-./agents/apply-agent-stack.sh
-./agents/test-agent-stack.sh
+./agents/apply.sh
+./agents/test.sh
 ```
 
-Or from this directory:
-
-```sh
-./apply-agent-stack.sh
-```
-
-By default the script applies local config only. Use `COMMIT=1` to commit generated repo changes and `COMMIT=1 PUSH=1` to push them.
+The script installs OpenCode if missing, copies `AGENTS.md` to `~/.config/opencode/AGENTS.md`, merges `~/.config/opencode/opencode.json`, configures RTK for OpenCode, installs Plannotator core and extras, and installs/updates required skills. Skills are installed live from upstream sources every run.
 
 ## Policy
 
-Do not maintain separate base and overlay Markdown files unless a harness genuinely needs different behavior.
+Do not vendor upstream skill or plugin payloads in this repo.
 
-Default rule: one source of truth, multiple placements.
+Default rule: install live, do not track copies.
+
+Exception: `auto-pr-review` is a local-only skill tracked under `agents/skills/auto-pr-review/`. Install it manually if needed.
