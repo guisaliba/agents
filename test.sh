@@ -113,7 +113,6 @@ for skill in \
   teach \
   writing-great-skills \
   improve \
-  zoom-out \
   plannotator-review \
   plannotator-annotate \
   plannotator-last \

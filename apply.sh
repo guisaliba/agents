@@ -136,6 +136,64 @@ install_plannotator() {
 
   log "Installing Plannotator extra skills"
   npx -y skills add backnotprop/plannotator/apps/skills/extra -g -a opencode -y --copy || die "Plannotator extras install failed"
+
+  cleanup_plannotator_cross_harness_side_effects
+}
+
+cleanup_plannotator_cross_harness_side_effects() {
+  log "Removing non-OpenCode Plannotator installer side effects"
+
+  rm -rf \
+    "$HOME/.claude/skills/plannotator-review" \
+    "$HOME/.claude/skills/plannotator-annotate" \
+    "$HOME/.claude/skills/plannotator-last"
+
+  rm -f \
+    "$HOME/.gemini/commands/plannotator-review.toml" \
+    "$HOME/.gemini/commands/plannotator-annotate.toml" \
+    "$HOME/.gemini/policies/plannotator.toml"
+
+  python3 - <<'PY'
+import json
+from pathlib import Path
+
+home = Path.home()
+
+codex_hooks = home / ".codex" / "hooks.json"
+removed_codex_plannotator_hook = False
+if codex_hooks.exists() and "plannotator" in codex_hooks.read_text(encoding="utf-8"):
+    codex_hooks.unlink()
+    removed_codex_plannotator_hook = True
+
+codex_config = home / ".codex" / "config.toml"
+if removed_codex_plannotator_hook and codex_config.exists():
+    lines = codex_config.read_text(encoding="utf-8").splitlines()
+    lines = [line for line in lines if line.strip() != "hooks = true"]
+    codex_config.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
+gemini_settings = home / ".gemini" / "settings.json"
+if gemini_settings.exists():
+    try:
+        data = json.loads(gemini_settings.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        data = None
+
+    if isinstance(data, dict):
+        hooks = data.get("hooks")
+        if isinstance(hooks, dict):
+            before_tool = hooks.get("BeforeTool")
+            if isinstance(before_tool, list):
+                hooks["BeforeTool"] = [
+                    item for item in before_tool
+                    if "plannotator" not in json.dumps(item)
+                ]
+                if not hooks["BeforeTool"]:
+                    hooks.pop("BeforeTool")
+            if not hooks:
+                data.pop("hooks", None)
+
+        gemini_settings.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+PY
 }
 
 install_plugins() {
@@ -176,7 +234,6 @@ install_required_skills() {
   install_skill "mattpocock/skills@engineering/grill-with-docs" "grill-with-docs"
   install_skill "mattpocock/skills@productivity/handoff" "handoff"
   install_skill "mattpocock/skills@engineering/tdd" "tdd"
-  install_skill "mattpocock/skills@engineering/zoom-out" "zoom-out"
   install_skill "mattpocock/skills@productivity/teach" "teach"
   install_skill "mattpocock/skills@productivity/writing-great-skills" "writing-great-skills"
   install_skill "shadcn/improve" "improve"
