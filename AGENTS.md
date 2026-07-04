@@ -1,4 +1,4 @@
-# Global Agent Instructions
+# AGENTS.md
 
 ## Role
 
