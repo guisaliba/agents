@@ -88,6 +88,7 @@ printf '\n--- Local Machine ---\n'
 require_command opencode
 require_command rtk
 require_command plannotator
+require_file "$HOME/.config/opencode/plugins/rtk.ts"
 
 opencode --help >/dev/null 2>&1 && ok "opencode help runs" || not_ok "opencode help failed"
 plannotator --help >/dev/null 2>&1 && ok "plannotator help runs" || not_ok "plannotator help failed"
