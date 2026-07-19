@@ -124,6 +124,7 @@ for skill in \
   teach \
   writing-great-skills \
   improve \
+  logging-best-practices \
   plannotator-review \
   plannotator-annotate \
   plannotator-last \

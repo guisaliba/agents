@@ -259,6 +259,7 @@ install_required_skills() {
   install_skill "mattpocock/skills@productivity/teach" "teach"
   install_skill "mattpocock/skills@productivity/writing-great-skills" "writing-great-skills"
   install_skill "shadcn/improve" "improve"
+  install_skill "boristane/agent-skills" "logging-best-practices"
 
   install_local_skill "$DOTFILES_DIR/agents/skills/find-skills" "find-skills"
 
