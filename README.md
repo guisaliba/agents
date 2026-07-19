@@ -5,7 +5,7 @@ This folder contains OpenCode agent setup configuration.
 ## Files
 
 - `AGENTS.md`: canonical global instructions used by OpenCode.
-- `apply.sh`: installs and configures OpenCode, RTK, Plannotator, and required skills.
+- `apply.sh`: installs and configures OpenCode, RTK, Plannotator, required skills, and the Cloudflare MCP servers.
 - `test.sh`: deterministic local checks for harness wiring.
 - `opencode/README.md`: OpenCode-specific notes.
 - `skills/README.md`: shared skills notes.
@@ -51,7 +51,7 @@ From the repo root:
 ./agents/test.sh
 ```
 
-The script installs OpenCode if missing, copies `AGENTS.md` to `~/.config/opencode/AGENTS.md`, merges `~/.config/opencode/opencode.json`, configures RTK for OpenCode, installs Plannotator core and extras, and installs/updates required skills. Skills are installed live from upstream sources every run.
+The script installs OpenCode if missing, copies `AGENTS.md` to `~/.config/opencode/AGENTS.md`, merges `~/.config/opencode/opencode.json`, configures RTK for OpenCode, installs Plannotator core and extras, and installs/updates required skills. Skills are installed live from upstream sources every run. The Cloudflare skills bundle (`https://github.com/cloudflare/skills`) is installed as a group without `-s` so every upstream skill is pulled in. The Cloudflare remote MCP servers (`cloudflare-api`, `cloudflare-docs`, `cloudflare-bindings`, `cloudflare-builds`, `cloudflare-observability`) are merged into the `mcp` block of `~/.config/opencode/opencode.json`; authenticate with `opencode mcp auth <name>`.
 
 ## Policy
 

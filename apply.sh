@@ -97,6 +97,23 @@ if plugin not in plugins:
     plugins.append(plugin)
 data["plugin"] = plugins
 
+cloudflare_mcps = {
+    "cloudflare-api": "https://mcp.cloudflare.com/mcp",
+    "cloudflare-docs": "https://docs.mcp.cloudflare.com/mcp",
+    "cloudflare-bindings": "https://bindings.mcp.cloudflare.com/mcp",
+    "cloudflare-builds": "https://builds.mcp.cloudflare.com/mcp",
+    "cloudflare-observability": "https://observability.mcp.cloudflare.com/mcp",
+}
+mcp = data.get("mcp")
+if not isinstance(mcp, dict):
+    mcp = {}
+for name, url in cloudflare_mcps.items():
+    existing = mcp.get(name)
+    if isinstance(existing, dict) and existing.get("url") == url:
+        continue
+    mcp[name] = {"type": "remote", "url": url, "enabled": True}
+data["mcp"] = mcp
+
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2)
     f.write("\n")
@@ -224,6 +241,11 @@ install_local_skill() {
 }
 
 
+install_cloudflare_skills() {
+  log "Installing/updating Cloudflare skills"
+  npx -y skills add https://github.com/cloudflare/skills -g -a opencode -y --copy || die "Cloudflare skills install failed"
+}
+
 install_required_skills() {
   log "Installing/updating required skills"
 
@@ -239,6 +261,8 @@ install_required_skills() {
   install_skill "shadcn/improve" "improve"
 
   install_local_skill "$DOTFILES_DIR/agents/skills/find-skills" "find-skills"
+
+  install_cloudflare_skills
 }
 
 main() {

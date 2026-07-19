@@ -38,6 +38,38 @@ Skills installed live by `agents/apply.sh`:
 | `teach` | `mattpocock/skills@productivity/teach` | Teach a concept, workflow, tool, or codebase area. |
 | `writing-great-skills` | `mattpocock/skills@productivity/writing-great-skills` | Author new agent skills with proper structure and progressive disclosure. |
 
+### Cloudflare skills
+
+The Cloudflare skills bundle is installed live as a group from `https://github.com/cloudflare/skills` by `agents/apply.sh`. It is added without `-s` so every skill in the upstream `skills/` directory is installed. Do not track copies of these skills under `agents/skills/`; update them by re-running `apply.sh`.
+
+| Skill | Purpose |
+| --- | --- |
+| `cloudflare` | Comprehensive platform skill covering Workers, Pages, storage (KV, D1, R2), AI, networking, security, and IaC. |
+| `agents-sdk` | Building stateful AI agents with state, scheduling, RPC, MCP servers, email, and streaming chat. |
+| `durable-objects` | Stateful coordination, RPC, SQLite, alarms, and WebSockets. |
+| `sandbox-sdk` | Secure code execution for AI code runners, interpreters, CI/CD, and interactive dev environments. |
+| `wrangler` | Deploying and managing Workers, KV, R2, D1, Vectorize, Queues, and Workflows. |
+| `web-perf` | Auditing Core Web Vitals and render-blocking resources. |
+| `workers-best-practices` | Best practices for building on Cloudflare Workers. |
+| `turnstile-spin` | Integrating Cloudflare Turnstile for bot protection. |
+| `cloudflare-email-service` | Email routing and processing on Cloudflare. |
+| `cloudflare-one` | Cloudflare One deployments across Access, Gateway, WARP, Tunnel, Magic WAN, DLP, CASB, posture, and identity. |
+| `cloudflare-one-migrations` | Migration assessments and rollout plans for SASE migrations to Cloudflare One. |
+
+### Cloudflare MCP servers
+
+`agents/apply.sh` also merges the Cloudflare remote MCP servers from `https://github.com/cloudflare/skills` into the `mcp` block of `~/.config/opencode/opencode.json`. These are remote MCP endpoints (OpenCode `type: "remote"`), not skills, and authenticate via OAuth on first use.
+
+| Server | URL | Purpose |
+| --- | --- | --- |
+| `cloudflare-api` | `https://mcp.cloudflare.com/mcp` | Manage account resources, zones, and settings. |
+| `cloudflare-docs` | `https://docs.mcp.cloudflare.com/mcp` | Up-to-date Cloudflare docs and reference. |
+| `cloudflare-bindings` | `https://bindings.mcp.cloudflare.com/mcp` | Build Workers apps with storage, AI, and compute primitives. |
+| `cloudflare-builds` | `https://builds.mcp.cloudflare.com/mcp` | Manage and get insights into Workers builds. |
+| `cloudflare-observability` | `https://observability.mcp.cloudflare.com/mcp` | Debug and analyze logs and analytics. |
+
+Authenticate a server with `opencode mcp auth <name>`; list status with `opencode mcp list`.
+
 Local-only skills (manual install):
 
 | Skill | Source | Purpose |

@@ -101,6 +101,16 @@ require_contains "$HOME/.config/opencode/AGENTS.md" "Required Capabilities"
 require_json "$HOME/.config/opencode/opencode.json"
 require_contains "$HOME/.config/opencode/opencode.json" "@plannotator/opencode@latest"
 
+for mcp in \
+  cloudflare-api \
+  cloudflare-docs \
+  cloudflare-bindings \
+  cloudflare-builds \
+  cloudflare-observability
+do
+  require_contains "$HOME/.config/opencode/opencode.json" "$mcp"
+done
+
 # Required skills
 printf '\n--- Skills ---\n'
 
@@ -119,7 +129,18 @@ for skill in \
   plannotator-last \
   plannotator-compound \
   plannotator-setup-goal \
-  plannotator-visual-explainer
+  plannotator-visual-explainer \
+  agents-sdk \
+  cloudflare \
+  cloudflare-email-service \
+  cloudflare-one \
+  cloudflare-one-migrations \
+  durable-objects \
+  sandbox-sdk \
+  turnstile-spin \
+  web-perf \
+  workers-best-practices \
+  wrangler
 do
   require_dir "$HOME/.agents/skills/$skill"
 done
