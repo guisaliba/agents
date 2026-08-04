@@ -128,6 +128,7 @@ for skill in \
   tdd \
   teach \
   to-tickets \
+  triage \
   writing-great-skills \
   improve \
   logging-best-practices \

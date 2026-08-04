@@ -39,6 +39,7 @@ Skills installed live by `agents/apply.sh`:
 | `tdd` | `mattpocock/skills@engineering/tdd` | Red-green-refactor implementation workflow. |
 | `teach` | `mattpocock/skills@productivity/teach` | Teach a concept, workflow, tool, or codebase area. |
 | `to-tickets` | `mattpocock/skills@engineering/to-tickets` | Break a plan or spec into tracer-bullet tickets with declared blocking edges, published to the configured tracker. |
+| `triage` | `mattpocock/skills@engineering/triage` | Move tracker issues through the configured triage roles and create agent-ready briefs. |
 | `writing-great-skills` | `mattpocock/skills@productivity/writing-great-skills` | Author new agent skills with proper structure and progressive disclosure. |
 
 ### Cloudflare skills

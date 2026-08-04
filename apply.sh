@@ -263,6 +263,7 @@ install_required_skills() {
   install_skill "mattpocock/skills@engineering/tdd" "tdd"
   install_skill "mattpocock/skills@productivity/teach" "teach"
   install_skill "mattpocock/skills@engineering/to-tickets" "to-tickets"
+  install_skill "mattpocock/skills@engineering/triage" "triage"
   install_skill "mattpocock/skills@productivity/writing-great-skills" "writing-great-skills"
   install_skill "shadcn/improve" "improve"
   install_skill "boristane/agent-skills" "logging-best-practices"
