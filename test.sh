@@ -106,10 +106,13 @@ for mcp in \
   cloudflare-docs \
   cloudflare-bindings \
   cloudflare-builds \
-  cloudflare-observability
+  cloudflare-observability \
+  linear
 do
   require_contains "$HOME/.config/opencode/opencode.json" "$mcp"
 done
+
+require_contains "$HOME/.config/opencode/opencode.json" "https://mcp.linear.app/mcp"
 
 # Required skills
 printf '\n--- Skills ---\n'

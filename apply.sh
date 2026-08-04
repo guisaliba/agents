@@ -104,10 +104,14 @@ cloudflare_mcps = {
     "cloudflare-builds": "https://builds.mcp.cloudflare.com/mcp",
     "cloudflare-observability": "https://observability.mcp.cloudflare.com/mcp",
 }
+remote_mcps = {
+    **cloudflare_mcps,
+    "linear": "https://mcp.linear.app/mcp",
+}
 mcp = data.get("mcp")
 if not isinstance(mcp, dict):
     mcp = {}
-for name, url in cloudflare_mcps.items():
+for name, url in remote_mcps.items():
     existing = mcp.get(name)
     if isinstance(existing, dict) and existing.get("url") == url:
         continue

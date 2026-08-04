@@ -57,7 +57,7 @@ The Cloudflare skills bundle is installed live as a group from `https://github.c
 | `cloudflare-one` | Cloudflare One deployments across Access, Gateway, WARP, Tunnel, Magic WAN, DLP, CASB, posture, and identity. |
 | `cloudflare-one-migrations` | Migration assessments and rollout plans for SASE migrations to Cloudflare One. |
 
-### Cloudflare MCP servers
+### Remote MCP servers
 
 `agents/apply.sh` also merges the Cloudflare remote MCP servers from `https://github.com/cloudflare/skills` into the `mcp` block of `~/.config/opencode/opencode.json`. These are remote MCP endpoints (OpenCode `type: "remote"`), not skills, and authenticate via OAuth on first use.
 
@@ -68,6 +68,12 @@ The Cloudflare skills bundle is installed live as a group from `https://github.c
 | `cloudflare-bindings` | `https://bindings.mcp.cloudflare.com/mcp` | Build Workers apps with storage, AI, and compute primitives. |
 | `cloudflare-builds` | `https://builds.mcp.cloudflare.com/mcp` | Manage and get insights into Workers builds. |
 | `cloudflare-observability` | `https://observability.mcp.cloudflare.com/mcp` | Debug and analyze logs and analytics. |
+
+The Linear remote MCP server is merged the same way:
+
+| Server | URL | Purpose |
+| --- | --- | --- |
+| `linear` | `https://mcp.linear.app/mcp` | Find, create, and update Linear issues, projects, and comments. |
 
 Authenticate a server with `opencode mcp auth <name>`; list status with `opencode mcp list`.
 
