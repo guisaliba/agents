@@ -125,6 +125,7 @@ for skill in \
   handoff \
   tdd \
   teach \
+  to-tickets \
   writing-great-skills \
   improve \
   logging-best-practices \
