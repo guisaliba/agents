@@ -123,6 +123,7 @@ for skill in \
   grill-me \
   grill-with-docs \
   handoff \
+  setup-matt-pocock-skills \
   tdd \
   teach \
   to-tickets \

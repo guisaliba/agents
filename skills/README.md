@@ -35,6 +35,7 @@ Skills installed live by `agents/apply.sh`:
 | `plannotator-compound` | Plannotator installer (extras) | Analyze plan archive for denial patterns and produce an HTML dashboard report. |
 | `plannotator-setup-goal` | Plannotator installer (extras) | Turn an idea into a goal package through structured discovery and Plannotator review. |
 | `plannotator-visual-explainer` | Plannotator installer (extras) | Generate self-contained HTML visualizations with Plannotator theming. |
+| `setup-matt-pocock-skills` | `mattpocock/skills@engineering/setup-matt-pocock-skills` | Per-repo setup for the engineering skills: issue tracker, triage labels, and domain docs. |
 | `tdd` | `mattpocock/skills@engineering/tdd` | Red-green-refactor implementation workflow. |
 | `teach` | `mattpocock/skills@productivity/teach` | Teach a concept, workflow, tool, or codebase area. |
 | `to-tickets` | `mattpocock/skills@engineering/to-tickets` | Break a plan or spec into tracer-bullet tickets with declared blocking edges, published to the configured tracker. |
