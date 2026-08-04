@@ -98,6 +98,7 @@ rewritten="$(rtk rewrite "git status --short" 2>/dev/null || true)"
 
 require_file "$HOME/.config/opencode/AGENTS.md"
 require_contains "$HOME/.config/opencode/AGENTS.md" "Required Capabilities"
+require_contains "$HOME/.config/opencode/AGENTS.md" "ASD-STE100"
 require_json "$HOME/.config/opencode/opencode.json"
 require_contains "$HOME/.config/opencode/opencode.json" "@plannotator/opencode@latest"
 
