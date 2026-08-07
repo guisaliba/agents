@@ -10,15 +10,15 @@ Shared skills are installed into:
 
 Most skills are installed live from upstream sources by `agents/apply.sh`. Do not vendor skill payloads under `agents/skills/` unless the skill has no upstream source.
 
-Local skill exceptions are tracked directly under `agents/skills/<skill-name>/`. These are manual-install only and not part of the automated setup script.
+Local tracked skills are versioned directly under `agents/skills/<skill-name>/`. `agents/apply.sh` copies them to `~/.agents/skills/`; it does not fetch them from upstream.
 
 ## Skill discovery
 
 OpenCode discovers global skills from `~/.agents/skills/*/SKILL.md` automatically. No extra path config is needed.
 
-## Managed skills
+## Skills managed by `agents/apply.sh`
 
-Skills installed live by `agents/apply.sh`:
+Skills installed or copied by `agents/apply.sh`:
 
 | Skill | Source | Purpose |
 | --- | --- | --- |
@@ -40,7 +40,7 @@ Skills installed live by `agents/apply.sh`:
 | `teach` | `mattpocock/skills@productivity/teach` | Teach a concept, workflow, tool, or codebase area. |
 | `to-tickets` | `mattpocock/skills@engineering/to-tickets` | Break a plan or spec into tracer-bullet tickets with declared blocking edges, published to the configured tracker. |
 | `triage` | `mattpocock/skills@engineering/triage` | Move tracker issues through the configured triage roles and create agent-ready briefs. |
-| `writing-great-skills` | `mattpocock/skills@productivity/writing-great-skills` | Author new agent skills with proper structure and progressive disclosure. |
+| `writing-for-agents` | `mattpocock/skills@productivity/writing-for-agents` | Write predictable skills and agent instruction documents. |
 
 ### Cloudflare skills
 
@@ -51,7 +51,9 @@ The Cloudflare skills bundle is installed live as a group from `https://github.c
 | `cloudflare` | Comprehensive platform skill covering Workers, Pages, storage (KV, D1, R2), AI, networking, security, and IaC. |
 | `agents-sdk` | Building stateful AI agents with state, scheduling, RPC, MCP servers, email, and streaming chat. |
 | `durable-objects` | Stateful coordination, RPC, SQLite, alarms, and WebSockets. |
-| `sandbox-sdk` | Secure code execution for AI code runners, interpreters, CI/CD, and interactive dev environments. |
+| `sandbox-next` | Cloudflare Sandbox applications using the `@cloudflare/sandbox@next` preview package. |
+| `sandbox-stable` | Cloudflare Sandbox applications using the stable package. |
+| `sandbox-migrate-to-next` | Port Cloudflare Sandbox applications from stable to the `@next` preview package. |
 | `wrangler` | Deploying and managing Workers, KV, R2, D1, Vectorize, Queues, and Workflows. |
 | `web-perf` | Auditing Core Web Vitals and render-blocking resources. |
 | `workers-best-practices` | Best practices for building on Cloudflare Workers. |
@@ -80,7 +82,7 @@ The Linear remote MCP server is merged the same way:
 
 Authenticate a server with `opencode mcp auth <name>`; list status with `opencode mcp list`.
 
-Local-only skills (manual install):
+Local tracked skills (copied by `agents/apply.sh`):
 
 | Skill | Source | Purpose |
 | --- | --- | --- |

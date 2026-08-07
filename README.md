@@ -51,7 +51,7 @@ From the repo root:
 ./agents/test.sh
 ```
 
-The script installs OpenCode if missing, copies `AGENTS.md` to `~/.config/opencode/AGENTS.md`, merges `~/.config/opencode/opencode.json`, configures RTK for OpenCode, installs Plannotator core and extras, and installs/updates required skills. Skills are installed live from upstream sources every run. The Cloudflare skills bundle (`https://github.com/cloudflare/skills`) is installed as a group without `-s` so every upstream skill is pulled in. The Cloudflare remote MCP servers (`cloudflare-api`, `cloudflare-docs`, `cloudflare-bindings`, `cloudflare-builds`, `cloudflare-observability`) and the Linear remote MCP server (`linear`) are merged into the `mcp` block of `~/.config/opencode/opencode.json`; authenticate with `opencode mcp auth <name>`.
+The script installs OpenCode if missing, copies `AGENTS.md` to `~/.config/opencode/AGENTS.md`, merges `~/.config/opencode/opencode.json`, configures RTK for OpenCode, installs Plannotator core and extras, and installs/updates required skills. Upstream skills are installed live and tracked local skills are copied on every run. The Cloudflare skills bundle (`https://github.com/cloudflare/skills`) is installed as a group without `-s` so every upstream skill is pulled in. The Cloudflare remote MCP servers (`cloudflare-api`, `cloudflare-docs`, `cloudflare-bindings`, `cloudflare-builds`, `cloudflare-observability`) and the Linear remote MCP server (`linear`) are merged into the `mcp` block of `~/.config/opencode/opencode.json`; authenticate with `opencode mcp auth <name>`.
 
 ## Policy
 
@@ -59,4 +59,4 @@ Do not vendor upstream skill or plugin payloads in this repo.
 
 Default rule: install live, do not track copies.
 
-Exception: `auto-pr-review` is a local-only skill tracked under `agents/skills/auto-pr-review/`. Install it manually if needed.
+Exceptions: `find-skills` and `auto-pr-review` are local tracked skills under `agents/skills/`. `agents/apply.sh` copies them to `~/.agents/skills/` on every setup run.

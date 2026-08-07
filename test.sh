@@ -121,6 +121,7 @@ printf '\n--- Skills ---\n'
 for skill in \
   caveman \
   find-skills \
+  auto-pr-review \
   grill-me \
   grill-with-docs \
   handoff \
@@ -129,7 +130,7 @@ for skill in \
   teach \
   to-tickets \
   triage \
-  writing-great-skills \
+  writing-for-agents \
   improve \
   logging-best-practices \
   plannotator-review \
@@ -144,13 +145,19 @@ for skill in \
   cloudflare-one \
   cloudflare-one-migrations \
   durable-objects \
-  sandbox-sdk \
+  sandbox-migrate-to-next \
+  sandbox-next \
+  sandbox-stable \
   turnstile-spin \
   web-perf \
   workers-best-practices \
   wrangler
 do
   require_dir "$HOME/.agents/skills/$skill"
+done
+
+for skill in find-skills auto-pr-review; do
+  require_file "$HOME/.agents/skills/$skill/SKILL.md"
 done
 
 # Result

@@ -255,6 +255,9 @@ install_required_skills() {
 
   mkdir -p "$HOME/.agents/skills"
 
+  install_local_skill "$DOTFILES_DIR/agents/skills/find-skills" "find-skills"
+  install_local_skill "$DOTFILES_DIR/agents/skills/auto-pr-review" "auto-pr-review"
+
   install_skill "JuliusBrussee/caveman" "caveman"
   install_skill "mattpocock/skills@productivity/grill-me" "grill-me"
   install_skill "mattpocock/skills@engineering/grill-with-docs" "grill-with-docs"
@@ -264,11 +267,9 @@ install_required_skills() {
   install_skill "mattpocock/skills@productivity/teach" "teach"
   install_skill "mattpocock/skills@engineering/to-tickets" "to-tickets"
   install_skill "mattpocock/skills@engineering/triage" "triage"
-  install_skill "mattpocock/skills@productivity/writing-great-skills" "writing-great-skills"
+  install_skill "mattpocock/skills@productivity/writing-for-agents" "writing-for-agents"
   install_skill "shadcn/improve" "improve"
   install_skill "boristane/agent-skills" "logging-best-practices"
-
-  install_local_skill "$DOTFILES_DIR/agents/skills/find-skills" "find-skills"
 
   install_cloudflare_skills
 }
