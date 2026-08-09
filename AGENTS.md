@@ -56,6 +56,22 @@ Use focused checks first, then broader checks when appropriate.
 
 If checks are skipped, state why. If checks fail, separate failures caused by your change from pre-existing or unrelated failures.
 
+### Delegated Implementation Review
+
+When you are the primary agent, you are the final owner of delegated work.
+
+If a subagent modifies the workspace:
+
+1. Treat its response as a handoff, not as proof of correctness.
+2. Inspect the actual changes before you accept the work.
+3. Review the relevant diff and affected integration points. Do not rely only on the subagent summary.
+4. Run the applicable tests, checks, linting, type checks, builds, or other repository verification.
+5. If the implementation is incorrect or incomplete, fix it or delegate a focused correction.
+6. Review the corrected result again.
+7. Do not report the task as complete until you have personally reviewed and accepted the implementation.
+
+Do not delegate final acceptance of a subagent implementation to another subagent.
+
 ## Git
 
 Do not stage, commit, amend, push, create branches, tags, releases, issues, PRs, or PR comments unless explicitly requested.
