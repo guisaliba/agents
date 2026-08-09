@@ -10,7 +10,7 @@ set -Eeuo pipefail
 # Usage:
 #   ./agents/apply.sh
 #
-# Prerequisites: curl, git, npm, npx.
+# Prerequisites: curl, git, npm, npx, python3.
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_DIR="${DOTFILES_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
@@ -32,7 +32,7 @@ have() {
 check_prerequisites() {
   log "Checking prerequisites"
   local missing=()
-  for cmd in curl git npm npx; do
+  for cmd in curl git npm npx python3; do
     if ! have "$cmd"; then
       missing+=("$cmd")
     fi
@@ -66,28 +66,106 @@ copy_agents_md() {
   cp "$src" "$HOME/.config/opencode/AGENTS.md"
 }
 
+native_scout_available() {
+  local clean_home output
+  clean_home="$(mktemp -d)"
+
+  if output="$(
+    HOME="$clean_home" \
+      OPENCODE_DISABLE_EXTERNAL_SKILLS=1 \
+      opencode agent list --pure 2>/dev/null
+  )" && [[ "$output" == *$'\nscout (subagent)\n'* ]]; then
+    rm -rf "$clean_home"
+    return 0
+  fi
+
+  rm -rf "$clean_home"
+  return 1
+}
+
 merge_opencode_json() {
   log "Merging OpenCode opencode.json"
 
   local config="$HOME/.config/opencode/opencode.json"
+  local manage_scout=false
   mkdir -p "$(dirname "$config")"
 
-  python3 - "$config" <<'PY'
+  if native_scout_available; then
+    manage_scout=true
+    log "Native Scout subagent available; applying its model override"
+  else
+    log "Native Scout subagent unavailable; leaving Scout unmanaged"
+  fi
+
+  python3 - "$config" "$manage_scout" <<'PY'
 import json
 import os
 import sys
 
 path = sys.argv[1]
+manage_scout = sys.argv[2] == "true"
 data = {}
 
 if os.path.exists(path):
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-    except json.JSONDecodeError:
-        data = {}
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"ERROR: Invalid JSON in {path} at line {exc.lineno}, "
+            f"column {exc.colno}: {exc.msg}. File was not changed."
+        )
+
+if not isinstance(data, dict):
+    raise SystemExit(
+        f"ERROR: Expected a JSON object in {path}, found "
+        f"{type(data).__name__}. File was not changed."
+    )
 
 data.setdefault("$schema", "https://opencode.ai/config.json")
+
+sol_model = "openai/gpt-5.6-sol"
+deepseek_model = "opencode-go/deepseek-v4-flash"
+data["model"] = sol_model
+data["default_agent"] = "build"
+
+agents = data.get("agent", {})
+if not isinstance(agents, dict):
+    raise SystemExit(
+        f"ERROR: Expected 'agent' to be an object in {path}. File was not changed."
+    )
+
+managed_models = {
+    "plan": sol_model,
+    "general": deepseek_model,
+    "explore": deepseek_model,
+}
+if manage_scout:
+    managed_models["scout"] = deepseek_model
+
+for name, model in managed_models.items():
+    config = agents.get(name, {})
+    if not isinstance(config, dict):
+        raise SystemExit(
+            f"ERROR: Expected 'agent.{name}' to be an object in {path}. "
+            "File was not changed."
+        )
+    config["model"] = model
+    agents[name] = config
+
+if not manage_scout and "scout" in agents:
+    scout = agents["scout"]
+    if not isinstance(scout, dict):
+        raise SystemExit(
+            f"ERROR: Expected 'agent.scout' to be an object in {path}. "
+            "File was not changed."
+        )
+    if scout.get("model") == deepseek_model:
+        scout.pop("model")
+        if not scout:
+            agents.pop("scout")
+
+data["agent"] = agents
 
 plugin = "@plannotator/opencode@latest"
 plugins = list(data.get("plugin", []))
