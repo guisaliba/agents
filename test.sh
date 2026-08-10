@@ -10,6 +10,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_DIR="${DOTFILES_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 
 failures=0
+GITHUB_MCP_EXPECTED_JSON='{"type":"remote","url":"https://api.githubcopilot.com/mcp/","enabled":true,"oauth":false,"headers":{"Authorization":"Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}","X-MCP-Toolsets":"context,repos,issues,pull_requests,actions"}}'
 
 ok() {
   printf 'ok: %s\n' "$*"
@@ -110,9 +111,42 @@ PY
   fi
 }
 
+require_json_literal() {
+  local path="$1"
+  local key="$2"
+  local expected_json="$3"
+  if python3 - "$path" "$key" "$expected_json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+key = sys.argv[2]
+
+try:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    for part in key.split("."):
+        value = value[part]
+    expected = json.loads(sys.argv[3])
+except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError):
+    raise SystemExit(1)
+
+raise SystemExit(0 if value == expected else 1)
+PY
+  then
+    ok "json literal: $key == $expected_json"
+  else
+    not_ok "json literal mismatch: $key != $expected_json in $path"
+  fi
+}
+
 require_json_missing() {
   local path="$1"
   local key="$2"
+  if [[ ! -f "$path" ]]; then
+    not_ok "cannot inspect missing json file: $path"
+    return
+  fi
   if python3 - "$path" "$key" <<'PY'
 import json
 import sys
@@ -132,6 +166,128 @@ PY
   fi
 }
 
+test_opencode_json_merge() {
+  local fixture_root fixture_home fixture_config first_config
+  local malformed_home malformed_config malformed_before malformed_log
+  local invalid_home invalid_config invalid_before invalid_log
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  fixture_config="$fixture_home/.config/opencode/opencode.json"
+  first_config="$fixture_root/first-opencode.json"
+
+  mkdir -p "$(dirname "$fixture_config")"
+  python3 - "$fixture_config" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+config = {
+    "$schema": "https://opencode.ai/config.json",
+    "theme": "user-theme",
+    "agent": {
+        "general": {"temperature": 0.25},
+        "custom": {"model": "user/custom-model"},
+    },
+    "plugin": ["user/plugin"],
+    "mcp": {
+        "custom": {
+            "type": "remote",
+            "url": "https://example.invalid/mcp",
+            "enabled": False,
+            "headers": {"X-Custom": "keep"},
+        },
+        "github": {
+            "type": "local",
+            "command": ["obsolete-github-server"],
+            "enabled": False,
+        },
+    },
+}
+Path(sys.argv[1]).write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+PY
+
+  if (
+    HOME="$fixture_home"
+    unset GITHUB_PERSONAL_ACCESS_TOKEN
+    source "$DOTFILES_DIR/agents/apply.sh"
+    merge_opencode_json
+  ) >/dev/null 2>&1; then
+    ok "OpenCode merge fixture applies without GitHub credentials"
+  else
+    not_ok "OpenCode merge fixture failed"
+  fi
+
+  require_json_value "$fixture_config" "theme" "user-theme"
+  require_json_literal "$fixture_config" "agent.general.temperature" "0.25"
+  require_json_value "$fixture_config" "agent.custom.model" "user/custom-model"
+  require_json_value "$fixture_config" "mcp.custom.url" "https://example.invalid/mcp"
+  require_json_value "$fixture_config" "mcp.custom.headers.X-Custom" "keep"
+  require_json_value "$fixture_config" "mcp.github.type" "remote"
+  require_json_value "$fixture_config" "mcp.github.url" "https://api.githubcopilot.com/mcp/"
+  require_json_literal "$fixture_config" "mcp.github.enabled" "true"
+  require_json_literal "$fixture_config" "mcp.github.oauth" "false"
+  require_json_value "$fixture_config" "mcp.github.headers.Authorization" "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+  require_json_value "$fixture_config" "mcp.github.headers.X-MCP-Toolsets" "context,repos,issues,pull_requests,actions"
+  require_json_literal "$fixture_config" "mcp.github" "$GITHUB_MCP_EXPECTED_JSON"
+
+  cp "$fixture_config" "$first_config"
+  if (
+    HOME="$fixture_home"
+    unset GITHUB_PERSONAL_ACCESS_TOKEN
+    source "$DOTFILES_DIR/agents/apply.sh"
+    merge_opencode_json
+  ) >/dev/null 2>&1; then
+    ok "OpenCode merge fixture applies a second time"
+  else
+    not_ok "second OpenCode merge fixture apply failed"
+  fi
+  if cmp -s "$first_config" "$fixture_config"; then
+    ok "OpenCode merge is idempotent"
+  else
+    not_ok "OpenCode merge changed on the second apply"
+  fi
+
+  malformed_home="$fixture_root/malformed-home"
+  malformed_config="$malformed_home/.config/opencode/opencode.json"
+  malformed_before="$fixture_root/malformed-before.json"
+  malformed_log="$fixture_root/malformed.log"
+  mkdir -p "$(dirname "$malformed_config")"
+  printf '%s\n' '{"theme":"keep","mcp":[]}' >"$malformed_config"
+  cp "$malformed_config" "$malformed_before"
+  if (
+    HOME="$malformed_home"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    merge_opencode_json
+  ) >"$malformed_log" 2>&1; then
+    not_ok "malformed OpenCode mcp structure was accepted"
+  else
+    ok "malformed OpenCode mcp structure fails"
+  fi
+  require_same_file "$malformed_before" "$malformed_config"
+  require_contains "$malformed_log" "Expected 'mcp' to be an object"
+
+  invalid_home="$fixture_root/invalid-home"
+  invalid_config="$invalid_home/.config/opencode/opencode.json"
+  invalid_before="$fixture_root/invalid-before.json"
+  invalid_log="$fixture_root/invalid.log"
+  mkdir -p "$(dirname "$invalid_config")"
+  printf '%s\n' '{"theme":"keep", invalid}' >"$invalid_config"
+  cp "$invalid_config" "$invalid_before"
+  if (
+    HOME="$invalid_home"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    merge_opencode_json
+  ) >"$invalid_log" 2>&1; then
+    not_ok "invalid OpenCode JSON was accepted"
+  else
+    ok "invalid OpenCode JSON fails"
+  fi
+  require_same_file "$invalid_before" "$invalid_config"
+  require_contains "$invalid_log" "Invalid JSON"
+
+  rm -rf -- "$fixture_root"
+}
+
 # Repo structure checks
 printf '\n--- Repo Structure ---\n'
 
@@ -143,6 +299,11 @@ require_file "$DOTFILES_DIR/agents/skills/README.md"
 require_executable "$DOTFILES_DIR/agents/apply.sh"
 require_executable "$DOTFILES_DIR/agents/test.sh"
 require_contains "$DOTFILES_DIR/agents/AGENTS.md" "When you are the primary agent, you are the final owner of delegated work."
+
+# OpenCode merge fixture checks
+printf '\n--- OpenCode Merge Fixtures ---\n'
+
+test_opencode_json_merge
 
 # Local machine checks
 printf '\n--- Local Machine ---\n'
@@ -170,6 +331,13 @@ require_json_value "$HOME/.config/opencode/opencode.json" "default_agent" "build
 require_json_value "$HOME/.config/opencode/opencode.json" "agent.plan.model" "openai/gpt-5.6-sol"
 require_json_value "$HOME/.config/opencode/opencode.json" "agent.general.model" "opencode-go/deepseek-v4-flash"
 require_json_value "$HOME/.config/opencode/opencode.json" "agent.explore.model" "opencode-go/deepseek-v4-flash"
+require_json_value "$HOME/.config/opencode/opencode.json" "mcp.github.type" "remote"
+require_json_value "$HOME/.config/opencode/opencode.json" "mcp.github.url" "https://api.githubcopilot.com/mcp/"
+require_json_literal "$HOME/.config/opencode/opencode.json" "mcp.github.enabled" "true"
+require_json_literal "$HOME/.config/opencode/opencode.json" "mcp.github.oauth" "false"
+require_json_value "$HOME/.config/opencode/opencode.json" "mcp.github.headers.Authorization" "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+require_json_value "$HOME/.config/opencode/opencode.json" "mcp.github.headers.X-MCP-Toolsets" "context,repos,issues,pull_requests,actions"
+require_json_literal "$HOME/.config/opencode/opencode.json" "mcp.github" "$GITHUB_MCP_EXPECTED_JSON"
 
 available_agents="$(opencode agent list 2>/dev/null || true)"
 if [[ "$available_agents" == *$'\nscout (subagent)\n'* ]]; then

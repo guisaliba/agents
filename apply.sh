@@ -186,14 +186,26 @@ remote_mcps = {
     **cloudflare_mcps,
     "linear": "https://mcp.linear.app/mcp",
 }
-mcp = data.get("mcp")
+mcp = data.get("mcp", {})
 if not isinstance(mcp, dict):
-    mcp = {}
+    raise SystemExit(
+        f"ERROR: Expected 'mcp' to be an object in {path}. File was not changed."
+    )
 for name, url in remote_mcps.items():
     existing = mcp.get(name)
     if isinstance(existing, dict) and existing.get("url") == url:
         continue
     mcp[name] = {"type": "remote", "url": url, "enabled": True}
+mcp["github"] = {
+    "type": "remote",
+    "url": "https://api.githubcopilot.com/mcp/",
+    "enabled": True,
+    "oauth": False,
+    "headers": {
+        "Authorization": "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}",
+        "X-MCP-Toolsets": "context,repos,issues,pull_requests,actions",
+    },
+}
 data["mcp"] = mcp
 
 with open(path, "w", encoding="utf-8") as f:
@@ -364,4 +376,6 @@ main() {
   log "Setup complete. Run ./agents/test.sh to verify."
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi
