@@ -39,16 +39,18 @@ The script copies the complete canonical `agents/AGENTS.md` to `~/.config/openco
 
 Apply manages the official remote GitHub MCP Server as the global `mcp.github` entry. It uses `https://api.githubcopilot.com/mcp/` and the server-side `X-MCP-Toolsets` allow-list `context,repos,issues,pull_requests,actions`. These toolsets cover the authenticated user context, repositories and content, issues, pull requests and reviews, and GitHub Actions. The limited set avoids the tool-schema cost of `all`. It does not enable read-only mode, so supported writes remain available when the token permits them. The `context` toolset supplies current-user context; the larger `users` toolset is not enabled.
 
-Authentication is machine-specific. Set `GITHUB_PERSONAL_ACCESS_TOKEN` in the environment that starts OpenCode. OpenCode expands `Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}` at runtime. The token is not stored in this repository or copied into the runtime JSON. Apply and the deterministic test suite do not require the variable, network access, or a live GitHub response.
+Authentication is machine-specific. OpenCode reads a dedicated PAT from `~/.config/opencode/secrets/github-mcp-pat` through its documented `{file:...}` interpolation. Apply creates an empty `0600` placeholder when the file is absent and never replaces its contents. The token is not stored in this repository or copied into the runtime JSON. Apply and the deterministic test suite do not require a live token, network access, or a GitHub response.
 
-Restart OpenCode after apply or any GitHub MCP environment change. Then inspect the connection with:
+After apply, write only the PAT to the protected file. Do not include quotes or the `Bearer` prefix. The detailed setup command is in `agents/opencode/README.md`.
+
+Restart OpenCode after apply or any GitHub MCP token-file change. Then inspect the connection with:
 
 ```sh
 opencode mcp list
 opencode mcp debug github
 ```
 
-If the server reports `401 Unauthorized`, check that the variable is present in the process that starts OpenCode, that the token is valid, and that its repository permissions cover the requested operation. If tools are missing, confirm the managed allow-list and restart OpenCode. `opencode mcp auth github` is not used because the managed PAT configuration sets `oauth` to `false`.
+If the server reports `401 Unauthorized`, check that the token file is non-empty, contains only a valid PAT, and grants access to the required repositories and operations. If tools are missing, confirm the managed allow-list and restart OpenCode. `opencode mcp auth github` is not used because the managed PAT configuration sets `oauth` to `false`.
 
 Use GitHub MCP for GitHub platform objects and hosted state. Use local `git` for worktree and Git graph operations. Use `gh` when MCP coverage is insufficient, when local checkout integration is necessary, for Actions logs or artifacts that MCP does not expose adequately, or for `gh api`. File edits in a checked-out repository stay in the local diff and normal Git workflow. The detailed operating notes are in `agents/opencode/README.md`, and the agent selection rule is in `agents/AGENTS.md`.
 
@@ -93,7 +95,7 @@ From the repo root:
 
 Prerequisites are `curl`, `git`, `npm`, `npx`, and `python3`. On a new machine, authenticate the providers that supply `openai/gpt-5.6-sol` and `opencode-go/deepseek-v4-flash` with `opencode auth login` before use. Model policy is stored in Git. Provider API keys, OAuth tokens, and session credentials are not.
 
-The script installs OpenCode if missing, copies `AGENTS.md` to `~/.config/opencode/AGENTS.md`, merges the global routing and integrations into `~/.config/opencode/opencode.json`, configures RTK for OpenCode, installs Plannotator core and extras, and installs/updates required skills. Upstream skills are installed live and tracked local skills are copied on every run. The Cloudflare skills bundle (`https://github.com/cloudflare/skills`) is installed as a group without `-s` so every upstream skill is pulled in. The Cloudflare remote MCP servers (`cloudflare-api`, `cloudflare-docs`, `cloudflare-bindings`, `cloudflare-builds`, `cloudflare-observability`), the official GitHub remote MCP server (`github`), and the Linear remote MCP server (`linear`) are merged into the `mcp` block of `~/.config/opencode/opencode.json`. Use `opencode mcp auth <name>` for the OAuth-enabled Cloudflare and Linear servers. GitHub uses the `GITHUB_PERSONAL_ACCESS_TOKEN` environment variable instead.
+The script installs OpenCode if missing, copies `AGENTS.md` to `~/.config/opencode/AGENTS.md`, merges the global routing and integrations into `~/.config/opencode/opencode.json`, configures RTK for OpenCode, installs Plannotator core and extras, and installs/updates required skills. Upstream skills are installed live and tracked local skills are copied on every run. The Cloudflare skills bundle (`https://github.com/cloudflare/skills`) is installed as a group without `-s` so every upstream skill is pulled in. The Cloudflare remote MCP servers (`cloudflare-api`, `cloudflare-docs`, `cloudflare-bindings`, `cloudflare-builds`, `cloudflare-observability`), the official GitHub remote MCP server (`github`), and the Linear remote MCP server (`linear`) are merged into the `mcp` block of `~/.config/opencode/opencode.json`. Use `opencode mcp auth <name>` for the OAuth-enabled Cloudflare and Linear servers. GitHub uses the dedicated machine-local PAT file instead.
 
 ## Policy
 

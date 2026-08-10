@@ -49,7 +49,7 @@ The managed configuration is:
       "enabled": true,
       "oauth": false,
       "headers": {
-        "Authorization": "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}",
+        "Authorization": "Bearer {file:~/.config/opencode/secrets/github-mcp-pat}",
         "X-MCP-Toolsets": "context,repos,issues,pull_requests,actions"
       }
     }
@@ -69,9 +69,23 @@ The allow-list reduces tool-schema context. It does not use `all`, the separate 
 
 ### Authentication And Verification
 
-Provide `GITHUB_PERSONAL_ACCESS_TOKEN` through the machine-specific environment that starts OpenCode. Do not put its value in this repository or in `opencode.json`. The tracked setup stores only OpenCode's `{env:GITHUB_PERSONAL_ACCESS_TOKEN}` reference. Apply and deterministic tests work when the variable is absent.
+Create a dedicated PAT for GitHub MCP with only the repository access and permissions that the agent needs. Keep this token separate from the broader token used by `gh`.
 
-After apply, restart OpenCode so that the active process reads the new configuration and environment. Verify the server with:
+The [official GitHub OpenCode guide](https://github.com/github/github-mcp-server/blob/main/docs/installation-guides/install-opencode.md) shows environment-variable interpolation for the PAT. This setup uses [OpenCode's documented file interpolation](https://opencode.ai/docs/config/#files) instead. OpenCode replaces `{file:~/.config/opencode/secrets/github-mcp-pat}` with the trimmed file contents before it parses the configuration. The resulting request still uses the required `Authorization: Bearer <PAT>` header.
+
+Apply creates `~/.config/opencode/secrets/github-mcp-pat` as an empty `0600` file when it is absent. It never replaces an existing file or token. Write only the PAT to this file. Do not include quotes or the `Bearer` prefix. After apply, use this hidden prompt so the PAT does not enter shell history:
+
+```sh
+read -r -s -p 'GitHub MCP PAT: ' github_mcp_pat
+printf '\n'
+printf '%s\n' "$github_mcp_pat" >"$HOME/.config/opencode/secrets/github-mcp-pat"
+unset github_mcp_pat
+chmod 600 "$HOME/.config/opencode/secrets/github-mcp-pat"
+```
+
+The token file is machine-specific and is never copied into Git or `opencode.json`. The runtime JSON contains only the `{file:...}` reference. Apply and deterministic tests work with the empty placeholder and do not require GitHub access.
+
+Restart OpenCode after apply or after you change the token file. Then verify the server with:
 
 ```sh
 opencode mcp list
@@ -80,7 +94,7 @@ opencode mcp debug github
 
 The debug command tests the connection and reports authentication details. `opencode mcp auth github` does not apply to this managed entry because `oauth` is `false` and the server uses the PAT header.
 
-For `401 Unauthorized`, confirm that the variable is available to the OpenCode process, the token is current, and its repository permissions allow the requested access. For a failed server, use `opencode mcp debug github`. For missing tools, inspect the `X-MCP-Toolsets` value, confirm that `enabled` is `true`, and restart OpenCode. An offline machine or an unavailable GitHub service can make the live connection fail, but it does not affect the deterministic configuration checks.
+For `401 Unauthorized`, confirm that the token file is non-empty, contains only the current PAT, and grants the required repository access and permissions. Do not print the token during diagnosis. For a failed server, use `opencode mcp debug github`. For missing tools, inspect the `X-MCP-Toolsets` value, confirm that `enabled` is `true`, and restart OpenCode. An offline machine or an unavailable GitHub service can make the live connection fail, but it does not affect the deterministic configuration checks.
 
 ### Tool Selection
 

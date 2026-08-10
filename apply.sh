@@ -15,6 +15,8 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_DIR="${DOTFILES_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 RTK_VERSION="${RTK_VERSION:-v0.38.0}"
+GITHUB_MCP_TOKEN_FILE="$HOME/.config/opencode/secrets/github-mcp-pat"
+GITHUB_MCP_TOKEN_REFERENCE="~/.config/opencode/secrets/github-mcp-pat"
 
 log() {
   printf '\n==> %s\n' "$*"
@@ -66,6 +68,30 @@ copy_agents_md() {
   cp "$src" "$HOME/.config/opencode/AGENTS.md"
 }
 
+ensure_github_mcp_token_file() {
+  log "Preparing the machine-local GitHub MCP token file"
+
+  python3 - "$GITHUB_MCP_TOKEN_FILE" <<'PY'
+import os
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+path.parent.chmod(0o700)
+
+if path.is_symlink():
+    raise SystemExit(f"ERROR: GitHub MCP token path must not be a symlink: {path}")
+if path.exists() and not path.is_file():
+    raise SystemExit(f"ERROR: GitHub MCP token path must be a regular file: {path}")
+if not path.exists():
+    descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    os.close(descriptor)
+
+path.chmod(0o600)
+PY
+}
+
 native_scout_available() {
   local clean_home output
   clean_home="$(mktemp -d)"
@@ -97,13 +123,14 @@ merge_opencode_json() {
     log "Native Scout subagent unavailable; leaving Scout unmanaged"
   fi
 
-  python3 - "$config" "$manage_scout" <<'PY'
+  python3 - "$config" "$manage_scout" "$GITHUB_MCP_TOKEN_REFERENCE" <<'PY'
 import json
 import os
 import sys
 
 path = sys.argv[1]
 manage_scout = sys.argv[2] == "true"
+github_mcp_token_reference = sys.argv[3]
 data = {}
 
 if os.path.exists(path):
@@ -202,7 +229,7 @@ mcp["github"] = {
     "enabled": True,
     "oauth": False,
     "headers": {
-        "Authorization": "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}",
+        "Authorization": f"Bearer {{file:{github_mcp_token_reference}}}",
         "X-MCP-Toolsets": "context,repos,issues,pull_requests,actions",
     },
 }
@@ -216,6 +243,7 @@ PY
 
 setup_opencode() {
   copy_agents_md
+  ensure_github_mcp_token_file
   merge_opencode_json
 }
 

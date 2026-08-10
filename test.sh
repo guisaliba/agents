@@ -10,7 +10,8 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_DIR="${DOTFILES_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 
 failures=0
-GITHUB_MCP_EXPECTED_JSON='{"type":"remote","url":"https://api.githubcopilot.com/mcp/","enabled":true,"oauth":false,"headers":{"Authorization":"Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}","X-MCP-Toolsets":"context,repos,issues,pull_requests,actions"}}'
+GITHUB_MCP_TOKEN_FILE="$HOME/.config/opencode/secrets/github-mcp-pat"
+GITHUB_MCP_EXPECTED_JSON='{"type":"remote","url":"https://api.githubcopilot.com/mcp/","enabled":true,"oauth":false,"headers":{"Authorization":"Bearer {file:~/.config/opencode/secrets/github-mcp-pat}","X-MCP-Toolsets":"context,repos,issues,pull_requests,actions"}}'
 
 ok() {
   printf 'ok: %s\n' "$*"
@@ -24,6 +25,34 @@ not_ok() {
 require_file() {
   local path="$1"
   [[ -f "$path" ]] && ok "file exists: $path" || not_ok "missing file: $path"
+}
+
+require_empty_file() {
+  local path="$1"
+  [[ -f "$path" && ! -s "$path" ]] && ok "empty file: $path" || not_ok "file is missing or not empty: $path"
+}
+
+require_file_mode() {
+  local path="$1"
+  local expected="$2"
+  if python3 - "$path" "$expected" <<'PY'
+import stat
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+expected = int(sys.argv[2], 8)
+try:
+    mode = stat.S_IMODE(path.stat().st_mode)
+except OSError:
+    raise SystemExit(1)
+raise SystemExit(0 if mode == expected else 1)
+PY
+  then
+    ok "file mode: $path == $expected"
+  else
+    not_ok "file mode mismatch: $path != $expected"
+  fi
 }
 
 require_executable() {
@@ -167,12 +196,14 @@ PY
 }
 
 test_opencode_json_merge() {
-  local fixture_root fixture_home fixture_config first_config
+  local fixture_root fixture_home fixture_config fixture_token token_before first_config
   local malformed_home malformed_config malformed_before malformed_log
   local invalid_home invalid_config invalid_before invalid_log
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
   fixture_config="$fixture_home/.config/opencode/opencode.json"
+  fixture_token="$fixture_home/.config/opencode/secrets/github-mcp-pat"
+  token_before="$fixture_root/token-before"
   first_config="$fixture_root/first-opencode.json"
 
   mkdir -p "$(dirname "$fixture_config")"
@@ -208,14 +239,17 @@ PY
 
   if (
     HOME="$fixture_home"
-    unset GITHUB_PERSONAL_ACCESS_TOKEN
     source "$DOTFILES_DIR/agents/apply.sh"
+    ensure_github_mcp_token_file
     merge_opencode_json
   ) >/dev/null 2>&1; then
     ok "OpenCode merge fixture applies without GitHub credentials"
   else
     not_ok "OpenCode merge fixture failed"
   fi
+
+  require_empty_file "$fixture_token"
+  require_file_mode "$fixture_token" "600"
 
   require_json_value "$fixture_config" "theme" "user-theme"
   require_json_literal "$fixture_config" "agent.general.temperature" "0.25"
@@ -226,15 +260,18 @@ PY
   require_json_value "$fixture_config" "mcp.github.url" "https://api.githubcopilot.com/mcp/"
   require_json_literal "$fixture_config" "mcp.github.enabled" "true"
   require_json_literal "$fixture_config" "mcp.github.oauth" "false"
-  require_json_value "$fixture_config" "mcp.github.headers.Authorization" "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+  require_json_value "$fixture_config" "mcp.github.headers.Authorization" "Bearer {file:~/.config/opencode/secrets/github-mcp-pat}"
   require_json_value "$fixture_config" "mcp.github.headers.X-MCP-Toolsets" "context,repos,issues,pull_requests,actions"
   require_json_literal "$fixture_config" "mcp.github" "$GITHUB_MCP_EXPECTED_JSON"
 
   cp "$fixture_config" "$first_config"
+  printf '%s\n' 'fixture-only-token' >"$fixture_token"
+  chmod 0644 "$fixture_token"
+  cp "$fixture_token" "$token_before"
   if (
     HOME="$fixture_home"
-    unset GITHUB_PERSONAL_ACCESS_TOKEN
     source "$DOTFILES_DIR/agents/apply.sh"
+    ensure_github_mcp_token_file
     merge_opencode_json
   ) >/dev/null 2>&1; then
     ok "OpenCode merge fixture applies a second time"
@@ -246,6 +283,8 @@ PY
   else
     not_ok "OpenCode merge changed on the second apply"
   fi
+  require_same_file "$token_before" "$fixture_token"
+  require_file_mode "$fixture_token" "600"
 
   malformed_home="$fixture_root/malformed-home"
   malformed_config="$malformed_home/.config/opencode/opencode.json"
@@ -325,6 +364,8 @@ require_contains "$HOME/.config/opencode/AGENTS.md" "Required Capabilities"
 require_contains "$HOME/.config/opencode/AGENTS.md" "ASD-STE100"
 require_contains "$HOME/.config/opencode/AGENTS.md" "When you are the primary agent, you are the final owner of delegated work."
 require_same_file "$DOTFILES_DIR/agents/AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
+require_file "$GITHUB_MCP_TOKEN_FILE"
+require_file_mode "$GITHUB_MCP_TOKEN_FILE" "600"
 require_json "$HOME/.config/opencode/opencode.json"
 require_json_value "$HOME/.config/opencode/opencode.json" "model" "openai/gpt-5.6-sol"
 require_json_value "$HOME/.config/opencode/opencode.json" "default_agent" "build"
@@ -335,7 +376,7 @@ require_json_value "$HOME/.config/opencode/opencode.json" "mcp.github.type" "rem
 require_json_value "$HOME/.config/opencode/opencode.json" "mcp.github.url" "https://api.githubcopilot.com/mcp/"
 require_json_literal "$HOME/.config/opencode/opencode.json" "mcp.github.enabled" "true"
 require_json_literal "$HOME/.config/opencode/opencode.json" "mcp.github.oauth" "false"
-require_json_value "$HOME/.config/opencode/opencode.json" "mcp.github.headers.Authorization" "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+require_json_value "$HOME/.config/opencode/opencode.json" "mcp.github.headers.Authorization" "Bearer {file:~/.config/opencode/secrets/github-mcp-pat}"
 require_json_value "$HOME/.config/opencode/opencode.json" "mcp.github.headers.X-MCP-Toolsets" "context,repos,issues,pull_requests,actions"
 require_json_literal "$HOME/.config/opencode/opencode.json" "mcp.github" "$GITHUB_MCP_EXPECTED_JSON"
 
