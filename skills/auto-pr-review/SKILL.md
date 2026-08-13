@@ -1,6 +1,6 @@
 ---
 name: auto-pr-review
-description: Work through reviewer comments on an already-opened pull request. Read every review comment (e.g. from GitHub Copilot or a human reviewer), judge each one against the codebase and the project's own docs/conventions, implement the valid ones as atomic commits, reply to each thread citing the fix commit (or a rejection rationale), resolve the threads, then @-mention the reviewer to request another pass. Use when the user says things like "address the PR review comments", "resolve Copilot's comments", "go through the review feedback on the PR", or "iterate on the opened PR".
+description: Work through reviewer comments on an already-opened pull request. Read every review comment (e.g. from an agent or a human reviewer), judge each one against the codebase and the project's own docs/conventions, implement the valid ones as atomic commits, reply to each thread citing the fix commit (or a rejection rationale), resolve the threads, then @-mention the reviewer to request another pass. Use when the user says things like "address the PR review comments", "resolve the agent's comments", "go through the review feedback on the PR", or "iterate on the opened PR". Sometimes, instead of an anonymous agent, the prompt might ask for a specific agent like Codex or Copilot.
 argument-hint: "PR number or URL (optional; defaults to the current branch's PR)"
 ---
 
@@ -14,9 +14,9 @@ every suggestion, and not leaving threads dangling.
 
 ## When to use this skill
 
-- A PR is already open and a reviewer (often Copilot) has left comments.
+- A PR is already open and a reviewer (often an agent) has left comments.
 - The user asks to "address", "resolve", "respond to", or "go through" review
-  feedback, or to "ask Copilot to re-review".
+  feedback, or to "ask the reviewer to re-review".
 - You're iterating on an opened PR rather than authoring fresh changes.
 
 ## Prerequisites
@@ -39,7 +39,7 @@ to act on (a thread someone already resolved is done; don't reopen it without
 reason). The GraphQL query in Step 5 returns each thread's `isResolved`.
 
 ```sh
-# Review summaries (the overall "Copilot reviewed N files" body, verdicts)
+# Review summaries (the overall "agent reviewed N files" body, verdicts)
 gh api repos/$REPO/pulls/$PR/reviews \
   --jq '.[] | "--- \(.user.login) [\(.state)] ---\n\(.body)\n"'
 
@@ -56,7 +56,7 @@ the id to reply and resolve.
 
 ## Step 2 — Triage each comment (judge accept vs reject, don't obey)
 
-For **every** unresolved comment, decide *accept* (implement it) or *reject*
+For **every** unresolved comment, decide _accept_ (implement it) or _reject_
 (won't implement, with a reason) by checking it against:
 
 - the actual code at the cited `path:line` (read it — reviewers can be wrong or
@@ -135,23 +135,23 @@ replied with a rejection rationale the user/reviewer can see).
 
 ## Step 6 — Ask for a re-review
 
-Post one PR comment that @-mentions the reviewer so it runs another pass
-(Copilot re-reviews when mentioned). **Explain the changes if there were any**;
+Post one PR comment that @-mentions (e.g.: "@codex", @"copilot", or @"human-username") the reviewer so it runs another pass
+(an agent re-reviews when mentioned). **Explain the changes if there were any**;
 if everything was rejected (no changes), say that and why, and still ask for the
 re-review:
 
 ```sh
 # When changes were made:
-gh pr comment $PR --body "@copilot all N comments were addressed in <sha> (each thread replied to + resolved):
+gh pr comment $PR --body "@agent all N comments were addressed in <sha> (each thread replied to + resolved):
 1. <comment> → <fix>
 ...
 Tests are green. Please re-review the latest changes."
 
 # When nothing changed (all rejected):
-gh pr comment $PR --body "@copilot reviewed all N comments; none were applied — <brief reasons, grounded in the code/spec>. No code changed. Please take another look and let me know if you disagree."
+gh pr comment $PR --body "@agent reviewed all N comments; none were applied — <brief reasons, grounded in the code/spec>. No code changed. Please take another look and let me know if you disagree."
 ```
 
-For a human reviewer, `@`-mention them instead, or re-request via
+For a human reviewer, either `@`-mention them, or re-request via
 `gh pr edit $PR --add-reviewer <login>`.
 
 ## Close the loop
