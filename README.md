@@ -5,7 +5,7 @@ This folder contains OpenCode agent setup configuration.
 ## Files
 
 - `AGENTS.md`: canonical global instructions used by OpenCode.
-- `apply.sh`: installs and configures OpenCode, model routing, RTK, Plannotator, required skills, and the remote MCP servers (Cloudflare, GitHub, Linear).
+- `apply.sh`: installs and configures OpenCode, ai-memory, ai-jail, model routing, RTK, Plannotator, required skills, and the remote MCP servers.
 - `test.sh`: deterministic local checks for harness wiring.
 - `opencode/README.md`: OpenCode-specific notes.
 - `skills/README.md`: shared skills notes.
@@ -34,6 +34,130 @@ Subagents:
 Scout availability currently differs between OpenCode documentation and released/runtime implementations. Apply checks a clean OpenCode agent list. If OpenCode exposes native `scout (subagent)`, apply pins it to DeepSeek. If it does not, apply removes only this repository's prior Scout model override and does not create a custom or unrestricted fallback. `agents/test.sh` verifies the same boundary, so another supported device reports its effective Scout capability.
 
 The script copies the complete canonical `agents/AGENTS.md` to `~/.config/opencode/AGENTS.md`. The source and deployed file must match exactly after apply.
+
+### ai-memory Continuity
+
+ai-memory adds memory to OpenCode at three levels:
+
+| Level | Installed part | Result |
+| --- | --- | --- |
+| Search and durable pages | `mcp.ai-memory` at `http://127.0.0.1:49374/mcp` | OpenCode can search recent observations, the wiki, handoffs, and durable pages. |
+| Automatic lifecycle capture | generated `~/.config/opencode/plugins/ai-memory.ts` | OpenCode sends bounded and sanitized session and tool events. It can inject a pending handoff at session start. |
+| Managed workstream | `ai-memory run opencode` | ai-memory links one native OpenCode session to a portable workstream, resumes it, and imports its visible transcript records after exit. |
+
+The native per-user service stores its private state under `~/.local/share/ai-memory`. Its config is `~/.config/ai-memory/config.toml`. Its optional secrets file is `~/.config/ai-memory/env`. Apply creates the layout, keeps both config files private, and enables `ai-memory.service`. The test script verifies the local loopback endpoint.
+
+This opinionated setup uses an unauthenticated loopback service. Apply fails before it changes OpenCode configuration when `AI_MEMORY_AUTH_TOKEN`, `AI_MEMORY_AUTH__BEARER_TOKEN`, or `AI_MEMORY_AUTH__ACTOR_PROXY_BEARER_TOKEN` is active in the shell, systemd user manager, or environment file. It also rejects `[auth].bearer_token` and `[auth].actor_proxy_bearer_token` in `config.toml`. Do not set those values with this design. They would require authenticated MCP, hook, managed-launcher, and jail wiring that this setup intentionally does not generate.
+
+Dotfiles owns the service policy, the exact MCP entry, and the `instructions` reference in `opencode.json`. The current ai-memory binary generates and owns these files:
+
+- `~/.config/opencode/plugins/ai-memory.ts`
+- `~/.config/opencode/ai-memory.md`
+- `~/.agents/skills/ai-memory-*`
+
+The generated instruction file is separate from `~/.config/opencode/AGENTS.md`. OpenCode loads the global AGENTS file automatically and loads the generated file through its global `instructions` array. This keeps the canonical tracked `agents/AGENTS.md` byte-for-byte equal to its deployed copy and lets each installed ai-memory release refresh its own routing text.
+
+Apply passes the managed config path and `http://127.0.0.1:49374` explicitly to the hook generator. A stale default config or client `AI_MEMORY_SERVER_URL` cannot redirect the generated OpenCode plugin.
+
+Apply uses `--project-strategy repo-root` for the generated plugin. A session keeps one project identity when it changes into a repository subdirectory. Add a project `.ai-memory.toml` only when that project needs an explicit override.
+
+#### Model Routing
+
+ai-memory treats GPT-5.6 Sol, DeepSeek V4 Flash, Kimi K3, GPT-5.6 Luna, GLM-5.3, and other OpenCode Go choices as models inside the same OpenCode harness. A model change needs no ai-memory adapter or config change. OpenCode continues to own provider authentication, agent routing, and the selected model.
+
+The managed ledger records OpenCode as the harness. It does not promise a complete recursive copy of every child-subagent transcript. It imports visible records from the linked native session, including completed tool results that are present in that session. It excludes hidden reasoning and unsupported private records.
+
+#### Direct And Managed Starts
+
+Plain OpenCode stays valid:
+
+```sh
+opencode
+opencode -c
+opencode session list
+```
+
+These direct starts still have the MCP tools, lifecycle capture, durable wiki, and handoff behavior. They do not use the portable managed-workstream ledger.
+
+Use managed mode when you want ai-memory to own native resume and the portable visible-event ledger:
+
+```sh
+ai-memory run opencode
+```
+
+On the first managed start, ai-memory can offer recent OpenCode sessions from the same checkout for one-time adoption. After it links a native session, the next `ai-memory run opencode` resumes that exact session with OpenCode's `--session <id>` option.
+
+Use a native selector only as an explicit override:
+
+```sh
+ai-memory run opencode -c
+ai-memory run opencode --session <id>
+```
+
+ai-memory does not add its own resume option in these cases. OpenCode selects the session. The started session then becomes linked to the workstream. Thus, routine use must omit `-c`; use plain `ai-memory run opencode` instead.
+
+To create a new native OpenCode session and keep the same portable workstream, use:
+
+```sh
+ai-memory run --fresh opencode
+```
+
+The new session receives a bounded unseen delta. The full visible ledger stays searchable with `ai-memory workstream-search`, and the durable wiki stays available through MCP. ai-memory does not put every old raw token into the new context. To start an independent line of work, use `--new <name>` instead of `--fresh`.
+
+#### Managed ai-memory LLM
+
+The OpenCode session model and the ai-memory service model are independent. ai-memory does not inherit the current TUI model, the primary-agent model, or a subagent model. A session can move between Sol, Luna, Kimi, DeepSeek, or GLM without changing its memory identity. The separate ai-memory service uses one provider and model for consolidation, review, and optional reranking across all sessions.
+
+This repository manages a persistent profile selector in `~/.config/ai-memory/env`. The default is `DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-deepseek`.
+
+| Profile | Provider and model | Activation |
+| --- | --- | --- |
+| `opencode-go-deepseek` | `opencode` / `deepseek-v4-flash` | Default. `OPENCODE_API_KEY` is non-empty in the environment file. |
+| `openai-subscription-luna` | `openai-oauth` / `gpt-5.6-luna` | A valid OpenAI OAuth entry exists in `~/.local/share/ai-memory/auth.json`. |
+| `openai-api-luna` | `openai` / `gpt-5.6-luna` | `OPENAI_API_KEY` is non-empty in the environment file. This uses Platform API billing. |
+| `disabled` | No provider or model | Always stays in zero-LLM mode. |
+
+Apply preserves user-owned keys and unrelated values. It manages the profile, provider, model, `AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL=true`, and `AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED=false`. If the selected credential is absent, it writes an empty provider so the service starts safely in zero-LLM mode. If the ai-memory OAuth file or OpenAI entry is malformed, apply fails before it rewrites the environment policy.
+
+The default OpenCode Go flow is:
+
+```sh
+./agents/apply.sh
+# Edit ~/.config/ai-memory/env and add:
+# OPENCODE_API_KEY=<your OpenCode Go API key>
+./agents/apply.sh
+./agents/test.sh
+```
+
+Use an API key from the OpenCode Go account that supplies DeepSeek V4 Flash. ai-memory calls the OpenCode Go API directly. It does not run this service job inside the OpenCode TUI, and it does not inherit the TUI login, selected model, or model effort. Do not put the key in Git.
+
+For the optional OpenAI subscription profile, set `DOTFILES_AI_MEMORY_LLM_PROFILE=openai-subscription-luna`, run `ai-memory --data-dir "$HOME/.local/share/ai-memory" --config "$HOME/.config/ai-memory/config.toml" auth login openai-oauth`, and rerun apply. This login is owned by ai-memory. It does not inherit or copy OpenCode's OpenAI login. It can use the same ChatGPT/Codex subscription account, but it stores a separate refresh token in the ai-memory data directory.
+
+To change profiles, edit only `DOTFILES_AI_MEMORY_LLM_PROFILE` in `~/.config/ai-memory/env`, add the selected profile's key when required, and rerun apply. Do not edit `config.toml` to select the provider or model; the managed environment policy wins.
+
+Current endpoint compatibility limits the available choices:
+
+| Candidate | Works with ai-memory 1.28.0 | Reason |
+| --- | --- | --- |
+| DeepSeek V4 Flash through OpenCode Go | Yes; managed default | OpenCode Go exposes `deepseek-v4-flash` at `/chat/completions`, which matches ai-memory's OpenCode provider. |
+| GPT-5.6 Luna through OpenAI subscription OAuth | Yes; selectable profile | ai-memory uses its own ChatGPT/Codex OAuth token and Codex Responses backend. |
+| Qwen3.8 Max through OpenCode Go | No | OpenCode Go exposes `qwen3.8-max` at `/messages`, but ai-memory's OpenCode provider calls `/chat/completions`. |
+| GPT-5.6 Luna through OpenCode Go | No | OpenCode Go exposes Luna at `/responses`, not `/chat/completions`. |
+| GPT-5.6 Luna through the OpenAI API | Yes; selectable profile | It needs `OPENAI_API_KEY` and uses Platform API billing. |
+
+The compatibility table follows the [current OpenCode Go endpoint table](https://opencode.ai/docs/go/), the [pinned ai-memory OpenCode provider](https://github.com/akitaonrails/ai-memory/blob/7f052990991aa541022a4bd015b58d1f5a9e8bf5/crates/ai-memory-llm/src/opencode.rs), the [pinned provider-neutral request fields](https://github.com/akitaonrails/ai-memory/blob/7f052990991aa541022a4bd015b58d1f5a9e8bf5/crates/ai-memory-llm/src/types.rs), and the [OpenAI GPT-5.6 Luna model reference](https://developers.openai.com/api/docs/models/gpt-5.6-luna).
+
+OpenCode Go's current catalog exposes `low`, `high`, and `max` for DeepSeek V4 Flash, and DeepSeek documents `high` as the API default. However, ai-memory 1.28.0 does not expose or send a reasoning-effort field through its OpenCode provider. This setup therefore cannot pin `max`; it omits the field and receives the provider default, which is currently `high`. Do not add an unrecognized effort variable to the environment file. An explicit `max` policy requires upstream ai-memory support for the request field. See the [OpenCode Go model record](https://github.com/anomalyco/models.dev/blob/dev/providers/opencode-go/models/deepseek-v4-flash.toml) and [DeepSeek Chat Completions reference](https://api-docs.deepseek.com/api/create-chat-completion/).
+
+### ai-jail For Managed Dangerous Mode
+
+ai-memory translates its `--yolo` option to OpenCode's native `--auto`. It does not create a sandbox. ai-jail must be the outer process, and the harness must be explicit:
+
+```sh
+ai-jail ai-memory run opencode --yolo
+```
+
+Current ai-jail can detect this command and apply both its `ai-memory` and `opencode` command policies. It cannot know that bare `ai-memory run` will later select OpenCode, and its narrow parser does not identify OpenCode when `--yolo` is before the harness. The fully configured jail command and its capability risks are in `agents/opencode/README.md`.
 
 ### GitHub MCP
 
@@ -93,15 +217,35 @@ From the repo root:
 ./agents/test.sh
 ```
 
-Prerequisites are `curl`, `git`, `npm`, `npx`, and `python3`. On a new machine, authenticate the providers that supply `openai/gpt-5.6-sol` and `opencode-go/deepseek-v4-flash` with `opencode auth login` before use. Model policy is stored in Git. Provider API keys, OAuth tokens, and session credentials are not.
+For a repository-only check that does not require an applied workstation:
 
-The script installs OpenCode if missing, copies `AGENTS.md` to `~/.config/opencode/AGENTS.md`, merges the global routing and integrations into `~/.config/opencode/opencode.json`, configures RTK for OpenCode, installs Plannotator core and extras, and installs/updates required skills. Upstream skills are installed live and tracked local skills are copied on every run. The Cloudflare skills bundle (`https://github.com/cloudflare/skills`) is installed as a group without `-s` so every upstream skill is pulled in. The Cloudflare remote MCP servers (`cloudflare-api`, `cloudflare-docs`, `cloudflare-bindings`, `cloudflare-builds`, `cloudflare-observability`), the official GitHub remote MCP server (`github`), and the Linear remote MCP server (`linear`) are merged into the `mcp` block of `~/.config/opencode/opencode.json`. Use `opencode mcp auth <name>` for the OAuth-enabled Cloudflare and Linear servers. GitHub uses the dedicated machine-local PAT file instead.
+```sh
+./agents/test.sh --repo-only
+```
+
+Prerequisites are `curl`, `git`, `npm`, `npx`, Python 3.11 or newer, and a working systemd user manager. When `ai-memory` or `ai-jail` is absent, apply also needs `yay` and installs the native `ai-memory-bin` and `ai-jail-bin` AUR packages. The script requires ai-memory 1.28.0 or newer and ai-jail 1.18.1 or newer because the documented fresh-session and private-home behavior depends on these releases. On a new machine, authenticate the providers that supply `openai/gpt-5.6-sol` and `opencode-go/deepseek-v4-flash` with `opencode auth login` before use. Also put a separate OpenCode Go API key in `~/.config/ai-memory/env` to enable the default ai-memory service model. Model policy is stored in Git. Provider API keys, OAuth tokens, session credentials, the ai-memory token pepper, and memory data are not.
+
+The automatic installation target is Omarchy or another Arch-based system. It also works in an Arch-based WSL2 distribution when systemd user services are enabled. On another WSL2 distribution, install current native ai-memory and ai-jail binaries plus a matching ai-memory user unit before apply, or use the upstream Docker-wrapper design as a separate setup. Do not mix a Docker wrapper and the native user service on the same `127.0.0.1:49374` endpoint.
+
+The script installs OpenCode if missing, installs the two native AUR tools if needed, copies `AGENTS.md`, merges global routing and integrations, initializes and starts ai-memory, refreshes the generated ai-memory plugin and skills, configures RTK, installs Plannotator, and installs required skills. It converges the selected ai-memory LLM profile and keeps zero-LLM mode until that profile's credential is ready. Upstream skills are installed live and tracked local skills are copied on every run. The Cloudflare skills bundle (`https://github.com/cloudflare/skills`) is installed as a group without `-s` so every upstream skill is pulled in. The Cloudflare, GitHub, Linear, and ai-memory remote MCP entries are merged into `~/.config/opencode/opencode.json`. Use `opencode mcp auth <name>` for the OAuth-enabled Cloudflare and Linear servers. GitHub uses the dedicated machine-local PAT file. ai-memory uses the local loopback service without bearer authentication.
+
+For an ai-memory upgrade, first create a backup outside the repository. Then update the package and rerun apply. Apply refreshes the generated OpenCode plugin, routing instructions, and skills for the installed version.
+
+```sh
+ai-memory --data-dir "$HOME/.local/share/ai-memory" \
+  backup --to "$HOME/ai-memory-backup.tar.gz"
+yay -S ai-memory-bin ai-jail-bin
+./agents/apply.sh
+./agents/test.sh
+```
 
 ## Policy
 
 Global OpenCode configuration is the default source of user-wide model and agent policy. Use `~/.config/opencode/opencode.json` for normal work. Add a project-level `opencode.json` only when that project has an explicit technical requirement for different settings. OpenCode's normal project-over-global precedence remains available for that exception.
 
-Do not vendor upstream skill or plugin payloads in this repo.
+OpenCode instruction arrays are replaced, not concatenated, when a higher-precedence project config defines them. If an exceptional project-level `opencode.json` has an `instructions` array, include `~/.config/opencode/ai-memory.md` in that project array too.
+
+Do not vendor upstream skill, generated ai-memory instruction, or plugin payloads in this repo.
 
 Default rule: install live, do not track copies.
 

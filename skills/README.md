@@ -10,6 +10,8 @@ Shared skills are installed into:
 
 Most skills are installed live from upstream sources by `agents/apply.sh`. Do not vendor skill payloads under `agents/skills/` unless the skill has no upstream source.
 
+The installed ai-memory binary is the source for its five managed skills. `agents/apply.sh` runs `ai-memory install-skills --scope global --agent agents` on each apply. Do not install these five through `npx` and do not track a copy in this repository.
+
 Local tracked skills are versioned directly under `agents/skills/<skill-name>/`. `agents/apply.sh` copies them to `~/.agents/skills/`; it does not fetch them from upstream.
 
 ## Skill discovery
@@ -29,6 +31,11 @@ Skills installed or copied by `agents/apply.sh`:
 | `handoff` | `mattpocock/skills@productivity/handoff` | Compact the conversation into a handoff document for the next agent. |
 | `improve` | `shadcn/improve` | Improve codebase architecture. |
 | `logging-best-practices` | `boristane/agent-skills` | Wide-event (canonical log line) logging guidance for writing, reviewing, and designing logging strategy. |
+| `ai-memory-retrieval` | installed ai-memory binary | Search and rank recent observations, wiki pages, handoffs, and workstream history. |
+| `ai-memory-handoff` | installed ai-memory binary | Create, inspect, accept, and route cross-session handoffs. |
+| `ai-memory-durable-pages` | installed ai-memory binary | Write explicit durable notes and global preferences with correct scope and lifetime. |
+| `ai-memory-learning-maintenance` | installed ai-memory binary | Review and maintain consolidated project learning. |
+| `ai-memory-routing-install` | installed ai-memory binary | Install or refresh ai-memory routing instructions and managed skills. |
 | `plannotator-review` | Plannotator installer | Review uncommitted changes or PRs. |
 | `plannotator-annotate` | Plannotator installer | Annotate markdown files, folders, or URLs. |
 | `plannotator-last` | Plannotator installer | Annotate the agent's last message. |
@@ -107,3 +114,5 @@ npx -y skills remove <skill-name> -g -y
 ```
 
 The global AGENTS instructions expect agents to use these skills for requirement discovery, concise output, skill discovery, and TDD-oriented implementation.
+
+The separate generated `~/.config/opencode/ai-memory.md` file tells OpenCode when to load the ai-memory skills. The lifecycle plugin captures routine bounded events automatically. Agents must not write routine memory notes after each turn. They write a durable page only when the user explicitly asks to remember or preserve information.

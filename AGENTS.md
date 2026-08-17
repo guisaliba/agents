@@ -104,6 +104,8 @@ Avoid global installs unless explicitly requested.
 
 Use available skills and tools when they match the task.
 
+This workstation loads generated ai-memory routing from `~/.config/opencode/ai-memory.md`. Do not install or refresh an ai-memory routing block in a project `AGENTS.md` unless the user or that project explicitly requires it. Use the dotfiles apply script to refresh the global generated routing.
+
 Expected global capabilities: `caveman`, `rtk`, `grill-me`, `grill-with-docs`, `find-skills`, `tdd`, `teach`.
 
 Treat `rtk` as a shell/tool safety and command rewriting layer.
