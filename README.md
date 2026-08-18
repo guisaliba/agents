@@ -50,7 +50,7 @@ The native per-user service stores its private state under `~/.local/share/ai-me
 
 This opinionated setup uses an unauthenticated loopback service. Apply fails before it changes OpenCode configuration when `AI_MEMORY_AUTH_TOKEN`, `AI_MEMORY_AUTH__BEARER_TOKEN`, or `AI_MEMORY_AUTH__ACTOR_PROXY_BEARER_TOKEN` is active in the shell, systemd user manager, or environment file. It also rejects `[auth].bearer_token` and `[auth].actor_proxy_bearer_token` in `config.toml`. Do not set those values with this design. They would require authenticated MCP, hook, managed-launcher, and jail wiring that this setup intentionally does not generate.
 
-Dotfiles owns the service policy, the exact MCP entry, and the `instructions` reference in `opencode.json`. The current ai-memory binary generates and owns these files:
+`dotfiles` owns the service policy, the exact MCP entry, and the `instructions` reference in `opencode.json`. The current ai-memory binary generates and owns these files:
 
 - `~/.config/opencode/plugins/ai-memory.ts`
 - `~/.config/opencode/ai-memory.md`
@@ -86,7 +86,7 @@ The function is not exported. When ai-memory starts its child, it resolves the r
 
 On the first managed start, ai-memory can offer recent OpenCode sessions from the same checkout for one-time adoption. Verify the title and ID. After the link exists, routine use is plain `opencode`; ai-memory resumes that exact session with OpenCode's native `--session <id>` option.
 
-Native selectors remain explicit overrides. ai-memory does not inject its linked selector when `-c`, `--continue`, `--session`, or `--fork` is present. The native session selected by OpenCode then becomes linked to the managed workstream.
+Native selectors override ai-memory’s automatic resume target, but do not bypass the managed launcher: ai-memory does not inject its linked selector when `-c`, `--continue`, `--session`, or `--fork` is present. The native session selected by OpenCode then becomes linked to the managed workstream.
 
 This override covers normal interactive Bash command words. It cannot intercept an absolute executable path, `command opencode`, `env opencode`, a noninteractive script that did not source the function, or `opencode` passed as an argument to another executable. Use explicit `ai-memory run opencode` in automation. `opencode-raw` keeps one supported bypass for diagnostics and recovery, not routine sessions.
 
@@ -110,6 +110,8 @@ This repository manages a persistent profile selector in `~/.config/ai-memory/en
 | `openai-subscription-luna` | `openai-oauth` / `gpt-5.6-luna` | A valid OpenAI OAuth entry exists in `~/.local/share/ai-memory/auth.json`. |
 | `openai-api-luna` | `openai` / `gpt-5.6-luna` | `OPENAI_API_KEY` is non-empty in the environment file. This uses Platform API billing. |
 | `disabled` | No provider or model | Always stays in zero-LLM mode. |
+
+(These are just the author's preferred models at the time of this setup wiring, 2026-08-17. Feel free to add or remove profiles in `~/.config/ai-memory/env`.)
 
 Apply preserves user-owned keys and unrelated values. It manages the profile, provider, model, `AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL=true`, and `AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED=false`. If the selected credential is absent, it writes an empty provider so the service starts safely in zero-LLM mode. If the ai-memory OAuth file or OpenAI entry is malformed, apply fails before it rewrites the environment policy.
 
