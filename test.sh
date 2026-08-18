@@ -33,6 +33,8 @@ AI_JAIL_MIN_VERSION="1.18.1"
 AI_MEMORY_LLM_PROFILE_EXPECTED="opencode-go-deepseek"
 AI_MEMORY_LLM_PROVIDER_EXPECTED="opencode"
 AI_MEMORY_LLM_MODEL_EXPECTED="deepseek-v4-flash"
+OPENCODE_SHELL_BLOCK_START="# >>> dotfiles OpenCode ai-memory wrapper >>>"
+OPENCODE_SHELL_BLOCK_END="# <<< dotfiles OpenCode ai-memory wrapper <<<"
 
 ok() {
   printf 'ok: %s\n' "$*"
@@ -110,6 +112,30 @@ PY
     ok "contains '$needle': $path"
   else
     not_ok "missing '$needle': $path"
+  fi
+}
+
+require_text_count() {
+  local path="$1"
+  local needle="$2"
+  local expected="$3"
+  if python3 - "$path" "$needle" "$expected" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+needle = sys.argv[2]
+expected = int(sys.argv[3])
+try:
+    count = path.read_text(encoding="utf-8").count(needle)
+except OSError:
+    raise SystemExit(1)
+raise SystemExit(0 if count == expected else 1)
+PY
+  then
+    ok "text count: $path contains $needle exactly $expected time(s)"
+  else
+    not_ok "text count mismatch: $needle in $path"
   fi
 }
 
@@ -890,6 +916,150 @@ test_ai_memory_env_file() {
   rm -rf -- "$fixture_root"
 }
 
+test_opencode_shell_override() {
+  local fixture_root fixture_home aliases first_aliases stub_bin
+  local ai_memory_log raw_log expected yolo_log
+  local malformed_home malformed_aliases malformed_before malformed_log
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  aliases="$fixture_home/.bash_aliases"
+  first_aliases="$fixture_root/first-bash-aliases"
+  stub_bin="$fixture_root/bin"
+  ai_memory_log="$fixture_root/ai-memory.log"
+  raw_log="$fixture_root/raw-opencode.log"
+  expected="$fixture_root/expected.log"
+  yolo_log="$fixture_root/yolo.log"
+
+  mkdir -p "$fixture_home" "$stub_bin"
+  printf '%s\n' \
+    'alias preserved-alias='\''printf preserved'\''' \
+    '# >>> dotfiles OpenCode ai-memory wrapper >>>' \
+    'alias opencode='\''stale-wrapper'\''' \
+    '# <<< dotfiles OpenCode ai-memory wrapper <<<' >"$aliases"
+
+  if (
+    HOME="$fixture_home"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    merge_opencode_shell_override
+  ) >/dev/null 2>&1; then
+    ok "OpenCode Bash override fixture applies"
+  else
+    not_ok "OpenCode Bash override fixture failed"
+  fi
+
+  require_contains "$aliases" "alias preserved-alias='printf preserved'"
+  require_text_count "$aliases" "$OPENCODE_SHELL_BLOCK_START" "1"
+  require_text_count "$aliases" "$OPENCODE_SHELL_BLOCK_END" "1"
+  require_contains "$aliases" 'opencode() {'
+  require_contains "$aliases" 'opencode-raw() {'
+  require_contains "$aliases" 'command ai-memory run opencode "$@"'
+  cp "$aliases" "$first_aliases"
+
+  if (
+    HOME="$fixture_home"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    merge_opencode_shell_override
+  ) >/dev/null 2>&1; then
+    ok "OpenCode Bash override fixture applies a second time"
+  else
+    not_ok "OpenCode Bash override second apply failed"
+  fi
+  require_same_file "$first_aliases" "$aliases"
+
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf '\''%s\n'\'' "$@" >"$OPENCODE_TEST_AI_MEMORY_LOG"' >"$stub_bin/ai-memory"
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf '\''%s\n'\'' "$@" >"$OPENCODE_TEST_RAW_LOG"' >"$stub_bin/opencode"
+  chmod +x "$stub_bin/ai-memory" "$stub_bin/opencode"
+
+  if HOME="$fixture_home" \
+    PATH="$stub_bin:/usr/bin:/bin" \
+    OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
+    OPENCODE_TEST_RAW_LOG="$raw_log" \
+    bash --noprofile --norc -c \
+      'source "$HOME/.bash_aliases"; opencode -c "two words"'; then
+    printf '%s\n' run opencode -c 'two words' >"$expected"
+    require_same_file "$expected" "$ai_memory_log"
+  else
+    not_ok "managed OpenCode Bash function failed"
+  fi
+
+  if HOME="$fixture_home" \
+    PATH="$stub_bin:/usr/bin:/bin" \
+    OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
+    OPENCODE_TEST_RAW_LOG="$raw_log" \
+    bash --noprofile --norc -c \
+      'source "$HOME/.bash_aliases"; opencode session list'; then
+    printf '%s\n' run opencode session list >"$expected"
+    require_same_file "$expected" "$ai_memory_log"
+  else
+    not_ok "managed OpenCode session utility forwarding failed"
+  fi
+
+  if HOME="$fixture_home" \
+    PATH="$stub_bin:/usr/bin:/bin" \
+    OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
+    OPENCODE_TEST_RAW_LOG="$raw_log" \
+    bash --noprofile --norc -c \
+      'source "$HOME/.bash_aliases"; opencode-raw --version'; then
+    printf '%s\n' --version >"$expected"
+    require_same_file "$expected" "$raw_log"
+  else
+    not_ok "raw OpenCode escape hatch failed"
+  fi
+
+  : >"$ai_memory_log"
+  if HOME="$fixture_home" \
+    PATH="$stub_bin:/usr/bin:/bin" \
+    OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
+    OPENCODE_TEST_RAW_LOG="$raw_log" \
+    bash --noprofile --norc -c \
+      'source "$HOME/.bash_aliases"; opencode --yolo' >"$yolo_log" 2>&1; then
+    not_ok "managed OpenCode Bash function accepted an unjailed --yolo start"
+  else
+    ok "managed OpenCode Bash function rejects an unjailed --yolo start"
+  fi
+  require_empty_file "$ai_memory_log"
+  require_contains "$yolo_log" "Refusing an unjailed OpenCode dangerous-mode start"
+
+  if HOME="$fixture_home" \
+    PATH="$stub_bin:/usr/bin:/bin" \
+    OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
+    OPENCODE_TEST_RAW_LOG="$raw_log" \
+    bash --noprofile --norc -c \
+      'source "$HOME/.bash_aliases"; opencode --auto' >"$yolo_log" 2>&1; then
+    not_ok "managed OpenCode Bash function accepted an unjailed --auto start"
+  else
+    ok "managed OpenCode Bash function rejects an unjailed --auto start"
+  fi
+  require_empty_file "$ai_memory_log"
+
+  malformed_home="$fixture_root/malformed-home"
+  malformed_aliases="$malformed_home/.bash_aliases"
+  malformed_before="$fixture_root/malformed-before"
+  malformed_log="$fixture_root/malformed.log"
+  mkdir -p "$malformed_home"
+  printf '%s\n' \
+    'alias keep='\''printf keep'\''' \
+    "$OPENCODE_SHELL_BLOCK_START" >"$malformed_aliases"
+  cp "$malformed_aliases" "$malformed_before"
+  if (
+    HOME="$malformed_home"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    merge_opencode_shell_override
+  ) >"$malformed_log" 2>&1; then
+    not_ok "malformed OpenCode Bash wrapper markers were accepted"
+  else
+    ok "malformed OpenCode Bash wrapper markers fail safely"
+  fi
+  require_same_file "$malformed_before" "$malformed_aliases"
+  require_contains "$malformed_log" "Expected one balanced OpenCode wrapper block"
+
+  rm -rf -- "$fixture_root"
+}
+
 # Repo structure checks
 printf '\n--- Repo Structure ---\n'
 
@@ -898,9 +1068,12 @@ require_file "$DOTFILES_DIR/agents/apply.sh"
 require_file "$DOTFILES_DIR/agents/test.sh"
 require_file "$DOTFILES_DIR/agents/opencode/README.md"
 require_file "$DOTFILES_DIR/agents/skills/README.md"
+require_file "$DOTFILES_DIR/bash/.bash_aliases"
 require_executable "$DOTFILES_DIR/agents/apply.sh"
 require_executable "$DOTFILES_DIR/agents/test.sh"
 require_contains "$DOTFILES_DIR/agents/AGENTS.md" "When you are the primary agent, you are the final owner of delegated work."
+require_text_count "$DOTFILES_DIR/bash/.bash_aliases" "$OPENCODE_SHELL_BLOCK_START" "1"
+require_text_count "$DOTFILES_DIR/bash/.bash_aliases" "$OPENCODE_SHELL_BLOCK_END" "1"
 
 # OpenCode merge fixture checks
 printf '\n--- OpenCode Merge Fixtures ---\n'
@@ -911,6 +1084,11 @@ test_opencode_json_merge
 printf '\n--- ai-memory File Fixtures ---\n'
 
 test_ai_memory_env_file
+
+# Bash command override fixture checks
+printf '\n--- OpenCode Bash Override Fixtures ---\n'
+
+test_opencode_shell_override
 
 if [[ "$repo_only" == "true" ]]; then
   printf '\n'
@@ -926,6 +1104,7 @@ fi
 printf '\n--- Local Machine ---\n'
 
 require_command python3
+require_command bash
 require_command opencode
 require_command ai-memory
 require_command ai-jail
@@ -964,6 +1143,15 @@ require_contains "$HOME/.config/opencode/AGENTS.md" "Required Capabilities"
 require_contains "$HOME/.config/opencode/AGENTS.md" "ASD-STE100"
 require_contains "$HOME/.config/opencode/AGENTS.md" "When you are the primary agent, you are the final owner of delegated work."
 require_same_file "$DOTFILES_DIR/agents/AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
+require_file "$HOME/.bash_aliases"
+require_text_count "$HOME/.bash_aliases" "$OPENCODE_SHELL_BLOCK_START" "1"
+require_text_count "$HOME/.bash_aliases" "$OPENCODE_SHELL_BLOCK_END" "1"
+if bash -ic 'declare -F opencode >/dev/null && declare -F opencode-raw >/dev/null' \
+  </dev/null >/dev/null 2>&1; then
+  ok "interactive Bash loads managed opencode and opencode-raw functions"
+else
+  not_ok "interactive Bash does not load the managed OpenCode functions"
+fi
 require_file "$GITHUB_MCP_TOKEN_FILE"
 require_file_mode "$GITHUB_MCP_TOKEN_FILE" "600"
 require_json "$HOME/.config/opencode/opencode.json"

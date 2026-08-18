@@ -30,6 +30,10 @@ AI_MEMORY_LOOPBACK_SERVER_URL="http://127.0.0.1:49374"
 AI_MEMORY_INSTRUCTIONS_FILE="$HOME/.config/opencode/ai-memory.md"
 AI_MEMORY_INSTRUCTIONS_REFERENCE="~/.config/opencode/ai-memory.md"
 AI_MEMORY_DEFAULT_LLM_PROFILE="opencode-go-deepseek"
+BASH_ALIASES_SOURCE="$DOTFILES_DIR/bash/.bash_aliases"
+BASH_ALIASES_FILE="$HOME/.bash_aliases"
+OPENCODE_SHELL_BLOCK_START="# >>> dotfiles OpenCode ai-memory wrapper >>>"
+OPENCODE_SHELL_BLOCK_END="# <<< dotfiles OpenCode ai-memory wrapper <<<"
 
 log() {
   printf '\n==> %s\n' "$*"
@@ -47,7 +51,7 @@ have() {
 check_prerequisites() {
   log "Checking prerequisites"
   local missing=()
-  for cmd in curl git npm npx python3 systemctl; do
+  for cmd in bash curl git npm npx python3 systemctl; do
     if ! have "$cmd"; then
       missing+=("$cmd")
     fi
@@ -216,6 +220,113 @@ install_opencode() {
 
   export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
   have opencode || die "OpenCode install did not put opencode on PATH"
+}
+
+merge_opencode_shell_override() {
+  log "Making interactive Bash OpenCode starts use ai-memory managed workstreams"
+
+  python3 - \
+    "$BASH_ALIASES_SOURCE" \
+    "$BASH_ALIASES_FILE" \
+    "$OPENCODE_SHELL_BLOCK_START" \
+    "$OPENCODE_SHELL_BLOCK_END" <<'PY'
+import os
+import stat
+import sys
+import tempfile
+from pathlib import Path
+
+source_path = Path(sys.argv[1])
+target_path = Path(sys.argv[2])
+start_marker = sys.argv[3]
+end_marker = sys.argv[4]
+
+
+def locate_block(lines, path, allow_absent):
+    starts = [index for index, line in enumerate(lines) if line == start_marker]
+    ends = [index for index, line in enumerate(lines) if line == end_marker]
+    if not starts and not ends and allow_absent:
+        return None
+    if len(starts) != 1 or len(ends) != 1 or ends[0] <= starts[0]:
+        raise SystemExit(
+            f"ERROR: Expected one balanced OpenCode wrapper block in {path}; "
+            "file was not changed"
+        )
+    return starts[0], ends[0]
+
+
+try:
+    source_lines = source_path.read_text(encoding="utf-8").splitlines()
+except OSError as exc:
+    raise SystemExit(f"ERROR: Cannot read Bash alias source {source_path}: {exc}")
+
+source_bounds = locate_block(source_lines, source_path, allow_absent=False)
+source_start, source_end = source_bounds
+canonical_block = source_lines[source_start : source_end + 1]
+
+if target_path.is_symlink():
+    try:
+        same_source = target_path.resolve(strict=True) == source_path.resolve(strict=True)
+    except OSError as exc:
+        raise SystemExit(f"ERROR: Cannot resolve Bash alias target {target_path}: {exc}")
+    if same_source:
+        raise SystemExit(0)
+    raise SystemExit(
+        f"ERROR: Bash alias target must not be an unrelated symlink: {target_path}"
+    )
+
+if target_path.exists() and not target_path.is_file():
+    raise SystemExit(f"ERROR: Bash alias target must be a regular file: {target_path}")
+
+if target_path.exists():
+    try:
+        target_text = target_path.read_text(encoding="utf-8")
+        target_mode = stat.S_IMODE(target_path.stat().st_mode)
+    except OSError as exc:
+        raise SystemExit(f"ERROR: Cannot read Bash alias target {target_path}: {exc}")
+    target_lines = target_text.splitlines()
+else:
+    target_text = ""
+    target_mode = 0o644
+    target_lines = []
+
+target_bounds = locate_block(target_lines, target_path, allow_absent=True)
+if target_bounds is None:
+    kept_lines = target_lines
+else:
+    target_start, target_end = target_bounds
+    kept_lines = target_lines[:target_start] + target_lines[target_end + 1 :]
+
+while kept_lines and not kept_lines[-1].strip():
+    kept_lines.pop()
+if kept_lines:
+    kept_lines.append("")
+kept_lines.extend(canonical_block)
+content = "\n".join(kept_lines) + "\n"
+
+if target_path.exists() and content == target_text:
+    raise SystemExit(0)
+
+target_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+descriptor, temporary_name = tempfile.mkstemp(prefix=".bash_aliases.", dir=target_path.parent)
+try:
+    os.fchmod(descriptor, target_mode)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as temporary_file:
+        temporary_file.write(content)
+        temporary_file.flush()
+        os.fsync(temporary_file.fileno())
+    os.replace(temporary_name, target_path)
+except BaseException:
+    try:
+        os.close(descriptor)
+    except OSError:
+        pass
+    try:
+        os.unlink(temporary_name)
+    except FileNotFoundError:
+        pass
+    raise
+PY
 }
 
 copy_agents_md() {
@@ -921,10 +1032,11 @@ main() {
   verify_ai_memory_unauthenticated_loopback
   setup_opencode
   setup_ai_memory
+  merge_opencode_shell_override
   install_plugins
   install_required_skills
 
-  log "Setup complete. Run ./agents/test.sh to verify."
+  log "Setup complete. Open a new Bash shell or source ~/.bash_aliases, then run ./agents/test.sh to verify."
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

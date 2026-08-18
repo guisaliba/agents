@@ -5,10 +5,11 @@ This folder contains OpenCode agent setup configuration.
 ## Files
 
 - `AGENTS.md`: canonical global instructions used by OpenCode.
-- `apply.sh`: installs and configures OpenCode, ai-memory, ai-jail, model routing, RTK, Plannotator, required skills, and the remote MCP servers.
+- `apply.sh`: installs and configures OpenCode, ai-memory, ai-jail, the managed Bash entry point, model routing, RTK, Plannotator, required skills, and the remote MCP servers.
 - `test.sh`: deterministic local checks for harness wiring.
 - `opencode/README.md`: OpenCode-specific notes.
 - `skills/README.md`: shared skills notes.
+- `../bash/.bash_aliases`: canonical marked Bash function block for the managed `opencode` command and its `opencode-raw` escape hatch.
 
 ## Runtime Wiring
 
@@ -43,7 +44,7 @@ ai-memory adds memory to OpenCode at three levels:
 | --- | --- | --- |
 | Search and durable pages | `mcp.ai-memory` at `http://127.0.0.1:49374/mcp` | OpenCode can search recent observations, the wiki, handoffs, and durable pages. |
 | Automatic lifecycle capture | generated `~/.config/opencode/plugins/ai-memory.ts` | OpenCode sends bounded and sanitized session and tool events. It can inject a pending handoff at session start. |
-| Managed workstream | `ai-memory run opencode` | ai-memory links one native OpenCode session to a portable workstream, resumes it, and imports its visible transcript records after exit. |
+| Managed workstream | interactive Bash `opencode` → `ai-memory run opencode` | ai-memory links one native OpenCode session to a portable workstream, resumes it, and imports its visible transcript records after exit. |
 
 The native per-user service stores its private state under `~/.local/share/ai-memory`. Its config is `~/.config/ai-memory/config.toml`. Its optional secrets file is `~/.config/ai-memory/env`. Apply creates the layout, keeps both config files private, and enables `ai-memory.service`. The test script verifies the local loopback endpoint.
 
@@ -67,34 +68,27 @@ ai-memory treats GPT-5.6 Sol, DeepSeek V4 Flash, Kimi K3, GPT-5.6 Luna, GLM-5.3,
 
 The managed ledger records OpenCode as the harness. It does not promise a complete recursive copy of every child-subagent transcript. It imports visible records from the linked native session, including completed tool results that are present in that session. It excludes hidden reasoning and unsupported private records.
 
-#### Direct And Managed Starts
+#### Managed-By-Default Bash Entry Point
 
-Plain OpenCode stays valid:
+Apply takes the canonical marked block from `bash/.bash_aliases` and merges only that block into `~/.bash_aliases`. It preserves unrelated aliases and functions. Open a new Bash shell or run `source ~/.bash_aliases` after apply.
 
-```sh
-opencode
-opencode -c
-opencode session list
-```
+The block defines an unexported Bash function. It changes normal interactive commands as follows:
 
-These direct starts still have the MCP tools, lifecycle capture, durable wiki, and handoff behavior. They do not use the portable managed-workstream ledger.
+| Typed command | Effective command | Result |
+| --- | --- | --- |
+| `opencode` | `ai-memory run opencode` | Starts or resumes the linked managed workstream. |
+| `opencode -c` | `ai-memory run opencode -c` | Makes OpenCode choose its latest native session and relinks the workstream to it. |
+| `opencode --session <id>` | `ai-memory run opencode --session <id>` | Opens that native session and links it to the workstream. |
+| `opencode session list` | `ai-memory run opencode session list` | Runs the utility command after the launcher prepares the current workstream. |
+| `opencode-raw ...` | native `opencode ...` | Diagnostic and recovery escape; lifecycle MCP/hooks still load, but no managed visible-event ledger is imported. |
 
-Use managed mode when you want ai-memory to own native resume and the portable visible-event ledger:
+The function is not exported. When ai-memory starts its child, it resolves the real OpenCode executable from `PATH`, so it cannot recurse into the parent Bash function. An executable shim named `opencode` would need brittle executable pinning to avoid that recursion and is intentionally not used.
 
-```sh
-ai-memory run opencode
-```
+On the first managed start, ai-memory can offer recent OpenCode sessions from the same checkout for one-time adoption. Verify the title and ID. After the link exists, routine use is plain `opencode`; ai-memory resumes that exact session with OpenCode's native `--session <id>` option.
 
-On the first managed start, ai-memory can offer recent OpenCode sessions from the same checkout for one-time adoption. After it links a native session, the next `ai-memory run opencode` resumes that exact session with OpenCode's `--session <id>` option.
+Native selectors remain explicit overrides. ai-memory does not inject its linked selector when `-c`, `--continue`, `--session`, or `--fork` is present. The native session selected by OpenCode then becomes linked to the managed workstream.
 
-Use a native selector only as an explicit override:
-
-```sh
-ai-memory run opencode -c
-ai-memory run opencode --session <id>
-```
-
-ai-memory does not add its own resume option in these cases. OpenCode selects the session. The started session then becomes linked to the workstream. Thus, routine use must omit `-c`; use plain `ai-memory run opencode` instead.
+This override covers normal interactive Bash command words. It cannot intercept an absolute executable path, `command opencode`, `env opencode`, a noninteractive script that did not source the function, or `opencode` passed as an argument to another executable. Use explicit `ai-memory run opencode` in automation. `opencode-raw` keeps one supported bypass for diagnostics and recovery, not routine sessions.
 
 To create a new native OpenCode session and keep the same portable workstream, use:
 
@@ -156,6 +150,8 @@ ai-memory translates its `--yolo` option to OpenCode's native `--auto`. It does 
 ```sh
 ai-jail ai-memory run opencode --yolo
 ```
+
+The interactive function rejects `opencode --yolo` and native `opencode --auto` so dangerous mode cannot look jailed when it is not. `ai-jail opencode --yolo` also bypasses the function because `opencode` is an argument to ai-jail, not the Bash command word. Use the full explicit form above.
 
 Current ai-jail can detect this command and apply both its `ai-memory` and `opencode` command policies. It cannot know that bare `ai-memory run` will later select OpenCode, and its narrow parser does not identify OpenCode when `--yolo` is before the harness. The fully configured jail command and its capability risks are in `agents/opencode/README.md`.
 
@@ -223,11 +219,11 @@ For a repository-only check that does not require an applied workstation:
 ./agents/test.sh --repo-only
 ```
 
-Prerequisites are `curl`, `git`, `npm`, `npx`, Python 3.11 or newer, and a working systemd user manager. When `ai-memory` or `ai-jail` is absent, apply also needs `yay` and installs the native `ai-memory-bin` and `ai-jail-bin` AUR packages. The script requires ai-memory 1.28.0 or newer and ai-jail 1.18.1 or newer because the documented fresh-session and private-home behavior depends on these releases. On a new machine, authenticate the providers that supply `openai/gpt-5.6-sol` and `opencode-go/deepseek-v4-flash` with `opencode auth login` before use. Also put a separate OpenCode Go API key in `~/.config/ai-memory/env` to enable the default ai-memory service model. Model policy is stored in Git. Provider API keys, OAuth tokens, session credentials, the ai-memory token pepper, and memory data are not.
+Prerequisites are Bash, `curl`, `git`, `npm`, `npx`, Python 3.11 or newer, and a working systemd user manager. When `ai-memory` or `ai-jail` is absent, apply also needs `yay` and installs the native `ai-memory-bin` and `ai-jail-bin` AUR packages. The script requires ai-memory 1.28.0 or newer and ai-jail 1.18.1 or newer because the documented fresh-session and private-home behavior depends on these releases. On a new machine, authenticate the providers that supply `openai/gpt-5.6-sol` and `opencode-go/deepseek-v4-flash` with `opencode-raw auth login` before use. Also put a separate OpenCode Go API key in `~/.config/ai-memory/env` to enable the default ai-memory service model. Model policy is stored in Git. Provider API keys, OAuth tokens, session credentials, the ai-memory token pepper, and memory data are not.
 
 The automatic installation target is Omarchy or another Arch-based system. It also works in an Arch-based WSL2 distribution when systemd user services are enabled. On another WSL2 distribution, install current native ai-memory and ai-jail binaries plus a matching ai-memory user unit before apply, or use the upstream Docker-wrapper design as a separate setup. Do not mix a Docker wrapper and the native user service on the same `127.0.0.1:49374` endpoint.
 
-The script installs OpenCode if missing, installs the two native AUR tools if needed, copies `AGENTS.md`, merges global routing and integrations, initializes and starts ai-memory, refreshes the generated ai-memory plugin and skills, configures RTK, installs Plannotator, and installs required skills. It converges the selected ai-memory LLM profile and keeps zero-LLM mode until that profile's credential is ready. Upstream skills are installed live and tracked local skills are copied on every run. The Cloudflare skills bundle (`https://github.com/cloudflare/skills`) is installed as a group without `-s` so every upstream skill is pulled in. The Cloudflare, GitHub, Linear, and ai-memory remote MCP entries are merged into `~/.config/opencode/opencode.json`. Use `opencode mcp auth <name>` for the OAuth-enabled Cloudflare and Linear servers. GitHub uses the dedicated machine-local PAT file. ai-memory uses the local loopback service without bearer authentication.
+The script installs OpenCode if missing, installs the two native AUR tools if needed, copies `AGENTS.md`, merges global routing and integrations, initializes and starts ai-memory, merges the canonical marked function block into `~/.bash_aliases`, refreshes the generated ai-memory plugin and skills, configures RTK, installs Plannotator, and installs required skills. It converges the selected ai-memory LLM profile and keeps zero-LLM mode until that profile's credential is ready. Upstream skills are installed live and tracked local skills are copied on every run. The Cloudflare skills bundle (`https://github.com/cloudflare/skills`) is installed as a group without `-s` so every upstream skill is pulled in. The Cloudflare, GitHub, Linear, and ai-memory remote MCP entries are merged into `~/.config/opencode/opencode.json`. Use `opencode mcp auth <name>` for the OAuth-enabled Cloudflare and Linear servers. GitHub uses the dedicated machine-local PAT file. ai-memory uses the local loopback service without bearer authentication.
 
 For an ai-memory upgrade, first create a backup outside the repository. Then update the package and rerun apply. Apply refreshes the generated OpenCode plugin, routing instructions, and skills for the installed version.
 
