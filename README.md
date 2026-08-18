@@ -111,7 +111,7 @@ This repository manages a persistent profile selector in `~/.config/ai-memory/en
 | `openai-api-luna` | `openai` / `gpt-5.6-luna` | `OPENAI_API_KEY` is non-empty in the environment file. This uses Platform API billing. |
 | `disabled` | No provider or model | Always stays in zero-LLM mode. |
 
-(These are just the author's preferred models at the time of this setup wiring, 2026-08-17. Feel free to add or remove profiles in `~/.config/ai-memory/env`.)
+(These are just the author's preferred models at the time of this setup wiring, 2026-08-17. Available through paid subscriptions, OpenCode Go and OpenAI's ChatGPT Pro.)
 
 Apply preserves user-owned keys and unrelated values. It manages the profile, provider, model, `AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL=true`, and `AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED=false`. If the selected credential is absent, it writes an empty provider so the service starts safely in zero-LLM mode. If the ai-memory OAuth file or OpenAI entry is malformed, apply fails before it rewrites the environment policy.
 
