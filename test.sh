@@ -158,24 +158,6 @@ require_same_file() {
   fi
 }
 
-require_skill_matches_source() {
-  local source="$1"
-  local installed="$2"
-  if [[ ! -d "$source" ]]; then
-    not_ok "cannot compare missing skill source: $source"
-    return
-  fi
-  if [[ ! -d "$installed" ]]; then
-    not_ok "missing installed skill: $installed"
-    return
-  fi
-  if diff -ru --no-dereference "$source" "$installed" >/dev/null 2>&1; then
-    ok "installed skill matches source: $installed"
-  else
-    not_ok "installed skill differs from source: $installed"
-  fi
-}
-
 require_env_assignment() {
   local path="$1"
   local name="$2"
@@ -1086,7 +1068,6 @@ require_file "$DOTFILES_DIR/agents/apply.sh"
 require_file "$DOTFILES_DIR/agents/test.sh"
 require_file "$DOTFILES_DIR/agents/opencode/README.md"
 require_file "$DOTFILES_DIR/agents/skills/README.md"
-require_file "$DOTFILES_DIR/agents/skills/architecture-map/SKILL.md"
 require_file "$DOTFILES_DIR/bash/.bash_aliases"
 require_executable "$DOTFILES_DIR/agents/apply.sh"
 require_executable "$DOTFILES_DIR/agents/test.sh"
@@ -1257,7 +1238,6 @@ printf '\n--- Skills ---\n'
 for skill in \
   caveman \
   find-skills \
-  architecture-map \
   auto-pr-review \
   grill-me \
   grill-with-docs \
@@ -1301,10 +1281,6 @@ done
 for skill in find-skills auto-pr-review; do
   require_file "$HOME/.agents/skills/$skill/SKILL.md"
 done
-require_file "$HOME/.agents/skills/architecture-map/SKILL.md"
-require_skill_matches_source \
-  "$DOTFILES_DIR/agents/skills/architecture-map" \
-  "$HOME/.agents/skills/architecture-map"
 
 # Result
 printf '\n'

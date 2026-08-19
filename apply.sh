@@ -1004,7 +1004,6 @@ install_required_skills() {
   mkdir -p "$HOME/.agents/skills"
 
   install_local_skill "$DOTFILES_DIR/agents/skills/find-skills" "find-skills"
-  install_local_skill "$DOTFILES_DIR/agents/skills/architecture-map" "architecture-map"
   install_local_skill "$DOTFILES_DIR/agents/skills/auto-pr-review" "auto-pr-review"
 
   install_skill "JuliusBrussee/caveman" "caveman"
