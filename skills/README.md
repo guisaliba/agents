@@ -93,6 +93,7 @@ Local tracked skills (copied by `agents/apply.sh`):
 
 | Skill | Source | Purpose |
 | --- | --- | --- |
+| `architecture-map` | local at `agents/skills/architecture-map` | Build interactive isometric architecture maps from a codebase's measured structure and real call paths. |
 | `auto-pr-review` | local at `agents/skills/auto-pr-review` | Work the post-open PR review loop: read unresolved reviewer comments, judge accept/reject, fix the valid ones, reply and resolve each thread citing the commit, then @-mention the reviewer for a re-review. |
 
 ## Installing skills
