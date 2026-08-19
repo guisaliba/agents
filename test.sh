@@ -1071,6 +1071,12 @@ require_file "$DOTFILES_DIR/agents/skills/README.md"
 require_file "$DOTFILES_DIR/bash/.bash_aliases"
 require_executable "$DOTFILES_DIR/agents/apply.sh"
 require_executable "$DOTFILES_DIR/agents/test.sh"
+require_contains "$DOTFILES_DIR/agents/apply.sh" 'install_skill "https://github.com/almendili/skills" "architecture-map"'
+if [[ ! -e "$DOTFILES_DIR/agents/skills/architecture-map" ]]; then
+  ok "architecture-map is not locally vendored"
+else
+  not_ok "architecture-map must be installed from upstream, not locally vendored"
+fi
 require_contains "$DOTFILES_DIR/agents/AGENTS.md" "When you are the primary agent, you are the final owner of delegated work."
 require_text_count "$DOTFILES_DIR/bash/.bash_aliases" "$OPENCODE_SHELL_BLOCK_START" "1"
 require_text_count "$DOTFILES_DIR/bash/.bash_aliases" "$OPENCODE_SHELL_BLOCK_END" "1"
@@ -1238,6 +1244,7 @@ printf '\n--- Skills ---\n'
 for skill in \
   caveman \
   find-skills \
+  architecture-map \
   auto-pr-review \
   grill-me \
   grill-with-docs \
@@ -1278,9 +1285,10 @@ do
   require_dir "$HOME/.agents/skills/$skill"
 done
 
-for skill in find-skills auto-pr-review; do
+for skill in find-skills architecture-map auto-pr-review; do
   require_file "$HOME/.agents/skills/$skill/SKILL.md"
 done
+require_contains "$HOME/.agents/skills/architecture-map/SKILL.md" "name: architecture-map"
 
 # Result
 printf '\n'

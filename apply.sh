@@ -1006,6 +1006,7 @@ install_required_skills() {
   install_local_skill "$DOTFILES_DIR/agents/skills/find-skills" "find-skills"
   install_local_skill "$DOTFILES_DIR/agents/skills/auto-pr-review" "auto-pr-review"
 
+  install_skill "https://github.com/almendili/skills" "architecture-map"
   install_skill "JuliusBrussee/caveman" "caveman"
   install_skill "mattpocock/skills@productivity/grill-me" "grill-me"
   install_skill "mattpocock/skills@engineering/grill-with-docs" "grill-with-docs"

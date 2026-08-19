@@ -24,6 +24,7 @@ Skills installed or copied by `agents/apply.sh`:
 
 | Skill | Source | Purpose |
 | --- | --- | --- |
+| `architecture-map` | `almendili/skills@architecture-map` | Build interactive isometric architecture maps from a codebase's measured structure and real call paths. |
 | `caveman` | `JuliusBrussee/caveman@caveman` | Opt-in concise agent output and token-efficient communication. |
 | `find-skills` | local at `agents/skills/find-skills` | Discover and install skills from the open agent skills ecosystem. |
 | `grill-me` | `mattpocock/skills@productivity/grill-me` | Requirement discovery. |
@@ -112,6 +113,8 @@ npx -y skills ls -g
 npx -y skills update -g
 npx -y skills remove <skill-name> -g -y
 ```
+
+`architecture-map` is installed directly from `https://github.com/almendili/skills` with `-s architecture-map`; it does not need a registry entry.
 
 The global AGENTS instructions expect agents to use these skills for requirement discovery, concise output, skill discovery, and TDD-oriented implementation.
 
