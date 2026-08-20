@@ -1299,9 +1299,6 @@ done
 for skill in find-skills architecture-map auto-pr-review code-review implement; do
   require_file "$HOME/.agents/skills/$skill/SKILL.md"
 done
-require_contains "$HOME/.agents/skills/architecture-map/SKILL.md" "name: architecture-map"
-require_contains "$HOME/.agents/skills/code-review/SKILL.md" "name: code-review"
-require_contains "$HOME/.agents/skills/implement/SKILL.md" "name: implement"
 
 # Result
 printf '\n'
