@@ -1008,9 +1008,11 @@ install_required_skills() {
 
   install_skill "https://github.com/almendili/skills" "architecture-map"
   install_skill "JuliusBrussee/caveman" "caveman"
+  install_skill "mattpocock/skills@engineering/code-review" "code-review"
   install_skill "mattpocock/skills@productivity/grill-me" "grill-me"
   install_skill "mattpocock/skills@engineering/grill-with-docs" "grill-with-docs"
   install_skill "mattpocock/skills@productivity/handoff" "handoff"
+  install_skill "mattpocock/skills@engineering/implement" "implement"
   install_skill "mattpocock/skills@engineering/setup-matt-pocock-skills" "setup-matt-pocock-skills"
   install_skill "mattpocock/skills@engineering/tdd" "tdd"
   install_skill "mattpocock/skills@productivity/teach" "teach"

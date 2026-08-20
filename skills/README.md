@@ -26,10 +26,12 @@ Skills installed or copied by `agents/apply.sh`:
 | --- | --- | --- |
 | `architecture-map` | `almendili/skills@architecture-map` | Build interactive isometric architecture maps from a codebase's measured structure and real call paths. |
 | `caveman` | `JuliusBrussee/caveman@caveman` | Opt-in concise agent output and token-efficient communication. |
+| `code-review` | `mattpocock/skills@engineering/code-review` | Review a change against repository standards and its source specification as separate axes. |
 | `find-skills` | local at `agents/skills/find-skills` | Discover and install skills from the open agent skills ecosystem. |
 | `grill-me` | `mattpocock/skills@productivity/grill-me` | Requirement discovery. |
 | `grill-with-docs` | `mattpocock/skills@engineering/grill-with-docs` | Requirement discovery grounded in repo docs. |
 | `handoff` | `mattpocock/skills@productivity/handoff` | Compact the conversation into a handoff document for the next agent. |
+| `implement` | `mattpocock/skills@engineering/implement` | Implement work from a specification or tickets, verify it, and run a code review. |
 | `improve` | `shadcn/improve` | Improve codebase architecture. |
 | `logging-best-practices` | `boristane/agent-skills` | Wide-event (canonical log line) logging guidance for writing, reviewing, and designing logging strategy. |
 | `ai-memory-retrieval` | installed ai-memory binary | Search and rank recent observations, wiki pages, handoffs, and workstream history. |
@@ -116,6 +118,6 @@ npx -y skills remove <skill-name> -g -y
 
 `architecture-map` is installed directly from `https://github.com/almendili/skills` with `-s architecture-map`; it does not need a registry entry.
 
-The global AGENTS instructions expect agents to use these skills for requirement discovery, concise output, skill discovery, and TDD-oriented implementation.
+The global AGENTS instructions expect agents to use these skills for requirement discovery, concise output, skill discovery, TDD-oriented implementation, and two-axis code review.
 
 The separate generated `~/.config/opencode/ai-memory.md` file tells OpenCode when to load the ai-memory skills. The lifecycle plugin captures routine bounded events automatically. Agents must not write routine memory notes after each turn. They write a durable page only when the user explicitly asks to remember or preserve information.

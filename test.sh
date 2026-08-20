@@ -1072,11 +1072,20 @@ require_file "$DOTFILES_DIR/bash/.bash_aliases"
 require_executable "$DOTFILES_DIR/agents/apply.sh"
 require_executable "$DOTFILES_DIR/agents/test.sh"
 require_contains "$DOTFILES_DIR/agents/apply.sh" 'install_skill "https://github.com/almendili/skills" "architecture-map"'
+require_contains "$DOTFILES_DIR/agents/apply.sh" 'install_skill "mattpocock/skills@engineering/code-review" "code-review"'
+require_contains "$DOTFILES_DIR/agents/apply.sh" 'install_skill "mattpocock/skills@engineering/implement" "implement"'
 if [[ ! -e "$DOTFILES_DIR/agents/skills/architecture-map" ]]; then
   ok "architecture-map is not locally vendored"
 else
   not_ok "architecture-map must be installed from upstream, not locally vendored"
 fi
+for skill in code-review implement; do
+  if [[ ! -e "$DOTFILES_DIR/agents/skills/$skill" ]]; then
+    ok "$skill is not locally vendored"
+  else
+    not_ok "$skill must be installed from upstream, not locally vendored"
+  fi
+done
 require_contains "$DOTFILES_DIR/agents/AGENTS.md" "When you are the primary agent, you are the final owner of delegated work."
 require_text_count "$DOTFILES_DIR/bash/.bash_aliases" "$OPENCODE_SHELL_BLOCK_START" "1"
 require_text_count "$DOTFILES_DIR/bash/.bash_aliases" "$OPENCODE_SHELL_BLOCK_END" "1"
@@ -1246,9 +1255,11 @@ for skill in \
   find-skills \
   architecture-map \
   auto-pr-review \
+  code-review \
   grill-me \
   grill-with-docs \
   handoff \
+  implement \
   setup-matt-pocock-skills \
   tdd \
   teach \
@@ -1285,10 +1296,12 @@ do
   require_dir "$HOME/.agents/skills/$skill"
 done
 
-for skill in find-skills architecture-map auto-pr-review; do
+for skill in find-skills architecture-map auto-pr-review code-review implement; do
   require_file "$HOME/.agents/skills/$skill/SKILL.md"
 done
 require_contains "$HOME/.agents/skills/architecture-map/SKILL.md" "name: architecture-map"
+require_contains "$HOME/.agents/skills/code-review/SKILL.md" "name: code-review"
+require_contains "$HOME/.agents/skills/implement/SKILL.md" "name: implement"
 
 # Result
 printf '\n'
