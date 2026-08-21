@@ -15,6 +15,8 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_DIR="${DOTFILES_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+AGENT_STACK_HELPER="$SCRIPT_DIR/lib/agent_stack.py"
+SKILLS_MANIFEST="$SCRIPT_DIR/skills.tsv"
 RTK_VERSION="${RTK_VERSION:-v0.38.0}"
 GITHUB_MCP_TOKEN_FILE="$HOME/.config/opencode/secrets/github-mcp-pat"
 GITHUB_MCP_TOKEN_REFERENCE="~/.config/opencode/secrets/github-mcp-pat"
@@ -121,14 +123,21 @@ install_ai_jail() {
 }
 
 verify_ai_memory_no_static_auth_files() {
-  python3 - "$AI_MEMORY_CONFIG_FILE" "$AI_MEMORY_ENV_FILE" <<'PY'
-import re
+  python3 - \
+    "$AI_MEMORY_CONFIG_FILE" \
+    "$AI_MEMORY_ENV_FILE" \
+    "$AGENT_STACK_HELPER" <<'PY'
 import sys
 import tomllib
 from pathlib import Path
 
 config_path = Path(sys.argv[1])
 env_path = Path(sys.argv[2])
+helper_path = Path(sys.argv[3])
+sys.path.insert(0, str(helper_path.parent))
+sys.dont_write_bytecode = True
+
+from agent_stack import parse_env_assignment
 
 if config_path.exists():
     try:
@@ -154,20 +163,18 @@ if env_path.exists():
     except OSError as exc:
         raise SystemExit(f"ERROR: Cannot read ai-memory environment file at {env_path}: {exc}")
 
+    auth_names = {
+        "AI_MEMORY_AUTH_TOKEN",
+        "AI_MEMORY_AUTH__BEARER_TOKEN",
+        "AI_MEMORY_AUTH__ACTOR_PROXY_BEARER_TOKEN",
+    }
     for line in lines:
-        if not line.strip() or line.lstrip().startswith("#"):
+        assignment = parse_env_assignment(line)
+        if assignment is None:
             continue
-        match = re.match(
-            r"^\s*(AI_MEMORY_AUTH_TOKEN|AI_MEMORY_AUTH__BEARER_TOKEN|"
-            r"AI_MEMORY_AUTH__ACTOR_PROXY_BEARER_TOKEN)\s*=\s*(.*?)\s*$",
-            line,
-        )
-        if match is None:
+        name, value = assignment
+        if name not in auth_names:
             continue
-        name = match.group(1)
-        value = match.group(2)
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-            value = value[1:-1]
         if value.strip():
             raise SystemExit(
                 f"ERROR: {env_path} sets {name}; "
@@ -229,17 +236,21 @@ merge_opencode_shell_override() {
     "$BASH_ALIASES_SOURCE" \
     "$BASH_ALIASES_FILE" \
     "$OPENCODE_SHELL_BLOCK_START" \
-    "$OPENCODE_SHELL_BLOCK_END" <<'PY'
-import os
+    "$OPENCODE_SHELL_BLOCK_END" \
+    "$AGENT_STACK_HELPER" <<'PY'
 import stat
 import sys
-import tempfile
 from pathlib import Path
 
 source_path = Path(sys.argv[1])
 target_path = Path(sys.argv[2])
 start_marker = sys.argv[3]
 end_marker = sys.argv[4]
+helper_path = Path(sys.argv[5])
+sys.path.insert(0, str(helper_path.parent))
+sys.dont_write_bytecode = True
+
+from agent_stack import atomic_write_text
 
 
 def locate_block(lines, path, allow_absent):
@@ -308,24 +319,7 @@ if target_path.exists() and content == target_text:
     raise SystemExit(0)
 
 target_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-descriptor, temporary_name = tempfile.mkstemp(prefix=".bash_aliases.", dir=target_path.parent)
-try:
-    os.fchmod(descriptor, target_mode)
-    with os.fdopen(descriptor, "w", encoding="utf-8") as temporary_file:
-        temporary_file.write(content)
-        temporary_file.flush()
-        os.fsync(temporary_file.fileno())
-    os.replace(temporary_name, target_path)
-except BaseException:
-    try:
-        os.close(descriptor)
-    except OSError:
-        pass
-    try:
-        os.unlink(temporary_name)
-    except FileNotFoundError:
-        pass
-    raise
+atomic_write_text(target_path, content, target_mode, ".bash_aliases.")
 PY
 }
 
@@ -342,25 +336,10 @@ copy_agents_md() {
 ensure_github_mcp_token_file() {
   log "Preparing the machine-local GitHub MCP token file"
 
-  python3 - "$GITHUB_MCP_TOKEN_FILE" <<'PY'
-import os
-import sys
-from pathlib import Path
-
-path = Path(sys.argv[1])
-path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-path.parent.chmod(0o700)
-
-if path.is_symlink():
-    raise SystemExit(f"ERROR: GitHub MCP token path must not be a symlink: {path}")
-if path.exists() and not path.is_file():
-    raise SystemExit(f"ERROR: GitHub MCP token path must be a regular file: {path}")
-if not path.exists():
-    descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    os.close(descriptor)
-
-path.chmod(0o600)
-PY
+  python3 "$AGENT_STACK_HELPER" \
+    ensure-private-file \
+    "$GITHUB_MCP_TOKEN_FILE" \
+    "GitHub MCP token path"
 }
 
 native_scout_available() {
@@ -546,59 +525,16 @@ setup_opencode() {
 ensure_ai_memory_env_file() {
   log "Preparing the machine-local ai-memory environment file"
 
-  python3 - "$AI_MEMORY_ENV_FILE" <<'PY'
-import os
-import sys
-from pathlib import Path
-
-path = Path(sys.argv[1])
-path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-path.parent.chmod(0o700)
-
-if path.is_symlink():
-    raise SystemExit(f"ERROR: ai-memory environment path must not be a symlink: {path}")
-if path.exists() and not path.is_file():
-    raise SystemExit(f"ERROR: ai-memory environment path must be a regular file: {path}")
-if not path.exists():
-    descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    os.close(descriptor)
-
-path.chmod(0o600)
-PY
+  python3 "$AGENT_STACK_HELPER" \
+    ensure-private-file \
+    "$AI_MEMORY_ENV_FILE" \
+    "ai-memory environment path"
 }
 
 ai_memory_env_value() {
   local name="$1"
 
-  python3 - "$AI_MEMORY_ENV_FILE" "$name" <<'PY'
-import re
-import sys
-from pathlib import Path
-
-path = Path(sys.argv[1])
-name = sys.argv[2]
-pattern = re.compile(rf"^\s*{re.escape(name)}\s*=\s*(.*?)\s*$")
-value = None
-
-try:
-    lines = path.read_text(encoding="utf-8").splitlines()
-except OSError:
-    raise SystemExit(1)
-
-for line in lines:
-    if not line.strip() or line.lstrip().startswith("#"):
-        continue
-    match = pattern.match(line)
-    if match is None:
-        continue
-    value = match.group(1)
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-        value = value[1:-1]
-
-if value is None:
-    raise SystemExit(1)
-print(value.strip())
-PY
+  python3 "$AGENT_STACK_HELPER" env-value "$AI_MEMORY_ENV_FILE" "$name"
 }
 
 ai_memory_env_has_nonempty_value() {
@@ -610,19 +546,20 @@ ai_memory_env_has_nonempty_value() {
 }
 
 ai_memory_openai_oauth_state() {
+  python3 "$AGENT_STACK_HELPER" \
+    guard-regular-file \
+    "$AI_MEMORY_AUTH_FILE" \
+    "ai-memory auth path"
+
   python3 - "$AI_MEMORY_AUTH_FILE" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
-if path.is_symlink():
-    raise SystemExit(f"ERROR: ai-memory auth path must not be a symlink: {path}")
 if not path.exists():
     print("missing")
     raise SystemExit(0)
-if not path.is_file():
-    raise SystemExit(f"ERROR: ai-memory auth path must be a regular file: {path}")
 
 try:
     root = json.loads(path.read_text(encoding="utf-8"))
@@ -725,11 +662,9 @@ configure_ai_memory_env_file() {
     "$profile" \
     "$provider" \
     "$model" \
-    "$provider_state" <<'PY'
-import os
-import re
+    "$provider_state" \
+    "$AGENT_STACK_HELPER" <<'PY'
 import sys
-import tempfile
 from pathlib import Path
 
 path = Path(sys.argv[1])
@@ -737,7 +672,12 @@ profile = sys.argv[2]
 provider = sys.argv[3]
 model = sys.argv[4]
 provider_state = sys.argv[5]
-assignment = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$")
+helper_path = Path(sys.argv[6])
+sys.path.insert(0, str(helper_path.parent))
+sys.dont_write_bytecode = True
+
+from agent_stack import atomic_write_text, parse_env_assignment
+
 managed_names = {
     "DOTFILES_AI_MEMORY_LLM_PROFILE",
     "AI_MEMORY_LLM_PROVIDER",
@@ -757,8 +697,8 @@ kept_lines = []
 for line in original_lines:
     if line == managed_comment:
         continue
-    match = None if line.lstrip().startswith("#") else assignment.match(line)
-    if match is not None and match.group(1) in managed_names:
+    parsed = parse_env_assignment(line)
+    if parsed is not None and parsed[0] in managed_names:
         continue
     kept_lines.append(line)
 
@@ -779,24 +719,7 @@ kept_lines.extend(
 )
 
 content = "\n".join(kept_lines) + "\n"
-descriptor, temporary_name = tempfile.mkstemp(prefix=".env.", dir=path.parent)
-try:
-    os.fchmod(descriptor, 0o600)
-    with os.fdopen(descriptor, "w", encoding="utf-8") as temporary_file:
-        temporary_file.write(content)
-        temporary_file.flush()
-        os.fsync(temporary_file.fileno())
-    os.replace(temporary_name, path)
-except BaseException:
-    try:
-        os.close(descriptor)
-    except OSError:
-        pass
-    try:
-        os.unlink(temporary_name)
-    except FileNotFoundError:
-        pass
-    raise
+atomic_write_text(path, content, 0o600, ".env.")
 
 print(provider_state)
 PY
@@ -818,16 +741,10 @@ PY
 initialize_ai_memory() {
   log "Initializing the ai-memory user data layout"
 
-  python3 - "$AI_MEMORY_CONFIG_FILE" <<'PY'
-import sys
-from pathlib import Path
-
-path = Path(sys.argv[1])
-if path.is_symlink():
-    raise SystemExit(f"ERROR: ai-memory config path must not be a symlink: {path}")
-if path.exists() and not path.is_file():
-    raise SystemExit(f"ERROR: ai-memory config path must be a regular file: {path}")
-PY
+  python3 "$AGENT_STACK_HELPER" \
+    guard-regular-file \
+    "$AI_MEMORY_CONFIG_FILE" \
+    "ai-memory config path"
 
   mkdir -p "$AI_MEMORY_DATA_DIR" "$(dirname "$AI_MEMORY_CONFIG_FILE")"
   ai-memory \
@@ -999,28 +916,25 @@ install_cloudflare_skills() {
 }
 
 install_required_skills() {
+  local manifest_rows provider name source_ref require_skill_file
+
   log "Installing/updating required skills"
 
   mkdir -p "$HOME/.agents/skills"
 
-  install_local_skill "$DOTFILES_DIR/agents/skills/find-skills" "find-skills"
-  install_local_skill "$DOTFILES_DIR/agents/skills/auto-pr-review" "auto-pr-review"
+  manifest_rows="$(python3 "$AGENT_STACK_HELPER" manifest "$SKILLS_MANIFEST")" || \
+    die "Could not read the required skill manifest"
 
-  install_skill "https://github.com/almendili/skills" "architecture-map"
-  install_skill "JuliusBrussee/caveman" "caveman"
-  install_skill "mattpocock/skills@engineering/code-review" "code-review"
-  install_skill "mattpocock/skills@productivity/grill-me" "grill-me"
-  install_skill "mattpocock/skills@engineering/grill-with-docs" "grill-with-docs"
-  install_skill "mattpocock/skills@productivity/handoff" "handoff"
-  install_skill "mattpocock/skills@engineering/implement" "implement"
-  install_skill "mattpocock/skills@engineering/setup-matt-pocock-skills" "setup-matt-pocock-skills"
-  install_skill "mattpocock/skills@engineering/tdd" "tdd"
-  install_skill "mattpocock/skills@productivity/teach" "teach"
-  install_skill "mattpocock/skills@engineering/to-tickets" "to-tickets"
-  install_skill "mattpocock/skills@engineering/triage" "triage"
-  install_skill "mattpocock/skills@productivity/writing-for-agents" "writing-for-agents"
-  install_skill "shadcn/improve" "improve"
-  install_skill "boristane/agent-skills" "logging-best-practices"
+  while IFS=$'\t' read -r provider name source_ref require_skill_file; do
+    case "$provider" in
+      local)
+        install_local_skill "$DOTFILES_DIR/$source_ref" "$name"
+        ;;
+      upstream)
+        install_skill "$source_ref" "$name"
+        ;;
+    esac
+  done <<<"$manifest_rows"
 
   install_cloudflare_skills
 }

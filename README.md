@@ -7,9 +7,13 @@ This folder contains OpenCode agent setup configuration.
 - `AGENTS.md`: canonical global instructions used by OpenCode.
 - `apply.sh`: installs and configures OpenCode, ai-memory, ai-jail, the managed Bash entry point, model routing, RTK, Plannotator, required skills, and the remote MCP servers.
 - `test.sh`: deterministic local checks for harness wiring.
+- `lib/agent_stack.py`: shared safe file, environment-assignment, and skill-manifest primitives used by the scripts.
+- `skills.tsv`: data-only inventory of local, direct-upstream, and generated skill provenance.
 - `opencode/README.md`: OpenCode-specific notes.
 - `skills/README.md`: shared skills notes.
 - `../bash/.bash_aliases`: canonical marked Bash function block for the managed `opencode` command and its `opencode-raw` escape hatch.
+
+`skills.tsv` does not vendor skill payloads. The `local` rows identify the two tracked skill exceptions copied by `apply.sh`; `upstream` rows identify skills fetched individually; `ai-memory`, `plannotator`, and `cloudflare` rows identify outputs owned by their existing dedicated installers. The test script uses the same inventory to validate installed directories and the selected `SKILL.md` files.
 
 ## Runtime Wiring
 

@@ -19,6 +19,8 @@ fi
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_DIR="${DOTFILES_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+AGENT_STACK_HELPER="$DOTFILES_DIR/agents/lib/agent_stack.py"
+SKILLS_MANIFEST="$DOTFILES_DIR/agents/skills.tsv"
 
 failures=0
 GITHUB_MCP_TOKEN_FILE="$HOME/.config/opencode/secrets/github-mcp-pat"
@@ -115,6 +117,38 @@ PY
   fi
 }
 
+require_skill_manifest_entry() {
+  local path="$SKILLS_MANIFEST"
+  local provider="$1"
+  local name="$2"
+  local source="$3"
+  local require_skill_file="$4"
+  if python3 - "$path" "$provider" "$name" "$source" "$require_skill_file" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+expected = tuple(sys.argv[2:])
+try:
+    lines = path.read_text(encoding="utf-8").splitlines()
+except OSError:
+    raise SystemExit(1)
+
+for line in lines:
+    if not line.strip() or line.lstrip().startswith("#"):
+        continue
+    if tuple(line.split("\t")) == expected:
+        raise SystemExit(0)
+
+raise SystemExit(1)
+PY
+  then
+    ok "skill manifest entry: $name"
+  else
+    not_ok "missing skill manifest entry: $name"
+  fi
+}
+
 require_text_count() {
   local path="$1"
   local needle="$2"
@@ -195,43 +229,6 @@ PY
     ok "environment assignment: $name is managed"
   else
     not_ok "environment assignment mismatch: $name in $path"
-  fi
-}
-
-env_assignment_has_nonempty_value() {
-  local path="$1"
-  local name="$2"
-  if python3 - "$path" "$name" <<'PY'
-import re
-import sys
-from pathlib import Path
-
-path = Path(sys.argv[1])
-name = sys.argv[2]
-pattern = re.compile(rf"^\s*{re.escape(name)}\s*=\s*(.*?)\s*$")
-value = ""
-
-try:
-    lines = path.read_text(encoding="utf-8").splitlines()
-except OSError:
-    raise SystemExit(1)
-
-for line in lines:
-    if not line.strip() or line.lstrip().startswith("#"):
-        continue
-    match = pattern.match(line)
-    if match is None:
-        continue
-    value = match.group(1)
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-        value = value[1:-1]
-
-raise SystemExit(0 if value.strip() else 1)
-PY
-  then
-    return 0
-  else
-    return 1
   fi
 }
 
@@ -916,6 +913,174 @@ test_ai_memory_env_file() {
   rm -rf -- "$fixture_root"
 }
 
+test_agent_stack_helpers() {
+  local fixture_root fixture_home fixture_env fixture_token fixture_config fixture_auth
+  local real_target atomic_target atomic_expected malformed_manifest duplicate_manifest
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  fixture_env="$fixture_home/.config/ai-memory/env"
+  fixture_token="$fixture_home/.config/opencode/secrets/github-mcp-pat"
+  fixture_config="$fixture_home/.config/ai-memory/config.toml"
+  fixture_auth="$fixture_home/.local/share/ai-memory/auth.json"
+  real_target="$fixture_root/real-target"
+  atomic_target="$fixture_root/atomic-target"
+  atomic_expected="$fixture_root/atomic-expected"
+  malformed_manifest="$fixture_root/malformed-skills.tsv"
+  duplicate_manifest="$fixture_root/duplicate-skills.tsv"
+
+  mkdir -p "$(dirname "$fixture_env")"
+  printf '%s\n' \
+    '# ignored comment' \
+    'TEST_VALUE=first' \
+    'TEST_VALUE = "second value"' \
+    'EMPTY_VALUE=""' >"$fixture_env"
+  if (
+    HOME="$fixture_home"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    [[ "$(ai_memory_env_value TEST_VALUE)" == "second value" ]]
+    ! ai_memory_env_has_nonempty_value EMPTY_VALUE
+  ); then
+    ok "shared environment parser preserves last-value and empty-value behavior"
+  else
+    not_ok "shared environment parser changed last-value or empty-value behavior"
+  fi
+
+  printf '%s\n' 'AI_MEMORY_AUTH_TOKEN = "fixture-token"' >"$fixture_env"
+  if (
+    HOME="$fixture_home"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    verify_ai_memory_no_static_auth_files
+  ) >/dev/null 2>&1; then
+    not_ok "quoted ai-memory auth assignment was accepted"
+  else
+    ok "quoted ai-memory auth assignment is rejected"
+  fi
+
+  mkdir -p "$(dirname "$fixture_token")"
+  printf '%s\n' 'fixture' >"$real_target"
+  ln -s "$real_target" "$fixture_token"
+  if (
+    HOME="$fixture_home"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    ensure_github_mcp_token_file
+  ) >/dev/null 2>&1; then
+    not_ok "GitHub MCP token symlink was accepted"
+  else
+    ok "GitHub MCP token symlink is rejected"
+  fi
+
+  rm -f "$fixture_token"
+  mkdir "$fixture_token"
+  if (
+    HOME="$fixture_home"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    ensure_github_mcp_token_file
+  ) >/dev/null 2>&1; then
+    not_ok "GitHub MCP token directory was accepted"
+  else
+    ok "GitHub MCP token directory is rejected"
+  fi
+
+  rm -rf "$fixture_token"
+  mkdir -p "$(dirname "$fixture_config")"
+  ln -s "$real_target" "$fixture_config"
+  if (
+    HOME="$fixture_home"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    initialize_ai_memory
+  ) >/dev/null 2>&1; then
+    not_ok "ai-memory config symlink was accepted"
+  else
+    ok "ai-memory config symlink is rejected before initialization"
+  fi
+
+  mkdir -p "$(dirname "$fixture_auth")"
+  ln -s "$real_target" "$fixture_auth"
+  if (
+    HOME="$fixture_home"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    ai_memory_openai_oauth_state
+  ) >/dev/null 2>&1; then
+    not_ok "ai-memory auth symlink was accepted"
+  else
+    ok "ai-memory auth symlink is rejected"
+  fi
+
+  printf '%s\n' 'new content' >"$atomic_expected"
+  printf '%s\n' 'new content' | \
+    python3 "$AGENT_STACK_HELPER" atomic-write "$atomic_target" 644 ".atomic." >/dev/null 2>&1
+  require_same_file "$atomic_expected" "$atomic_target"
+  require_file_mode "$atomic_target" "644"
+
+  cp "$SKILLS_MANIFEST" "$malformed_manifest"
+  printf '%s\n' 'broken-row' >>"$malformed_manifest"
+  if python3 "$AGENT_STACK_HELPER" manifest "$malformed_manifest" >/dev/null 2>&1; then
+    not_ok "malformed skill manifest row was accepted"
+  else
+    ok "malformed skill manifest row is rejected"
+  fi
+
+  cp "$SKILLS_MANIFEST" "$duplicate_manifest"
+  printf '%s\n' $'upstream\tduplicate\tduplicate/source\tno' >>"$duplicate_manifest"
+  printf '%s\n' $'local\tduplicate\tagents/skills/find-skills\tno' >>"$duplicate_manifest"
+  if python3 "$AGENT_STACK_HELPER" manifest "$duplicate_manifest" >/dev/null 2>&1; then
+    not_ok "duplicate skill manifest name was accepted"
+  else
+    ok "duplicate skill manifest name is rejected"
+  fi
+
+  rm -rf -- "$fixture_root"
+}
+
+test_required_skill_installation() {
+  local fixture_root fixture_home stub_bin install_log expected_log
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  stub_bin="$fixture_root/bin"
+  install_log="$fixture_root/install.log"
+  expected_log="$fixture_root/expected.log"
+  mkdir -p "$stub_bin"
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf '\''%s\n'\'' "$*" >>"$SKILL_INSTALL_LOG"' >"$stub_bin/npx"
+  chmod +x "$stub_bin/npx"
+
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    export SKILL_INSTALL_LOG="$install_log"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    install_required_skills
+  ) >/dev/null 2>&1; then
+    ok "manifest-driven skill installation applies"
+  else
+    not_ok "manifest-driven skill installation failed"
+  fi
+  require_dir "$fixture_home/.agents/skills/find-skills"
+  require_dir "$fixture_home/.agents/skills/auto-pr-review"
+
+  printf '%s\n' \
+    '-y skills add https://github.com/almendili/skills -g -a opencode -s architecture-map -y --copy' \
+    '-y skills add JuliusBrussee/caveman -g -a opencode -s caveman -y --copy' \
+    '-y skills add mattpocock/skills@engineering/code-review -g -a opencode -s code-review -y --copy' \
+    '-y skills add mattpocock/skills@productivity/grill-me -g -a opencode -s grill-me -y --copy' \
+    '-y skills add mattpocock/skills@engineering/grill-with-docs -g -a opencode -s grill-with-docs -y --copy' \
+    '-y skills add mattpocock/skills@productivity/handoff -g -a opencode -s handoff -y --copy' \
+    '-y skills add mattpocock/skills@engineering/implement -g -a opencode -s implement -y --copy' \
+    '-y skills add mattpocock/skills@engineering/setup-matt-pocock-skills -g -a opencode -s setup-matt-pocock-skills -y --copy' \
+    '-y skills add mattpocock/skills@engineering/tdd -g -a opencode -s tdd -y --copy' \
+    '-y skills add mattpocock/skills@productivity/teach -g -a opencode -s teach -y --copy' \
+    '-y skills add mattpocock/skills@engineering/to-tickets -g -a opencode -s to-tickets -y --copy' \
+    '-y skills add mattpocock/skills@engineering/triage -g -a opencode -s triage -y --copy' \
+    '-y skills add mattpocock/skills@productivity/writing-for-agents -g -a opencode -s writing-for-agents -y --copy' \
+    '-y skills add shadcn/improve -g -a opencode -s improve -y --copy' \
+    '-y skills add boristane/agent-skills -g -a opencode -s logging-best-practices -y --copy' \
+    '-y skills add https://github.com/cloudflare/skills -g -a opencode -y --copy' >"$expected_log"
+  require_same_file "$expected_log" "$install_log"
+
+  rm -rf -- "$fixture_root"
+}
+
 test_opencode_shell_override() {
   local fixture_root fixture_home aliases first_aliases stub_bin
   local ai_memory_log raw_log expected yolo_log
@@ -1068,24 +1233,37 @@ require_file "$DOTFILES_DIR/agents/apply.sh"
 require_file "$DOTFILES_DIR/agents/test.sh"
 require_file "$DOTFILES_DIR/agents/opencode/README.md"
 require_file "$DOTFILES_DIR/agents/skills/README.md"
+require_file "$AGENT_STACK_HELPER"
+require_file "$SKILLS_MANIFEST"
 require_file "$DOTFILES_DIR/bash/.bash_aliases"
 require_executable "$DOTFILES_DIR/agents/apply.sh"
 require_executable "$DOTFILES_DIR/agents/test.sh"
-require_contains "$DOTFILES_DIR/agents/apply.sh" 'install_skill "https://github.com/almendili/skills" "architecture-map"'
-require_contains "$DOTFILES_DIR/agents/apply.sh" 'install_skill "mattpocock/skills@engineering/code-review" "code-review"'
-require_contains "$DOTFILES_DIR/agents/apply.sh" 'install_skill "mattpocock/skills@engineering/implement" "implement"'
-if [[ ! -e "$DOTFILES_DIR/agents/skills/architecture-map" ]]; then
-  ok "architecture-map is not locally vendored"
+if manifest_rows="$(python3 "$AGENT_STACK_HELPER" manifest "$SKILLS_MANIFEST" 2>/dev/null)"; then
+  manifest_valid=true
+  ok "skill manifest is valid"
 else
-  not_ok "architecture-map must be installed from upstream, not locally vendored"
+  manifest_valid=false
+  not_ok "skill manifest is invalid"
 fi
-for skill in code-review implement; do
-  if [[ ! -e "$DOTFILES_DIR/agents/skills/$skill" ]]; then
-    ok "$skill is not locally vendored"
-  else
-    not_ok "$skill must be installed from upstream, not locally vendored"
-  fi
-done
+require_skill_manifest_entry "upstream" "architecture-map" "https://github.com/almendili/skills" "yes"
+require_skill_manifest_entry "upstream" "code-review" "mattpocock/skills@engineering/code-review" "yes"
+require_skill_manifest_entry "upstream" "implement" "mattpocock/skills@engineering/implement" "yes"
+if [[ "$manifest_valid" == true ]]; then
+  while IFS=$'\t' read -r provider name source_ref require_skill_file; do
+    case "$provider" in
+      local)
+        require_dir "$DOTFILES_DIR/$source_ref"
+        ;;
+      upstream)
+        if [[ ! -e "$DOTFILES_DIR/agents/skills/$name" ]]; then
+          ok "$name is not locally vendored"
+        else
+          not_ok "$name must be installed from upstream, not locally vendored"
+        fi
+        ;;
+    esac
+  done <<<"$manifest_rows"
+fi
 require_contains "$DOTFILES_DIR/agents/AGENTS.md" "When you are the primary agent, you are the final owner of delegated work."
 require_text_count "$DOTFILES_DIR/bash/.bash_aliases" "$OPENCODE_SHELL_BLOCK_START" "1"
 require_text_count "$DOTFILES_DIR/bash/.bash_aliases" "$OPENCODE_SHELL_BLOCK_END" "1"
@@ -1099,6 +1277,16 @@ test_opencode_json_merge
 printf '\n--- ai-memory File Fixtures ---\n'
 
 test_ai_memory_env_file
+
+# Shared helper fixture checks
+printf '\n--- Shared Helper Fixtures ---\n'
+
+test_agent_stack_helpers
+
+# Manifest installation fixture checks
+printf '\n--- Skill Installation Fixtures ---\n'
+
+test_required_skill_installation
 
 # Bash command override fixture checks
 printf '\n--- OpenCode Bash Override Fixtures ---\n'
@@ -1250,55 +1438,14 @@ require_ai_memory_status
 # Required skills
 printf '\n--- Skills ---\n'
 
-for skill in \
-  caveman \
-  find-skills \
-  architecture-map \
-  auto-pr-review \
-  code-review \
-  grill-me \
-  grill-with-docs \
-  handoff \
-  implement \
-  setup-matt-pocock-skills \
-  tdd \
-  teach \
-  to-tickets \
-  triage \
-  writing-for-agents \
-  improve \
-  logging-best-practices \
-  ai-memory-retrieval \
-  ai-memory-handoff \
-  ai-memory-durable-pages \
-  ai-memory-learning-maintenance \
-  ai-memory-routing-install \
-  plannotator-review \
-  plannotator-annotate \
-  plannotator-last \
-  plannotator-compound \
-  plannotator-setup-goal \
-  plannotator-visual-explainer \
-  agents-sdk \
-  cloudflare \
-  cloudflare-email-service \
-  cloudflare-one \
-  cloudflare-one-migrations \
-  durable-objects \
-  sandbox-migrate-to-next \
-  sandbox-next \
-  sandbox-stable \
-  turnstile-spin \
-  web-perf \
-  workers-best-practices \
-  wrangler
-do
-  require_dir "$HOME/.agents/skills/$skill"
-done
-
-for skill in find-skills architecture-map auto-pr-review code-review implement; do
-  require_file "$HOME/.agents/skills/$skill/SKILL.md"
-done
+if [[ "$manifest_valid" == true ]]; then
+  while IFS=$'\t' read -r provider name source_ref require_skill_file; do
+    require_dir "$HOME/.agents/skills/$name"
+    if [[ "$require_skill_file" == yes ]]; then
+      require_file "$HOME/.agents/skills/$name/SKILL.md"
+    fi
+  done <<<"$manifest_rows"
+fi
 
 # Result
 printf '\n'
