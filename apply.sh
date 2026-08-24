@@ -4,14 +4,14 @@ set -Eeuo pipefail
 # apply.sh
 #
 # Deterministic OpenCode setup script.
-# Installs OpenCode, ai-memory, ai-jail, RTK, Plannotator, and required skills.
+# Installs OpenCode, ai-memory, RTK, Plannotator, and required skills.
 # Installs/updates skills live on every run.
 #
 # Usage:
 #   ./agents/apply.sh
 #
 # Prerequisites: curl, git, npm, npx, python3, systemctl.
-# AUR package installation also needs yay when ai-memory or ai-jail is absent.
+# AUR package installation also needs yay when ai-memory is absent.
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_DIR="${DOTFILES_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
@@ -21,9 +21,7 @@ RTK_VERSION="${RTK_VERSION:-v0.38.0}"
 GITHUB_MCP_TOKEN_FILE="$HOME/.config/opencode/secrets/github-mcp-pat"
 GITHUB_MCP_TOKEN_REFERENCE="~/.config/opencode/secrets/github-mcp-pat"
 AI_MEMORY_AUR_PACKAGE="${AI_MEMORY_AUR_PACKAGE:-ai-memory-bin}"
-AI_JAIL_AUR_PACKAGE="${AI_JAIL_AUR_PACKAGE:-ai-jail-bin}"
 AI_MEMORY_MIN_VERSION="${AI_MEMORY_MIN_VERSION:-1.28.0}"
-AI_JAIL_MIN_VERSION="${AI_JAIL_MIN_VERSION:-1.18.1}"
 AI_MEMORY_DATA_DIR="$HOME/.local/share/ai-memory"
 AI_MEMORY_AUTH_FILE="$AI_MEMORY_DATA_DIR/auth.json"
 AI_MEMORY_CONFIG_FILE="$HOME/.config/ai-memory/config.toml"
@@ -117,9 +115,12 @@ install_ai_memory() {
   require_minimum_version ai-memory "$AI_MEMORY_MIN_VERSION"
 }
 
-install_ai_jail() {
-  install_aur_command ai-jail "$AI_JAIL_AUR_PACKAGE"
-  require_minimum_version ai-jail "$AI_JAIL_MIN_VERSION"
+report_optional_ai_jail() {
+  if have ai-jail; then
+    log "Optional ai-jail command available for sandboxed dangerous-mode sessions"
+  else
+    log "Optional ai-jail command unavailable; sandboxed dangerous-mode sessions are disabled"
+  fi
 }
 
 verify_ai_memory_no_static_auth_files() {
@@ -945,7 +946,7 @@ main() {
   check_prerequisites
   install_opencode
   install_ai_memory
-  install_ai_jail
+  report_optional_ai_jail
   verify_ai_memory_unauthenticated_loopback
   setup_opencode
   setup_ai_memory

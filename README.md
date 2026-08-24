@@ -5,7 +5,7 @@ This folder contains OpenCode agent setup configuration.
 ## Files
 
 - `AGENTS.md`: canonical global instructions used by OpenCode.
-- `apply.sh`: installs and configures OpenCode, ai-memory, ai-jail, the managed Bash entry point, model routing, RTK, Plannotator, required skills, and the remote MCP servers.
+- `apply.sh`: installs and configures OpenCode, ai-memory, the managed Bash entry point, model routing, RTK, Plannotator, required skills, and the remote MCP servers. It reports whether the optional ai-jail command is available but does not install it.
 - `test.sh`: deterministic local checks for harness wiring.
 - `lib/agent_stack.py`: shared safe file, environment-assignment, and skill-manifest primitives used by the scripts.
 - `skills.tsv`: data-only inventory of local, direct-upstream, and generated skill provenance.
@@ -151,6 +151,8 @@ OpenCode Go's current catalog exposes `low`, `high`, and `max` for DeepSeek V4 F
 
 ### ai-jail For Managed Dangerous Mode
 
+ai-jail is optional and is not a dependency of ai-memory or the normal managed OpenCode runtime. Apply does not install or configure it. Install it separately only when this sandboxed dangerous-mode path is required.
+
 ai-memory translates its `--yolo` option to OpenCode's native `--auto`. It does not create a sandbox. ai-jail must be the outer process, and the harness must be explicit:
 
 ```sh
@@ -225,18 +227,18 @@ For a repository-only check that does not require an applied workstation:
 ./agents/test.sh --repo-only
 ```
 
-Prerequisites are Bash, `curl`, `git`, `npm`, `npx`, Python 3.11 or newer, and a working systemd user manager. When `ai-memory` or `ai-jail` is absent, apply also needs `yay` and installs the native `ai-memory-bin` and `ai-jail-bin` AUR packages. The script requires ai-memory 1.28.0 or newer and ai-jail 1.18.1 or newer because the documented fresh-session and private-home behavior depends on these releases. On a new machine, authenticate the providers that supply `openai/gpt-5.6-sol` and `opencode-go/deepseek-v4-flash` with `opencode-raw auth login` before use. Also put a separate OpenCode Go API key in `~/.config/ai-memory/env` to enable the default ai-memory service model. Model policy is stored in Git. Provider API keys, OAuth tokens, session credentials, the ai-memory token pepper, and memory data are not.
+Prerequisites are Bash, `curl`, `git`, `npm`, `npx`, Python 3.11 or newer, and a working systemd user manager. When ai-memory is absent, apply also needs `yay` and installs the native `ai-memory-bin` AUR package. The script requires ai-memory 1.28.0 or newer. ai-jail is optional and must be installed separately when sandboxed dangerous-mode sessions are required. On a new machine, authenticate the providers that supply `openai/gpt-5.6-sol` and `opencode-go/deepseek-v4-flash` with `opencode-raw auth login` before use. Also put a separate OpenCode Go API key in `~/.config/ai-memory/env` to enable the default ai-memory service model. Model policy is stored in Git. Provider API keys, OAuth tokens, session credentials, the ai-memory token pepper, and memory data are not.
 
-The automatic installation target is Omarchy or another Arch-based system. It also works in an Arch-based WSL2 distribution when systemd user services are enabled. On another WSL2 distribution, install current native ai-memory and ai-jail binaries plus a matching ai-memory user unit before apply, or use the upstream Docker-wrapper design as a separate setup. Do not mix a Docker wrapper and the native user service on the same `127.0.0.1:49374` endpoint.
+The automatic installation target is Omarchy or another Arch-based system. It also works in an Arch-based WSL2 distribution when systemd user services are enabled. On another WSL2 distribution, install a current native ai-memory binary plus a matching ai-memory user unit before apply, or use the upstream Docker-wrapper design as a separate setup. Do not mix a Docker wrapper and the native user service on the same `127.0.0.1:49374` endpoint.
 
-The script installs OpenCode if missing, installs the two native AUR tools if needed, copies `AGENTS.md`, merges global routing and integrations, initializes and starts ai-memory, merges the canonical marked function block into `~/.bash_aliases`, refreshes the generated ai-memory plugin and skills, configures RTK, installs Plannotator, and installs required skills. It converges the selected ai-memory LLM profile and keeps zero-LLM mode until that profile's credential is ready. Upstream skills are installed live and tracked local skills are copied on every run. The Cloudflare skills bundle (`https://github.com/cloudflare/skills`) is installed as a group without `-s` so every upstream skill is pulled in. The Cloudflare, GitHub, Linear, and ai-memory remote MCP entries are merged into `~/.config/opencode/opencode.json`. Use `opencode mcp auth <name>` for the OAuth-enabled Cloudflare and Linear servers. GitHub uses the dedicated machine-local PAT file. ai-memory uses the local loopback service without bearer authentication.
+The script installs OpenCode if missing, installs the native ai-memory AUR tool if needed, copies `AGENTS.md`, merges global routing and integrations, initializes and starts ai-memory, merges the canonical marked function block into `~/.bash_aliases`, refreshes the generated ai-memory plugin and skills, configures RTK, installs Plannotator, and installs required skills. It converges the selected ai-memory LLM profile and keeps zero-LLM mode until that profile's credential is ready. Upstream skills are installed live and tracked local skills are copied on every run. The Cloudflare skills bundle (`https://github.com/cloudflare/skills`) is installed as a group without `-s` so every upstream skill is pulled in. The Cloudflare, GitHub, Linear, and ai-memory remote MCP entries are merged into `~/.config/opencode/opencode.json`. Use `opencode mcp auth <name>` for the OAuth-enabled Cloudflare and Linear servers. GitHub uses the dedicated machine-local PAT file. ai-memory uses the local loopback service without bearer authentication.
 
 For an ai-memory upgrade, first create a backup outside the repository. Then update the package and rerun apply. Apply refreshes the generated OpenCode plugin, routing instructions, and skills for the installed version.
 
 ```sh
 ai-memory --data-dir "$HOME/.local/share/ai-memory" \
   backup --to "$HOME/ai-memory-backup.tar.gz"
-yay -S ai-memory-bin ai-jail-bin
+yay -S ai-memory-bin
 ./agents/apply.sh
 ./agents/test.sh
 ```

@@ -204,7 +204,7 @@ ai-jail ai-memory \
   run opencode --yolo
 ```
 
-This repository installs ai-jail but does not write `~/.ai-jail`. The policy grants capabilities that need a direct decision:
+This repository does not install ai-jail or write `~/.ai-jail`. Install ai-jail separately before use. The policy grants capabilities that need a direct decision:
 
 - `network = true` gives all sandbox processes unrestricted outbound network access. OpenCode Go and the local loopback MCP service need network access.
 - `agent_state = true` mounts `~/.config/opencode` and `~/.local/share/opencode` read-write. This exposes provider credentials, the GitHub MCP PAT file, config, plugins, and the session database to all sandbox processes.

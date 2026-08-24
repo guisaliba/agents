@@ -31,7 +31,6 @@ AI_MEMORY_INSTRUCTIONS_FILE="$HOME/.config/opencode/ai-memory.md"
 AI_MEMORY_INSTRUCTIONS_REFERENCE="~/.config/opencode/ai-memory.md"
 AI_MEMORY_MCP_EXPECTED_JSON='{"type":"remote","url":"http://127.0.0.1:49374/mcp","enabled":true}'
 AI_MEMORY_MIN_VERSION="1.28.0"
-AI_JAIL_MIN_VERSION="1.18.1"
 AI_MEMORY_LLM_PROFILE_EXPECTED="opencode-go-deepseek"
 AI_MEMORY_LLM_PROVIDER_EXPECTED="opencode"
 AI_MEMORY_LLM_MODEL_EXPECTED="deepseek-v4-flash"
@@ -1225,6 +1224,25 @@ test_opencode_shell_override() {
   rm -rf -- "$fixture_root"
 }
 
+test_optional_ai_jail() {
+  local fixture_root stub_bin
+  fixture_root="$(mktemp -d)"
+  stub_bin="$fixture_root/bin"
+  mkdir -p "$stub_bin"
+
+  if (
+    PATH="$stub_bin:/usr/bin:/bin"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    report_optional_ai_jail
+  ) >/dev/null 2>&1; then
+    ok "apply accepts an unavailable optional ai-jail command"
+  else
+    not_ok "apply requires the optional ai-jail command"
+  fi
+
+  rm -rf -- "$fixture_root"
+}
+
 # Repo structure checks
 printf '\n--- Repo Structure ---\n'
 
@@ -1293,6 +1311,11 @@ printf '\n--- OpenCode Bash Override Fixtures ---\n'
 
 test_opencode_shell_override
 
+# Optional ai-jail fixture checks
+printf '\n--- Optional ai-jail Fixtures ---\n'
+
+test_optional_ai_jail
+
 if [[ "$repo_only" == "true" ]]; then
   printf '\n'
   if [[ "$failures" -gt 0 ]]; then
@@ -1310,14 +1333,12 @@ require_command python3
 require_command bash
 require_command opencode
 require_command ai-memory
-require_command ai-jail
 require_command rtk
 require_command plannotator
 require_file "$HOME/.config/opencode/plugins/rtk.ts"
 
 opencode --help >/dev/null 2>&1 && ok "opencode help runs" || not_ok "opencode help failed"
 ai-memory --help >/dev/null 2>&1 && ok "ai-memory help runs" || not_ok "ai-memory help failed"
-ai-jail --help >/dev/null 2>&1 && ok "ai-jail help runs" || not_ok "ai-jail help failed"
 plannotator --help >/dev/null 2>&1 && ok "plannotator help runs" || not_ok "plannotator help failed"
 
 if (
@@ -1329,13 +1350,10 @@ else
   not_ok "ai-memory version is older than $AI_MEMORY_MIN_VERSION or unreadable"
 fi
 
-if (
-  source "$DOTFILES_DIR/agents/apply.sh"
-  require_minimum_version ai-jail "$AI_JAIL_MIN_VERSION"
-) >/dev/null 2>&1; then
-  ok "ai-jail version is supported"
+if command -v ai-jail >/dev/null 2>&1; then
+  ai-jail --help >/dev/null 2>&1 && ok "optional ai-jail help runs" || not_ok "optional ai-jail help failed"
 else
-  not_ok "ai-jail version is older than $AI_JAIL_MIN_VERSION or unreadable"
+  ok "optional ai-jail command is not installed"
 fi
 
 rewritten="$(rtk rewrite "git status --short" 2>/dev/null || true)"
