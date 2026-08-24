@@ -11,9 +11,13 @@ upstream	grill-me	mattpocock/skills@productivity/grill-me	no
 upstream	grill-with-docs	mattpocock/skills@engineering/grill-with-docs	no
 upstream	handoff	mattpocock/skills@productivity/handoff	no
 upstream	implement	mattpocock/skills@engineering/implement	yes
+upstream	learn-profile	vasanthsreeram/Alvarmethod	yes
+upstream	learn-verify	vasanthsreeram/Alvarmethod	yes
+upstream	learn-visual	vasanthsreeram/Alvarmethod	yes
 upstream	setup-matt-pocock-skills	mattpocock/skills@engineering/setup-matt-pocock-skills	no
 upstream	tdd	mattpocock/skills@engineering/tdd	no
-upstream	teach	mattpocock/skills@productivity/teach	no
+upstream	probe	vasanthsreeram/Alvarmethod	yes
+upstream	teach	vasanthsreeram/Alvarmethod	yes
 upstream	to-tickets	mattpocock/skills@engineering/to-tickets	no
 upstream	triage	mattpocock/skills@engineering/triage	no
 upstream	writing-for-agents	mattpocock/skills@productivity/writing-for-agents	no

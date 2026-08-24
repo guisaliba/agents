@@ -106,7 +106,7 @@ Use available skills and tools when they match the task.
 
 This workstation loads generated ai-memory routing from `~/.config/opencode/ai-memory.md`. Do not install or refresh an ai-memory routing block in a project `AGENTS.md` unless the user or that project explicitly requires it. Use the dotfiles apply script to refresh the global generated routing.
 
-Expected global capabilities: `caveman`, `rtk`, `grill-me`, `grill-with-docs`, `find-skills`, `implement`, `code-review`, `tdd`, `teach`.
+Expected global capabilities: `caveman`, `rtk`, `grill-me`, `grill-with-docs`, `find-skills`, `implement`, `code-review`, `tdd`, `teach`, `probe`, `learn-profile`, `learn-verify`, `learn-visual`.
 
 Treat `rtk` as a shell/tool safety and command rewriting layer.
 
@@ -118,4 +118,4 @@ Use `code-review` to review a change against repository standards and its source
 
 Prefer `tdd` for non-trivial feature work and bug fixes.
 
-Use `teach` when the user wants to learn a subject, workflow, tool, codebase area or anything.
+Use `teach` for the Alvar learning workflow when the user wants to learn a subject, workflow, tool, or codebase area. Use its supporting `probe`, `learn-profile`, `learn-verify`, and `learn-visual` skills when their narrower task applies.

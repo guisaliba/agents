@@ -1066,9 +1066,13 @@ test_required_skill_installation() {
     '-y skills add mattpocock/skills@engineering/grill-with-docs -g -a opencode -s grill-with-docs -y --copy' \
     '-y skills add mattpocock/skills@productivity/handoff -g -a opencode -s handoff -y --copy' \
     '-y skills add mattpocock/skills@engineering/implement -g -a opencode -s implement -y --copy' \
+    '-y skills add vasanthsreeram/Alvarmethod -g -a opencode -s learn-profile -y --copy' \
+    '-y skills add vasanthsreeram/Alvarmethod -g -a opencode -s learn-verify -y --copy' \
+    '-y skills add vasanthsreeram/Alvarmethod -g -a opencode -s learn-visual -y --copy' \
     '-y skills add mattpocock/skills@engineering/setup-matt-pocock-skills -g -a opencode -s setup-matt-pocock-skills -y --copy' \
     '-y skills add mattpocock/skills@engineering/tdd -g -a opencode -s tdd -y --copy' \
-    '-y skills add mattpocock/skills@productivity/teach -g -a opencode -s teach -y --copy' \
+    '-y skills add vasanthsreeram/Alvarmethod -g -a opencode -s probe -y --copy' \
+    '-y skills add vasanthsreeram/Alvarmethod -g -a opencode -s teach -y --copy' \
     '-y skills add mattpocock/skills@engineering/to-tickets -g -a opencode -s to-tickets -y --copy' \
     '-y skills add mattpocock/skills@engineering/triage -g -a opencode -s triage -y --copy' \
     '-y skills add mattpocock/skills@productivity/writing-for-agents -g -a opencode -s writing-for-agents -y --copy' \
@@ -1266,6 +1270,11 @@ fi
 require_skill_manifest_entry "upstream" "architecture-map" "https://github.com/almendili/skills" "yes"
 require_skill_manifest_entry "upstream" "code-review" "mattpocock/skills@engineering/code-review" "yes"
 require_skill_manifest_entry "upstream" "implement" "mattpocock/skills@engineering/implement" "yes"
+require_skill_manifest_entry "upstream" "learn-profile" "vasanthsreeram/Alvarmethod" "yes"
+require_skill_manifest_entry "upstream" "learn-verify" "vasanthsreeram/Alvarmethod" "yes"
+require_skill_manifest_entry "upstream" "learn-visual" "vasanthsreeram/Alvarmethod" "yes"
+require_skill_manifest_entry "upstream" "probe" "vasanthsreeram/Alvarmethod" "yes"
+require_skill_manifest_entry "upstream" "teach" "vasanthsreeram/Alvarmethod" "yes"
 if [[ "$manifest_valid" == true ]]; then
   while IFS=$'\t' read -r provider name source_ref require_skill_file; do
     case "$provider" in
