@@ -42,7 +42,7 @@ The script copies the complete canonical `agents/AGENTS.md` to `~/.config/openco
 
 ### OpenCode Learn
 
-Apply installs the OpenCode-only learning system from `github:guisaliba/opencode-learn#main`. It merges the configured server entry into `~/.config/opencode/opencode.json` and the TUI entry into `~/.config/opencode/tui.json`. Both entries are required for graded quiz dialogs and immediate feedback. Each merge removes stale entries for the same package, keeps one managed entry, preserves unrelated valid settings, and is idempotent.
+Apply installs the OpenCode-only learning system from `github:guisaliba/learn#main`. It merges the configured server entry into `~/.config/opencode/opencode.json` and the TUI entry into `~/.config/opencode/tui.json`. Both entries are required for graded quiz dialogs and immediate feedback. Each merge removes stale entries for the same package, keeps one managed entry, preserves unrelated valid settings, and is idempotent.
 
 The `learn` primary agent inherits the current session model. Apply pins `learn-researcher` to `opencode-go/deepseek-v4-flash` and pins the SVG and Mermaid maker agents to `opencode-go/deepseek-v4-flash-vision-exp`. These are OpenCode session routes. They are separate from the managed ai-memory service profile below.
 

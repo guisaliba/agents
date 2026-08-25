@@ -35,7 +35,7 @@ AI_MEMORY_MIN_VERSION="1.28.0"
 AI_MEMORY_LLM_PROFILE_EXPECTED="opencode-go-deepseek"
 AI_MEMORY_LLM_PROVIDER_EXPECTED="opencode"
 AI_MEMORY_LLM_MODEL_EXPECTED="deepseek-v4-flash"
-LEARN_PLUGIN_SPEC="github:guisaliba/opencode-learn#main"
+LEARN_PLUGIN_SPEC="github:guisaliba/learn#main"
 LEARN_TEXT_MODEL_EXPECTED="opencode-go/deepseek-v4-flash"
 LEARN_VISUAL_MODEL_EXPECTED="opencode-go/deepseek-v4-flash-vision-exp"
 OPENCODE_SHELL_BLOCK_START="# >>> dotfiles OpenCode ai-memory wrapper >>>"
@@ -534,8 +534,8 @@ config = {
     },
     "plugin": [
         "user/plugin",
-        ["github:guisaliba/opencode-learn#v0.0.1", {"textModel": "stale/model"}],
-        "github:guisaliba/opencode-learn#main",
+        ["github:guisaliba/learn#v0.0.1", {"textModel": "stale/model"}],
+        "github:guisaliba/learn#main",
     ],
     "mcp": {
         "custom": {
@@ -583,7 +583,7 @@ PY
   require_json_array_item_count \
     "$fixture_config" \
     "plugin" \
-    '["github:guisaliba/opencode-learn#v0.0.1",{"textModel":"stale/model"}]' \
+    '["github:guisaliba/learn#v0.0.1",{"textModel":"stale/model"}]' \
     "0"
   require_json_array_item_count \
     "$fixture_config" \
@@ -702,8 +702,8 @@ config = {
     "theme": "user-theme",
     "plugin": [
         "user/tui-plugin",
-        ["github:guisaliba/opencode-learn#v0.0.1", {"ipcRoot": "/stale"}],
-        "github:guisaliba/opencode-learn#main",
+        ["github:guisaliba/learn#v0.0.1", {"ipcRoot": "/stale"}],
+        "github:guisaliba/learn#main",
     ],
 }
 Path(sys.argv[1]).write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
@@ -724,7 +724,7 @@ PY
   require_json_array_item_count \
     "$fixture_config" \
     "plugin" \
-    '["github:guisaliba/opencode-learn#v0.0.1",{"ipcRoot":"/stale"}]' \
+    '["github:guisaliba/learn#v0.0.1",{"ipcRoot":"/stale"}]' \
     "0"
 
   cp "$fixture_config" "$first_config"

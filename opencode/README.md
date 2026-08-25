@@ -40,7 +40,7 @@ Managed integrations:
 
 - rtk via `rtk init -g --opencode`
 - plannotator via plugin `@plannotator/opencode@latest` and commands at `~/.config/opencode/commands/plannotator-*`
-- OpenCode Learn via `github:guisaliba/opencode-learn#main` in both server and TUI configuration
+- OpenCode Learn via `github:guisaliba/learn#main` in both server and TUI configuration
 - official GitHub MCP Server via the managed global `mcp.github` entry
 - ai-memory via the managed global `mcp.ai-memory` entry and the upstream-generated plugin
 
