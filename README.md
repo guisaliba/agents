@@ -10,6 +10,7 @@ This folder contains OpenCode agent setup configuration.
 - `lib/agent_stack.py`: shared safe file, environment-assignment, and skill-manifest primitives used by the scripts.
 - `skills.tsv`: data-only inventory of local, direct-upstream, and generated skill provenance.
 - `opencode/README.md`: OpenCode-specific notes.
+- `opencode/themes/`: tracked OpenCode TUI themes that `apply.sh` installs.
 - `skills/README.md`: shared skills notes.
 - `../bash/.bash_aliases`: canonical marked Bash function block for the managed `opencode` command and its `opencode-raw` escape hatch.
 
@@ -37,6 +38,12 @@ Subagents:
 `agents/apply.sh` merges the managed routing fields into `~/.config/opencode/opencode.json`. The global model selects Sol for `build`, and a direct agent override pins `plan` to Sol. The merge preserves unrelated root fields, agent entries, agent-specific fields, plugins, MCP servers, permissions, providers, and commands. If an existing runtime file has invalid JSON, a non-object root, an invalid managed agent object, or a non-object `mcp` field, apply stops without overwriting the file.
 
 Scout availability currently differs between OpenCode documentation and released/runtime implementations. Apply checks a clean OpenCode agent list. If OpenCode exposes native `scout (subagent)`, apply pins it to DeepSeek. If it does not, apply removes only this repository's prior Scout model override and does not create a custom or unrestricted fallback. `agents/test.sh` verifies the same boundary, so another supported device reports its effective Scout capability.
+
+### OpenCode Theme
+
+Apply sets `"theme": "lucent-orng"` in `~/.config/opencode/tui.json` on every run. It also copies every tracked theme from `agents/opencode/themes/` to `~/.config/opencode/themes/`. The theme key belongs to `tui.json`; the current config schema rejects a top-level `theme` in `opencode.json`.
+
+The tracked `lucent-orng.json` pins the upstream TUI asset at commit `b72b50006b24666da9f2088dbce907d6b24b6901`. A user-directory file with this name overrides the binary's built-in copy of the same name. This keeps the selected look stable across OpenCode releases. The provenance and refresh steps are in `agents/opencode/README.md`.
 
 The script copies the complete canonical `agents/AGENTS.md` to `~/.config/opencode/AGENTS.md`. The source and deployed file must match exactly after apply.
 
@@ -263,4 +270,4 @@ Do not vendor upstream skill, generated ai-memory instruction, or plugin payload
 
 Default rule: install live, do not track copies.
 
-Exceptions: `find-skills` and `auto-pr-review` are local tracked skills under `agents/skills/`. `agents/apply.sh` copies them to `~/.agents/skills/` on every setup run.
+Exceptions: `find-skills` and `auto-pr-review` are local tracked skills under `agents/skills/`. `agents/apply.sh` copies them to `~/.agents/skills/` on every setup run. The `lucent-orng.json` theme under `agents/opencode/themes/` is a tracked exception for the same reason: apply must guarantee the managed TUI theme even when an OpenCode release changes its built-in set.

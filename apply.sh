@@ -34,6 +34,8 @@ AI_MEMORY_DEFAULT_LLM_PROFILE="opencode-go-deepseek"
 LEARN_PLUGIN_SPEC="github:guisaliba/learn#main"
 LEARN_TEXT_MODEL="opencode-go/deepseek-v4-flash"
 LEARN_VISUAL_MODEL="opencode-go/deepseek-v4-flash-vision-exp"
+OPENCODE_TUI_THEME="lucent-orng"
+OPENCODE_THEMES_SOURCE_DIR="$DOTFILES_DIR/agents/opencode/themes"
 BASH_ALIASES_SOURCE="$DOTFILES_DIR/bash/.bash_aliases"
 BASH_ALIASES_FILE="$HOME/.bash_aliases"
 OPENCODE_SHELL_BLOCK_START="# >>> dotfiles OpenCode ai-memory wrapper >>>"
@@ -358,6 +360,27 @@ copy_agents_md() {
   cp "$src" "$HOME/.config/opencode/AGENTS.md"
 }
 
+install_opencode_themes() {
+  local source_theme target_dir themes=()
+  log "Installing vendored OpenCode themes"
+
+  [[ -d "$OPENCODE_THEMES_SOURCE_DIR" ]] || \
+    die "Missing vendored OpenCode theme directory: $OPENCODE_THEMES_SOURCE_DIR"
+
+  shopt -s nullglob
+  themes=("$OPENCODE_THEMES_SOURCE_DIR"/*.json)
+  shopt -u nullglob
+  if [[ ${#themes[@]} -eq 0 ]]; then
+    die "No vendored OpenCode theme files in: $OPENCODE_THEMES_SOURCE_DIR"
+  fi
+
+  target_dir="$HOME/.config/opencode/themes"
+  mkdir -p "$target_dir"
+  for source_theme in "${themes[@]}"; do
+    cp "$source_theme" "$target_dir/"
+  done
+}
+
 ensure_github_mcp_token_file() {
   log "Preparing the machine-local GitHub MCP token file"
 
@@ -593,13 +616,14 @@ merge_opencode_tui_json() {
   local config="$HOME/.config/opencode/tui.json"
   mkdir -p "$(dirname "$config")"
 
-  python3 - "$config" "$LEARN_PLUGIN_SPEC" <<'PY'
+  python3 - "$config" "$LEARN_PLUGIN_SPEC" "$OPENCODE_TUI_THEME" <<'PY'
 import json
 import os
 import sys
 
 path = sys.argv[1]
 learn_plugin_spec = sys.argv[2]
+theme_name = sys.argv[3]
 learn_plugin_base = learn_plugin_spec.partition("#")[0]
 data = {}
 
@@ -620,6 +644,7 @@ if not isinstance(data, dict):
     )
 
 data.setdefault("$schema", "https://opencode.ai/tui.json")
+data["theme"] = theme_name
 plugins = data.get("plugin", [])
 if isinstance(plugins, str):
     plugins = [plugins]
@@ -669,6 +694,7 @@ setup_opencode() {
   copy_agents_md
   ensure_github_mcp_token_file
   merge_opencode_json
+  install_opencode_themes
   merge_opencode_tui_json
 }
 

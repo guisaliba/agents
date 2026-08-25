@@ -38,6 +38,7 @@ AI_MEMORY_LLM_MODEL_EXPECTED="deepseek-v4-flash"
 LEARN_PLUGIN_SPEC="github:guisaliba/learn#main"
 LEARN_TEXT_MODEL_EXPECTED="opencode-go/deepseek-v4-flash"
 LEARN_VISUAL_MODEL_EXPECTED="opencode-go/deepseek-v4-flash-vision-exp"
+OPENCODE_TUI_THEME_EXPECTED="lucent-orng"
 OPENCODE_SHELL_BLOCK_START="# >>> dotfiles OpenCode ai-memory wrapper >>>"
 OPENCODE_SHELL_BLOCK_END="# <<< dotfiles OpenCode ai-memory wrapper <<<"
 
@@ -718,7 +719,7 @@ PY
   else
     not_ok "OpenCode TUI merge fixture failed"
   fi
-  require_json_value "$fixture_config" "theme" "user-theme"
+  require_json_value "$fixture_config" "theme" "$OPENCODE_TUI_THEME_EXPECTED"
   require_json_array_count "$fixture_config" "plugin" "user/tui-plugin" "1"
   require_json_array_count "$fixture_config" "plugin" "$LEARN_PLUGIN_SPEC" "1"
   require_json_array_item_count \
@@ -1488,6 +1489,8 @@ require_file "$DOTFILES_DIR/agents/AGENTS.md"
 require_file "$DOTFILES_DIR/agents/apply.sh"
 require_file "$DOTFILES_DIR/agents/test.sh"
 require_file "$DOTFILES_DIR/agents/opencode/README.md"
+require_file "$DOTFILES_DIR/agents/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
+require_json "$DOTFILES_DIR/agents/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
 require_file "$DOTFILES_DIR/agents/skills/README.md"
 require_file "$AGENT_STACK_HELPER"
 require_file "$SKILLS_MANIFEST"
@@ -1657,6 +1660,12 @@ fi
 require_contains "$HOME/.config/opencode/opencode.json" "@plannotator/opencode@latest"
 require_file "$HOME/.config/opencode/tui.json"
 require_json "$HOME/.config/opencode/tui.json"
+require_json_value "$HOME/.config/opencode/tui.json" "theme" "$OPENCODE_TUI_THEME_EXPECTED"
+require_file "$HOME/.config/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
+require_json "$HOME/.config/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
+require_same_file \
+  "$DOTFILES_DIR/agents/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json" \
+  "$HOME/.config/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
 require_json_array_count "$HOME/.config/opencode/tui.json" "plugin" "$LEARN_PLUGIN_SPEC" "1"
 
 for retired in learn-profile learn-verify learn-visual probe; do

@@ -29,12 +29,24 @@ OpenCode uses these global paths:
 - global instructions: `~/.config/opencode/AGENTS.md`
 - runtime config: `~/.config/opencode/opencode.json`
 - TUI config: `~/.config/opencode/tui.json`
+- themes: `~/.config/opencode/themes/`
 - generated ai-memory instructions: `~/.config/opencode/ai-memory.md`
 - generated ai-memory lifecycle plugin: `~/.config/opencode/plugins/ai-memory.ts`
 - commands: `~/.config/opencode/commands/`
 - shared skills: `~/.agents/skills`
 
-`agents/apply.sh` is the deployment source of truth. It copies the complete `agents/AGENTS.md` to the global instruction path. It merges the global model, explicit Plan model, default agent, available built-in subagent models, Plannotator plugin, OpenCode Learn server plugin, and managed MCP servers into the runtime JSON. It also merges the OpenCode Learn TUI plugin into `tui.json`. Both merges preserve unrelated valid configuration. Invalid JSON or invalid managed structures cause a safe failure without overwrite.
+`agents/apply.sh` is the deployment source of truth. It copies the complete `agents/AGENTS.md` to the global instruction path. It merges the global model, explicit Plan model, default agent, available built-in subagent models, Plannotator plugin, OpenCode Learn server plugin, and managed MCP servers into the runtime JSON. It installs the tracked themes and sets the managed theme in `tui.json`. Both merges preserve unrelated valid configuration. Invalid JSON or invalid managed structures cause a safe failure without overwrite.
+
+## Theme
+
+Apply owns two theme parts:
+
+- `tui.json`: the `"theme"` key. Apply always converges it to `lucent-orng`. Do not put a `theme` key in `opencode.json`; the current schema rejects it there.
+- `~/.config/opencode/themes/*.json`: apply copies every tracked theme from `agents/opencode/themes/`.
+
+The tracked `lucent-orng.json` is a byte-exact copy of the upstream TUI asset at [anomalyco/opencode](https://github.com/anomalyco/opencode), path `packages/tui/src/theme/assets/lucent-orng.json`, commit `b72b50006b24666da9f2088dbce907d6b24b6901`. To refresh it, download that asset again and replace the tracked file.
+
+A theme file with this name takes priority over the binary's built-in copy. This keeps the look stable when a future OpenCode release drops or changes the built-in theme. After an apply that changes theme files, restart OpenCode because the TUI loads configuration once at start.
 
 Managed integrations:
 
