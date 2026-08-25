@@ -29,11 +29,15 @@ AI_MEMORY_CONFIG_FILE="$HOME/.config/ai-memory/config.toml"
 AI_MEMORY_ENV_FILE="$HOME/.config/ai-memory/env"
 AI_MEMORY_INSTRUCTIONS_FILE="$HOME/.config/opencode/ai-memory.md"
 AI_MEMORY_INSTRUCTIONS_REFERENCE="~/.config/opencode/ai-memory.md"
+AI_MEMORY_USER_SERVICE_FILE="$HOME/.config/systemd/user/ai-memory.service"
 AI_MEMORY_MCP_EXPECTED_JSON='{"type":"remote","url":"http://127.0.0.1:49374/mcp","enabled":true}'
 AI_MEMORY_MIN_VERSION="1.28.0"
 AI_MEMORY_LLM_PROFILE_EXPECTED="opencode-go-deepseek"
 AI_MEMORY_LLM_PROVIDER_EXPECTED="opencode"
 AI_MEMORY_LLM_MODEL_EXPECTED="deepseek-v4-flash"
+LEARN_PLUGIN_SPEC="github:guisaliba/opencode-learn#main"
+LEARN_TEXT_MODEL_EXPECTED="opencode-go/deepseek-v4-flash"
+LEARN_VISUAL_MODEL_EXPECTED="opencode-go/deepseek-v4-flash-vision-exp"
 OPENCODE_SHELL_BLOCK_START="# >>> dotfiles OpenCode ai-memory wrapper >>>"
 OPENCODE_SHELL_BLOCK_END="# <<< dotfiles OpenCode ai-memory wrapper <<<"
 
@@ -379,6 +383,34 @@ PY
   fi
 }
 
+require_json_array_item_count() {
+  local path="$1"
+  local key="$2"
+  local expected_json="$3"
+  local expected_count="$4"
+  if python3 - "$path" "$key" "$expected_json" "$expected_count" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+try:
+    value = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+    for part in sys.argv[2].split("."):
+        value = value[part]
+    expected = json.loads(sys.argv[3])
+    count = value.count(expected)
+except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+    raise SystemExit(1)
+
+raise SystemExit(0 if count == int(sys.argv[4]) else 1)
+PY
+  then
+    ok "json array item count: $key contains $expected_json exactly $expected_count time(s)"
+  else
+    not_ok "json array item count mismatch: $key / $expected_json in $path"
+  fi
+}
+
 require_ai_memory_instructions_current() {
   local fixture_root expected
   fixture_root="$(mktemp -d)"
@@ -500,7 +532,11 @@ config = {
         "general": {"temperature": 0.25},
         "custom": {"model": "user/custom-model"},
     },
-    "plugin": "user/plugin",
+    "plugin": [
+        "user/plugin",
+        ["github:guisaliba/opencode-learn#v0.0.1", {"textModel": "stale/model"}],
+        "github:guisaliba/opencode-learn#main",
+    ],
     "mcp": {
         "custom": {
             "type": "remote",
@@ -543,6 +579,17 @@ PY
   require_json_array_count "$fixture_config" "instructions" "$AI_MEMORY_INSTRUCTIONS_REFERENCE" "1"
   require_json_array_count "$fixture_config" "plugin" "user/plugin" "1"
   require_json_array_count "$fixture_config" "plugin" "@plannotator/opencode@latest" "1"
+  require_json_array_count "$fixture_config" "plugin" "$LEARN_PLUGIN_SPEC" "0"
+  require_json_array_item_count \
+    "$fixture_config" \
+    "plugin" \
+    '["github:guisaliba/opencode-learn#v0.0.1",{"textModel":"stale/model"}]' \
+    "0"
+  require_json_array_item_count \
+    "$fixture_config" \
+    "plugin" \
+    "[\"$LEARN_PLUGIN_SPEC\",{\"textModel\":\"$LEARN_TEXT_MODEL_EXPECTED\",\"visualModel\":\"$LEARN_VISUAL_MODEL_EXPECTED\"}]" \
+    "1"
   require_json_literal "$fixture_config" "agent.general.temperature" "0.25"
   require_json_value "$fixture_config" "agent.custom.model" "user/custom-model"
   require_json_value "$fixture_config" "mcp.custom.url" "https://example.invalid/mcp"
@@ -634,6 +681,82 @@ PY
   fi
   require_same_file "$instructions_before" "$instructions_config"
   require_contains "$instructions_log" "Expected 'instructions' to be an array"
+
+  rm -rf -- "$fixture_root"
+}
+
+test_opencode_tui_json_merge() {
+  local fixture_root fixture_home fixture_config first_config malformed_home malformed_config malformed_before malformed_log
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  fixture_config="$fixture_home/.config/opencode/tui.json"
+  first_config="$fixture_root/first-tui.json"
+  mkdir -p "$(dirname "$fixture_config")"
+  python3 - "$fixture_config" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+config = {
+    "$schema": "https://opencode.ai/tui.json",
+    "theme": "user-theme",
+    "plugin": [
+        "user/tui-plugin",
+        ["github:guisaliba/opencode-learn#v0.0.1", {"ipcRoot": "/stale"}],
+        "github:guisaliba/opencode-learn#main",
+    ],
+}
+Path(sys.argv[1]).write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+PY
+
+  if (
+    HOME="$fixture_home"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    merge_opencode_tui_json
+  ) >/dev/null 2>&1; then
+    ok "OpenCode TUI merge fixture applies"
+  else
+    not_ok "OpenCode TUI merge fixture failed"
+  fi
+  require_json_value "$fixture_config" "theme" "user-theme"
+  require_json_array_count "$fixture_config" "plugin" "user/tui-plugin" "1"
+  require_json_array_count "$fixture_config" "plugin" "$LEARN_PLUGIN_SPEC" "1"
+  require_json_array_item_count \
+    "$fixture_config" \
+    "plugin" \
+    '["github:guisaliba/opencode-learn#v0.0.1",{"ipcRoot":"/stale"}]' \
+    "0"
+
+  cp "$fixture_config" "$first_config"
+  if (
+    HOME="$fixture_home"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    merge_opencode_tui_json
+  ) >/dev/null 2>&1; then
+    ok "OpenCode TUI merge fixture applies a second time"
+  else
+    not_ok "second OpenCode TUI merge fixture apply failed"
+  fi
+  require_same_file "$first_config" "$fixture_config"
+
+  malformed_home="$fixture_root/malformed-home"
+  malformed_config="$malformed_home/.config/opencode/tui.json"
+  malformed_before="$fixture_root/malformed-before.json"
+  malformed_log="$fixture_root/malformed.log"
+  mkdir -p "$(dirname "$malformed_config")"
+  printf '%s\n' '{"theme":"keep","plugin":{}}' >"$malformed_config"
+  cp "$malformed_config" "$malformed_before"
+  if (
+    HOME="$malformed_home"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    merge_opencode_tui_json
+  ) >"$malformed_log" 2>&1; then
+    not_ok "invalid OpenCode TUI plugin structure was accepted"
+  else
+    ok "invalid OpenCode TUI plugin structure fails"
+  fi
+  require_same_file "$malformed_before" "$malformed_config"
+  require_contains "$malformed_log" "Expected 'plugin' to be an array or string"
 
   rm -rf -- "$fixture_root"
 }
@@ -1032,22 +1155,33 @@ test_agent_stack_helpers() {
 }
 
 test_required_skill_installation() {
-  local fixture_root fixture_home stub_bin install_log expected_log
+  local fixture_root fixture_home stub_bin install_log stdin_log expected_log
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
   stub_bin="$fixture_root/bin"
   install_log="$fixture_root/install.log"
+  stdin_log="$fixture_root/stdin.log"
   expected_log="$fixture_root/expected.log"
   mkdir -p "$stub_bin"
+  mkdir -p \
+    "$fixture_home/.agents/skills/learn-profile" \
+    "$fixture_home/.agents/skills/learn-verify" \
+    "$fixture_home/.agents/skills/learn-visual" \
+    "$fixture_home/.agents/skills/probe" \
+    "$fixture_home/.agents/skills/teach" \
+    "$fixture_home/.agents/skills/user-owned"
   printf '%s\n' \
     '#!/usr/bin/env bash' \
-    'printf '\''%s\n'\'' "$*" >>"$SKILL_INSTALL_LOG"' >"$stub_bin/npx"
+    'printf '\''%s\n'\'' "$*" >>"$SKILL_INSTALL_LOG"' \
+    'while IFS= read -r line; do printf '\''%s\n'\'' "$line" >>"$SKILL_STDIN_LOG"; done' >"$stub_bin/npx"
   chmod +x "$stub_bin/npx"
+  : >"$stdin_log"
 
-  if (
+  if printf '%s\n' 'fixture-stdin-must-not-be-consumed' | (
     HOME="$fixture_home"
     PATH="$stub_bin:/usr/bin:/bin"
     export SKILL_INSTALL_LOG="$install_log"
+    export SKILL_STDIN_LOG="$stdin_log"
     source "$DOTFILES_DIR/agents/apply.sh"
     install_required_skills
   ) >/dev/null 2>&1; then
@@ -1057,6 +1191,15 @@ test_required_skill_installation() {
   fi
   require_dir "$fixture_home/.agents/skills/find-skills"
   require_dir "$fixture_home/.agents/skills/auto-pr-review"
+  require_dir "$fixture_home/.agents/skills/user-owned"
+  for removed in learn-profile learn-verify learn-visual probe teach; do
+    if [[ ! -e "$fixture_home/.agents/skills/$removed" ]]; then
+      ok "legacy Alvar skill removed: $removed"
+    else
+      not_ok "legacy Alvar skill remains: $removed"
+    fi
+  done
+  require_empty_file "$stdin_log"
 
   printf '%s\n' \
     '-y skills add https://github.com/almendili/skills -g -a opencode -s architecture-map -y --copy' \
@@ -1066,13 +1209,9 @@ test_required_skill_installation() {
     '-y skills add mattpocock/skills@engineering/grill-with-docs -g -a opencode -s grill-with-docs -y --copy' \
     '-y skills add mattpocock/skills@productivity/handoff -g -a opencode -s handoff -y --copy' \
     '-y skills add mattpocock/skills@engineering/implement -g -a opencode -s implement -y --copy' \
-    '-y skills add vasanthsreeram/Alvarmethod -g -a opencode -s learn-profile -y --copy' \
-    '-y skills add vasanthsreeram/Alvarmethod -g -a opencode -s learn-verify -y --copy' \
-    '-y skills add vasanthsreeram/Alvarmethod -g -a opencode -s learn-visual -y --copy' \
     '-y skills add mattpocock/skills@engineering/setup-matt-pocock-skills -g -a opencode -s setup-matt-pocock-skills -y --copy' \
     '-y skills add mattpocock/skills@engineering/tdd -g -a opencode -s tdd -y --copy' \
-    '-y skills add vasanthsreeram/Alvarmethod -g -a opencode -s probe -y --copy' \
-    '-y skills add vasanthsreeram/Alvarmethod -g -a opencode -s teach -y --copy' \
+    '-y skills add mattpocock/skills@productivity/teach -g -a opencode -s teach -y --copy' \
     '-y skills add mattpocock/skills@engineering/to-tickets -g -a opencode -s to-tickets -y --copy' \
     '-y skills add mattpocock/skills@engineering/triage -g -a opencode -s triage -y --copy' \
     '-y skills add mattpocock/skills@productivity/writing-for-agents -g -a opencode -s writing-for-agents -y --copy' \
@@ -1247,6 +1386,101 @@ test_optional_ai_jail() {
   rm -rf -- "$fixture_root"
 }
 
+test_native_ai_memory_requirement() {
+  local fixture_root stub_bin wrapper_log
+  fixture_root="$(mktemp -d)"
+  stub_bin="$fixture_root/bin"
+  wrapper_log="$fixture_root/wrapper.log"
+  mkdir -p "$stub_bin"
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf '\''ai-memory 1.32.0\n'\''' >"$stub_bin/ai-memory"
+  chmod +x "$stub_bin/ai-memory"
+
+  if (
+    PATH="$stub_bin:/usr/bin:/bin"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    install_ai_memory
+  ) >"$wrapper_log" 2>&1; then
+    not_ok "Docker ai-memory wrapper was accepted as a native binary"
+  else
+    ok "Docker ai-memory wrapper is rejected before setup"
+  fi
+  require_contains "$wrapper_log" "ai-memory must be a native Linux executable"
+
+  cp /bin/true "$stub_bin/ai-memory"
+  if (
+    PATH="$stub_bin:/usr/bin:/bin"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    verify_native_ai_memory
+  ) >/dev/null 2>&1; then
+    ok "native Linux executable satisfies the ai-memory binary check"
+  else
+    not_ok "native Linux executable was rejected"
+  fi
+
+  rm -rf -- "$fixture_root"
+}
+
+test_ai_memory_user_service_installation() {
+  local fixture_root fixture_home stub_bin service_file first_service expected_service
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  stub_bin="$fixture_root/bin"
+  service_file="$fixture_home/.config/systemd/user/ai-memory.service"
+  first_service="$fixture_root/first-service"
+  expected_service="$fixture_root/expected-service"
+  mkdir -p "$stub_bin"
+  printf '\177ELFfixture' >"$stub_bin/ai-memory"
+  chmod +x "$stub_bin/ai-memory"
+
+  printf '%s\n' \
+    '# Managed by dotfiles/agents/apply.sh.' \
+    '[Unit]' \
+    'Description=ai-memory MCP server (user service)' \
+    'Documentation=https://github.com/akitaonrails/ai-memory' \
+    '' \
+    '[Service]' \
+    'Type=simple' \
+    'EnvironmentFile=-%h/.config/ai-memory/env' \
+    "ExecStart=\"$stub_bin/ai-memory\" --data-dir %h/.local/share/ai-memory --config %h/.config/ai-memory/config.toml serve --transport http --enable-web" \
+    'Restart=on-failure' \
+    'RestartSec=5s' \
+    'NoNewPrivileges=true' \
+    'PrivateTmp=true' \
+    '' \
+    '[Install]' \
+    'WantedBy=default.target' >"$expected_service"
+
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    install_ai_memory_user_service
+  ) >/dev/null 2>&1; then
+    ok "missing ai-memory user service is installed"
+  else
+    not_ok "missing ai-memory user service was not installed"
+  fi
+  require_same_file "$expected_service" "$service_file"
+  require_file_mode "$service_file" "644"
+
+  cp "$service_file" "$first_service"
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    install_ai_memory_user_service
+  ) >/dev/null 2>&1; then
+    ok "ai-memory user service installation applies a second time"
+  else
+    not_ok "second ai-memory user service installation failed"
+  fi
+  require_same_file "$first_service" "$service_file"
+
+  rm -rf -- "$fixture_root"
+}
+
 # Repo structure checks
 printf '\n--- Repo Structure ---\n'
 
@@ -1270,11 +1504,7 @@ fi
 require_skill_manifest_entry "upstream" "architecture-map" "https://github.com/almendili/skills" "yes"
 require_skill_manifest_entry "upstream" "code-review" "mattpocock/skills@engineering/code-review" "yes"
 require_skill_manifest_entry "upstream" "implement" "mattpocock/skills@engineering/implement" "yes"
-require_skill_manifest_entry "upstream" "learn-profile" "vasanthsreeram/Alvarmethod" "yes"
-require_skill_manifest_entry "upstream" "learn-verify" "vasanthsreeram/Alvarmethod" "yes"
-require_skill_manifest_entry "upstream" "learn-visual" "vasanthsreeram/Alvarmethod" "yes"
-require_skill_manifest_entry "upstream" "probe" "vasanthsreeram/Alvarmethod" "yes"
-require_skill_manifest_entry "upstream" "teach" "vasanthsreeram/Alvarmethod" "yes"
+require_skill_manifest_entry "upstream" "teach" "mattpocock/skills@productivity/teach" "yes"
 if [[ "$manifest_valid" == true ]]; then
   while IFS=$'\t' read -r provider name source_ref require_skill_file; do
     case "$provider" in
@@ -1299,6 +1529,7 @@ require_text_count "$DOTFILES_DIR/bash/.bash_aliases" "$OPENCODE_SHELL_BLOCK_END
 printf '\n--- OpenCode Merge Fixtures ---\n'
 
 test_opencode_json_merge
+test_opencode_tui_json_merge
 
 # ai-memory secret-file fixture checks
 printf '\n--- ai-memory File Fixtures ---\n'
@@ -1324,6 +1555,12 @@ test_opencode_shell_override
 printf '\n--- Optional ai-jail Fixtures ---\n'
 
 test_optional_ai_jail
+
+# Native ai-memory fixture checks
+printf '\n--- Native ai-memory Fixtures ---\n'
+
+test_native_ai_memory_requirement
+test_ai_memory_user_service_installation
 
 if [[ "$repo_only" == "true" ]]; then
   printf '\n'
@@ -1352,11 +1589,12 @@ plannotator --help >/dev/null 2>&1 && ok "plannotator help runs" || not_ok "plan
 
 if (
   source "$DOTFILES_DIR/agents/apply.sh"
+  verify_native_ai_memory
   require_minimum_version ai-memory "$AI_MEMORY_MIN_VERSION"
 ) >/dev/null 2>&1; then
-  ok "ai-memory version is supported"
+  ok "ai-memory is native and its version is supported"
 else
-  not_ok "ai-memory version is older than $AI_MEMORY_MIN_VERSION or unreadable"
+  not_ok "ai-memory is not native, is older than $AI_MEMORY_MIN_VERSION, or is unreadable"
 fi
 
 if command -v ai-jail >/dev/null 2>&1; then
@@ -1391,6 +1629,12 @@ require_json_value "$HOME/.config/opencode/opencode.json" "agent.plan.model" "op
 require_json_value "$HOME/.config/opencode/opencode.json" "agent.general.model" "opencode-go/deepseek-v4-flash"
 require_json_value "$HOME/.config/opencode/opencode.json" "agent.explore.model" "opencode-go/deepseek-v4-flash"
 require_json_array_count "$HOME/.config/opencode/opencode.json" "instructions" "$AI_MEMORY_INSTRUCTIONS_REFERENCE" "1"
+require_json_array_count "$HOME/.config/opencode/opencode.json" "plugin" "$LEARN_PLUGIN_SPEC" "0"
+require_json_array_item_count \
+  "$HOME/.config/opencode/opencode.json" \
+  "plugin" \
+  "[\"$LEARN_PLUGIN_SPEC\",{\"textModel\":\"$LEARN_TEXT_MODEL_EXPECTED\",\"visualModel\":\"$LEARN_VISUAL_MODEL_EXPECTED\"}]" \
+  "1"
 require_json_literal "$HOME/.config/opencode/opencode.json" "mcp.ai-memory" "$AI_MEMORY_MCP_EXPECTED_JSON"
 require_json_value "$HOME/.config/opencode/opencode.json" "mcp.github.type" "remote"
 require_json_value "$HOME/.config/opencode/opencode.json" "mcp.github.url" "https://api.githubcopilot.com/mcp/"
@@ -1411,6 +1655,17 @@ else
 fi
 
 require_contains "$HOME/.config/opencode/opencode.json" "@plannotator/opencode@latest"
+require_file "$HOME/.config/opencode/tui.json"
+require_json "$HOME/.config/opencode/tui.json"
+require_json_array_count "$HOME/.config/opencode/tui.json" "plugin" "$LEARN_PLUGIN_SPEC" "1"
+
+for retired in learn-profile learn-verify learn-visual probe; do
+  if [[ ! -e "$HOME/.agents/skills/$retired" ]]; then
+    ok "retired Alvar skill is absent: $retired"
+  else
+    not_ok "retired Alvar skill remains installed: $retired"
+  fi
+done
 
 for mcp in \
   cloudflare-api \
@@ -1455,6 +1710,10 @@ require_file "$HOME/.config/opencode/plugins/ai-memory.ts"
 require_contains "$HOME/.config/opencode/plugins/ai-memory.ts" 'Auto-generated by `ai-memory install-hooks --agent opencode --apply`'
 require_contains "$HOME/.config/opencode/plugins/ai-memory.ts" 'const SERVER = "http://127.0.0.1:49374"'
 require_contains "$HOME/.config/opencode/plugins/ai-memory.ts" 'const DEFAULT_PROJECT_STRATEGY = "repo-root";'
+require_file "$AI_MEMORY_USER_SERVICE_FILE"
+require_file_mode "$AI_MEMORY_USER_SERVICE_FILE" "644"
+require_contains "$AI_MEMORY_USER_SERVICE_FILE" "# Managed by dotfiles/agents/apply.sh."
+require_contains "$AI_MEMORY_USER_SERVICE_FILE" "--data-dir %h/.local/share/ai-memory"
 
 systemctl --user is-enabled --quiet ai-memory.service >/dev/null 2>&1 && \
   ok "ai-memory user service is enabled" || not_ok "ai-memory user service is not enabled"

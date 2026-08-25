@@ -29,7 +29,11 @@ AI_MEMORY_ENV_FILE="$HOME/.config/ai-memory/env"
 AI_MEMORY_LOOPBACK_SERVER_URL="http://127.0.0.1:49374"
 AI_MEMORY_INSTRUCTIONS_FILE="$HOME/.config/opencode/ai-memory.md"
 AI_MEMORY_INSTRUCTIONS_REFERENCE="~/.config/opencode/ai-memory.md"
+AI_MEMORY_USER_SERVICE_FILE="$HOME/.config/systemd/user/ai-memory.service"
 AI_MEMORY_DEFAULT_LLM_PROFILE="opencode-go-deepseek"
+LEARN_PLUGIN_SPEC="github:guisaliba/opencode-learn#main"
+LEARN_TEXT_MODEL="opencode-go/deepseek-v4-flash"
+LEARN_VISUAL_MODEL="opencode-go/deepseek-v4-flash-vision-exp"
 BASH_ALIASES_SOURCE="$DOTFILES_DIR/bash/.bash_aliases"
 BASH_ALIASES_FILE="$HOME/.bash_aliases"
 OPENCODE_SHELL_BLOCK_START="# >>> dotfiles OpenCode ai-memory wrapper >>>"
@@ -110,8 +114,28 @@ PY
   fi
 }
 
+verify_native_ai_memory() {
+  local executable
+  executable="$(type -P ai-memory)" || \
+    die "ai-memory must resolve to an executable file on PATH"
+
+  python3 - "$executable" <<'PY' || \
+    die "ai-memory must be a native Linux executable. Use the upstream Docker wrapper as a separate deployment, not with this native user-service setup."
+import sys
+from pathlib import Path
+
+try:
+    magic = Path(sys.argv[1]).read_bytes()[:4]
+except OSError:
+    raise SystemExit(1)
+
+raise SystemExit(0 if magic == b"\x7fELF" else 1)
+PY
+}
+
 install_ai_memory() {
   install_aur_command ai-memory "$AI_MEMORY_AUR_PACKAGE"
+  verify_native_ai_memory
   require_minimum_version ai-memory "$AI_MEMORY_MIN_VERSION"
 }
 
@@ -374,7 +398,14 @@ merge_opencode_json() {
     log "Native Scout subagent unavailable; leaving Scout unmanaged"
   fi
 
-  python3 - "$config" "$manage_scout" "$GITHUB_MCP_TOKEN_REFERENCE" "$AI_MEMORY_INSTRUCTIONS_REFERENCE" <<'PY'
+  python3 - \
+    "$config" \
+    "$manage_scout" \
+    "$GITHUB_MCP_TOKEN_REFERENCE" \
+    "$AI_MEMORY_INSTRUCTIONS_REFERENCE" \
+    "$LEARN_PLUGIN_SPEC" \
+    "$LEARN_TEXT_MODEL" \
+    "$LEARN_VISUAL_MODEL" <<'PY'
 import json
 import os
 import sys
@@ -383,6 +414,10 @@ path = sys.argv[1]
 manage_scout = sys.argv[2] == "true"
 github_mcp_token_reference = sys.argv[3]
 ai_memory_instructions_reference = sys.argv[4]
+learn_plugin_spec = sys.argv[5]
+learn_plugin_base = learn_plugin_spec.partition("#")[0]
+learn_text_model = sys.argv[6]
+learn_visual_model = sys.argv[7]
 data = {}
 
 if os.path.exists(path):
@@ -469,8 +504,43 @@ else:
         f"ERROR: Expected 'plugin' to be an array or string in {path}. "
         "File was not changed."
     )
-if plugin not in plugins:
+
+
+def plugin_spec(item):
+    if isinstance(item, str):
+        return item
+    if (
+        isinstance(item, list)
+        and len(item) == 2
+        and isinstance(item[0], str)
+        and isinstance(item[1], dict)
+    ):
+        return item[0]
+    raise SystemExit(
+        f"ERROR: Expected each 'plugin' entry in {path} to be a string or "
+        "[string, object] tuple. File was not changed."
+    )
+
+
+plugins = [
+    item
+    for item in plugins
+    if not (
+        plugin_spec(item) == learn_plugin_base
+        or plugin_spec(item).startswith(f"{learn_plugin_base}#")
+    )
+]
+if not any(plugin_spec(item) == plugin for item in plugins):
     plugins.append(plugin)
+plugins.append(
+    [
+        learn_plugin_spec,
+        {
+            "textModel": learn_text_model,
+            "visualModel": learn_visual_model,
+        },
+    ]
+)
 data["plugin"] = plugins
 
 cloudflare_mcps = {
@@ -517,10 +587,89 @@ with open(path, "w", encoding="utf-8") as f:
 PY
 }
 
+merge_opencode_tui_json() {
+  log "Merging OpenCode tui.json"
+
+  local config="$HOME/.config/opencode/tui.json"
+  mkdir -p "$(dirname "$config")"
+
+  python3 - "$config" "$LEARN_PLUGIN_SPEC" <<'PY'
+import json
+import os
+import sys
+
+path = sys.argv[1]
+learn_plugin_spec = sys.argv[2]
+learn_plugin_base = learn_plugin_spec.partition("#")[0]
+data = {}
+
+if os.path.exists(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"ERROR: Invalid JSON in {path} at line {exc.lineno}, "
+            f"column {exc.colno}: {exc.msg}. File was not changed."
+        )
+
+if not isinstance(data, dict):
+    raise SystemExit(
+        f"ERROR: Expected a JSON object in {path}, found "
+        f"{type(data).__name__}. File was not changed."
+    )
+
+data.setdefault("$schema", "https://opencode.ai/tui.json")
+plugins = data.get("plugin", [])
+if isinstance(plugins, str):
+    plugins = [plugins]
+elif isinstance(plugins, list):
+    plugins = list(plugins)
+else:
+    raise SystemExit(
+        f"ERROR: Expected 'plugin' to be an array or string in {path}. "
+        "File was not changed."
+    )
+
+
+def plugin_spec(item):
+    if isinstance(item, str):
+        return item
+    if (
+        isinstance(item, list)
+        and len(item) == 2
+        and isinstance(item[0], str)
+        and isinstance(item[1], dict)
+    ):
+        return item[0]
+    raise SystemExit(
+        f"ERROR: Expected each 'plugin' entry in {path} to be a string or "
+        "[string, object] tuple. File was not changed."
+    )
+
+
+plugins = [
+    item
+    for item in plugins
+    if not (
+        plugin_spec(item) == learn_plugin_base
+        or plugin_spec(item).startswith(f"{learn_plugin_base}#")
+    )
+]
+plugins.append(learn_plugin_spec)
+data["plugin"] = plugins
+
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2)
+    f.write("\n")
+PY
+}
+
 setup_opencode() {
   copy_agents_md
   ensure_github_mcp_token_file
   merge_opencode_json
+  merge_opencode_tui_json
 }
 
 ensure_ai_memory_env_file() {
@@ -759,9 +908,82 @@ initialize_ai_memory() {
   configure_ai_memory_env_file
 }
 
+install_ai_memory_user_service() {
+  local executable
+  executable="$(type -P ai-memory)" || \
+    die "ai-memory must resolve to an executable file on PATH"
+
+  log "Installing the managed ai-memory user service"
+  python3 "$AGENT_STACK_HELPER" \
+    guard-regular-file \
+    "$AI_MEMORY_USER_SERVICE_FILE" \
+    "ai-memory user service path"
+  mkdir -p "$(dirname "$AI_MEMORY_USER_SERVICE_FILE")"
+
+  python3 - \
+    "$AI_MEMORY_USER_SERVICE_FILE" \
+    "$executable" \
+    "$AGENT_STACK_HELPER" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+executable = str(Path(sys.argv[2]).absolute())
+helper_path = Path(sys.argv[3])
+sys.path.insert(0, str(helper_path.parent))
+sys.dont_write_bytecode = True
+
+from agent_stack import atomic_write_text
+
+
+def systemd_quote(value):
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%")
+    return f'"{escaped}"'
+
+
+content = "\n".join(
+    [
+        "# Managed by dotfiles/agents/apply.sh.",
+        "[Unit]",
+        "Description=ai-memory MCP server (user service)",
+        "Documentation=https://github.com/akitaonrails/ai-memory",
+        "",
+        "[Service]",
+        "Type=simple",
+        "EnvironmentFile=-%h/.config/ai-memory/env",
+        (
+            f"ExecStart={systemd_quote(executable)} "
+            "--data-dir %h/.local/share/ai-memory "
+            "--config %h/.config/ai-memory/config.toml "
+            "serve --transport http --enable-web"
+        ),
+        "Restart=on-failure",
+        "RestartSec=5s",
+        "NoNewPrivileges=true",
+        "PrivateTmp=true",
+        "",
+        "[Install]",
+        "WantedBy=default.target",
+        "",
+    ]
+)
+
+try:
+    if path.read_text(encoding="utf-8") == content:
+        raise SystemExit(0)
+except FileNotFoundError:
+    pass
+except OSError as exc:
+    raise SystemExit(f"ERROR: Cannot read ai-memory user service at {path}: {exc}")
+
+atomic_write_text(path, content, 0o644, ".ai-memory.service.")
+PY
+}
+
 start_ai_memory_service() {
   log "Enabling and restarting the ai-memory user service"
 
+  install_ai_memory_user_service
   systemctl --user daemon-reload || die "systemd user daemon reload failed"
   systemctl --user enable ai-memory.service || die "ai-memory user service enablement failed"
   systemctl --user restart ai-memory.service || die "ai-memory user service restart failed"
@@ -894,7 +1116,8 @@ install_skill() {
   local name="$2"
   log "Installing/updating skill: $name"
 
-  npx -y skills add "$source" -g -a opencode -s "$name" -y --copy || die "Failed to install skill: $name"
+  npx -y skills add "$source" -g -a opencode -s "$name" -y --copy </dev/null || \
+    die "Failed to install skill: $name"
 }
 
 install_local_skill() {
@@ -910,10 +1133,19 @@ install_local_skill() {
   cp -a "$src_dir" "$dst"
 }
 
+remove_legacy_alvar_skills() {
+  local name
+  log "Removing retired Alvar skills"
+  for name in learn-profile learn-verify learn-visual probe teach; do
+    rm -rf "$HOME/.agents/skills/$name"
+  done
+}
+
 
 install_cloudflare_skills() {
   log "Installing/updating Cloudflare skills"
-  npx -y skills add https://github.com/cloudflare/skills -g -a opencode -y --copy || die "Cloudflare skills install failed"
+  npx -y skills add https://github.com/cloudflare/skills -g -a opencode -y --copy </dev/null || \
+    die "Cloudflare skills install failed"
 }
 
 install_required_skills() {
@@ -922,6 +1154,7 @@ install_required_skills() {
   log "Installing/updating required skills"
 
   mkdir -p "$HOME/.agents/skills"
+  remove_legacy_alvar_skills
 
   manifest_rows="$(python3 "$AGENT_STACK_HELPER" manifest "$SKILLS_MANIFEST")" || \
     die "Could not read the required skill manifest"

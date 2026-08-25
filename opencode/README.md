@@ -11,6 +11,11 @@ Subagents:
   general -> DeepSeek V4 Flash (opencode-go/deepseek-v4-flash)
   explore -> DeepSeek V4 Flash (opencode-go/deepseek-v4-flash)
   scout   -> DeepSeek V4 Flash when OpenCode exposes native Scout
+
+Learn:
+  learn primary        -> current session model
+  learn-researcher     -> DeepSeek V4 Flash (opencode-go/deepseek-v4-flash)
+  learn visual makers  -> DeepSeek V4 Flash Vision Experimental (opencode-go/deepseek-v4-flash-vision-exp)
 ```
 
 `general` keeps its normal built-in write and command capabilities. No custom agent or capability restriction is used. The primary agent must review the actual changes from delegated implementation, check integration points, and run applicable verification before final acceptance. This rule is in the canonical `agents/AGENTS.md`.
@@ -23,21 +28,29 @@ OpenCode uses these global paths:
 
 - global instructions: `~/.config/opencode/AGENTS.md`
 - runtime config: `~/.config/opencode/opencode.json`
+- TUI config: `~/.config/opencode/tui.json`
 - generated ai-memory instructions: `~/.config/opencode/ai-memory.md`
 - generated ai-memory lifecycle plugin: `~/.config/opencode/plugins/ai-memory.ts`
 - commands: `~/.config/opencode/commands/`
 - shared skills: `~/.agents/skills`
 
-`agents/apply.sh` is the deployment source of truth. It copies the complete `agents/AGENTS.md` to the global instruction path. It merges the global model, explicit Plan model, default agent, available built-in subagent models, Plannotator plugin, and managed MCP servers into the runtime JSON while it preserves unrelated valid configuration and existing agent-specific fields. Invalid JSON, a non-object root, an invalid managed agent object, or a non-object `mcp` field causes a safe failure without overwrite.
+`agents/apply.sh` is the deployment source of truth. It copies the complete `agents/AGENTS.md` to the global instruction path. It merges the global model, explicit Plan model, default agent, available built-in subagent models, Plannotator plugin, OpenCode Learn server plugin, and managed MCP servers into the runtime JSON. It also merges the OpenCode Learn TUI plugin into `tui.json`. Both merges preserve unrelated valid configuration. Invalid JSON or invalid managed structures cause a safe failure without overwrite.
 
 Managed integrations:
 
 - rtk via `rtk init -g --opencode`
 - plannotator via plugin `@plannotator/opencode@latest` and commands at `~/.config/opencode/commands/plannotator-*`
+- OpenCode Learn via `github:guisaliba/opencode-learn#main` in both server and TUI configuration
 - official GitHub MCP Server via the managed global `mcp.github` entry
 - ai-memory via the managed global `mcp.ai-memory` entry and the upstream-generated plugin
 
 OpenCode reads `~/.agents/skills/*/SKILL.md` for global skill discovery.
+
+## Learning Systems
+
+`/learn` is the OpenCode-native adaptive workflow. It probes prior knowledge, presents a dependency plan, teaches one node at a time, grades quizzes through the TUI, can update a Markdown log, and can create inspected SVG or Mermaid visuals. The server and TUI plugin entries are both required. Mermaid rendering requires Chrome or Chromium.
+
+`/teach` is Matt Pocock's separate workspace workflow. It uses a mission, trusted resources, HTML lessons, reference pages, and learning records. It does not replace `/learn`, and `/learn` does not replace it.
 
 ## ai-memory
 

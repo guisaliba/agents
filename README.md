@@ -5,7 +5,7 @@ This folder contains OpenCode agent setup configuration.
 ## Files
 
 - `AGENTS.md`: canonical global instructions used by OpenCode.
-- `apply.sh`: installs and configures OpenCode, ai-memory, the managed Bash entry point, model routing, RTK, Plannotator, required skills, and the remote MCP servers. It reports whether the optional ai-jail command is available but does not install it.
+- `apply.sh`: installs and configures OpenCode, its TUI, ai-memory, the managed Bash entry point, model routing, OpenCode Learn, RTK, Plannotator, required skills, and the remote MCP servers. It reports whether the optional ai-jail command is available but does not install it.
 - `test.sh`: deterministic local checks for harness wiring.
 - `lib/agent_stack.py`: shared safe file, environment-assignment, and skill-manifest primitives used by the scripts.
 - `skills.tsv`: data-only inventory of local, direct-upstream, and generated skill provenance.
@@ -40,6 +40,16 @@ Scout availability currently differs between OpenCode documentation and released
 
 The script copies the complete canonical `agents/AGENTS.md` to `~/.config/opencode/AGENTS.md`. The source and deployed file must match exactly after apply.
 
+### OpenCode Learn
+
+Apply installs the OpenCode-only learning system from `github:guisaliba/opencode-learn#main`. It merges the configured server entry into `~/.config/opencode/opencode.json` and the TUI entry into `~/.config/opencode/tui.json`. Both entries are required for graded quiz dialogs and immediate feedback. Each merge removes stale entries for the same package, keeps one managed entry, preserves unrelated valid settings, and is idempotent.
+
+The `learn` primary agent inherits the current session model. Apply pins `learn-researcher` to `opencode-go/deepseek-v4-flash` and pins the SVG and Mermaid maker agents to `opencode-go/deepseek-v4-flash-vision-exp`. These are OpenCode session routes. They are separate from the managed ai-memory service profile below.
+
+Use `/learn <goal>` for frontier probing, a reviewed dependency plan, one-node teaching loops, graded quizzes, an optional live Markdown log, and inspected SVG or Mermaid teaching visuals. Mermaid rendering also needs Chrome or Chromium. The plugin can use `CHROME_PATH`, a standard system path, or a browser that Puppeteer already manages.
+
+Matt Pocock's separate `teach` skill remains available for persistent teaching workspaces with source lists, HTML lessons, reference pages, and learning records. Apply removes the retired `learn-profile`, `learn-verify`, `learn-visual`, and `probe` skill directories before it installs the canonical Matt Pocock `teach` source.
+
 ### ai-memory Continuity
 
 ai-memory adds memory to OpenCode at three levels:
@@ -50,7 +60,7 @@ ai-memory adds memory to OpenCode at three levels:
 | Automatic lifecycle capture | generated `~/.config/opencode/plugins/ai-memory.ts` | OpenCode sends bounded and sanitized session and tool events. It can inject a pending handoff at session start. |
 | Managed workstream | interactive Bash `opencode` → `ai-memory run opencode` | ai-memory links one native OpenCode session to a portable workstream, resumes it, and imports its visible transcript records after exit. |
 
-The native per-user service stores its private state under `~/.local/share/ai-memory`. Its config is `~/.config/ai-memory/config.toml`. Its optional secrets file is `~/.config/ai-memory/env`. Apply creates the layout, keeps both config files private, and enables `ai-memory.service`. The test script verifies the local loopback endpoint.
+The native per-user service stores its private state under `~/.local/share/ai-memory`. Its config is `~/.config/ai-memory/config.toml`. Its optional secrets file is `~/.config/ai-memory/env`. Apply creates the layout, keeps both config files private, writes `~/.config/systemd/user/ai-memory.service` with the resolved native executable path, and enables the service. The test script verifies the unit and local loopback endpoint.
 
 This opinionated setup uses an unauthenticated loopback service. Apply fails before it changes OpenCode configuration when `AI_MEMORY_AUTH_TOKEN`, `AI_MEMORY_AUTH__BEARER_TOKEN`, or `AI_MEMORY_AUTH__ACTOR_PROXY_BEARER_TOKEN` is active in the shell, systemd user manager, or environment file. It also rejects `[auth].bearer_token` and `[auth].actor_proxy_bearer_token` in `config.toml`. Do not set those values with this design. They would require authenticated MCP, hook, managed-launcher, and jail wiring that this setup intentionally does not generate.
 
@@ -227,11 +237,11 @@ For a repository-only check that does not require an applied workstation:
 ./agents/test.sh --repo-only
 ```
 
-Prerequisites are Bash, `curl`, `git`, `npm`, `npx`, Python 3.11 or newer, and a working systemd user manager. When ai-memory is absent, apply also needs `yay` and installs the native `ai-memory-bin` AUR package. The script requires ai-memory 1.28.0 or newer. ai-jail is optional and must be installed separately when sandboxed dangerous-mode sessions are required. On a new machine, authenticate the providers that supply `openai/gpt-5.6-sol` and `opencode-go/deepseek-v4-flash` with `opencode-raw auth login` before use. Also put a separate OpenCode Go API key in `~/.config/ai-memory/env` to enable the default ai-memory service model. Model policy is stored in Git. Provider API keys, OAuth tokens, session credentials, the ai-memory token pepper, and memory data are not.
+Prerequisites are Bash, `curl`, `git`, `npm`, `npx`, Python 3.11 or newer, and a working systemd user manager. When ai-memory is absent, apply also needs `yay` and installs the native `ai-memory-bin` AUR package. The script requires a native Linux ai-memory executable at version 1.28.0 or newer. It rejects the upstream Docker wrapper before it changes OpenCode configuration. ai-jail is optional and must be installed separately when sandboxed dangerous-mode sessions are required. Chrome or Chromium is required for `/learn` Mermaid visuals. On a new machine, authenticate the providers that supply `openai/gpt-5.6-sol`, `opencode-go/deepseek-v4-flash`, and `opencode-go/deepseek-v4-flash-vision-exp` with `opencode-raw auth login` before use. Also put a separate OpenCode Go API key in `~/.config/ai-memory/env` to enable the default ai-memory service model. Model policy is stored in Git. Provider API keys, OAuth tokens, session credentials, the ai-memory token pepper, and memory data are not.
 
-The automatic installation target is Omarchy or another Arch-based system. It also works in an Arch-based WSL2 distribution when systemd user services are enabled. On another WSL2 distribution, install a current native ai-memory binary plus a matching ai-memory user unit before apply, or use the upstream Docker-wrapper design as a separate setup. Do not mix a Docker wrapper and the native user service on the same `127.0.0.1:49374` endpoint.
+The automatic installation target is Omarchy or another Arch-based system. It also works in an Arch-based WSL2 distribution when systemd user services are enabled. On another WSL2 distribution, install a current native ai-memory binary before apply; apply writes its matching user unit. Use the upstream Docker-wrapper design only as a separate setup. Do not mix a Docker wrapper and the native user service on the same `127.0.0.1:49374` endpoint or data layout.
 
-The script installs OpenCode if missing, installs the native ai-memory AUR tool if needed, copies `AGENTS.md`, merges global routing and integrations, initializes and starts ai-memory, merges the canonical marked function block into `~/.bash_aliases`, refreshes the generated ai-memory plugin and skills, configures RTK, installs Plannotator, and installs required skills. It converges the selected ai-memory LLM profile and keeps zero-LLM mode until that profile's credential is ready. Upstream skills are installed live and tracked local skills are copied on every run. The Cloudflare skills bundle (`https://github.com/cloudflare/skills`) is installed as a group without `-s` so every upstream skill is pulled in. The Cloudflare, GitHub, Linear, and ai-memory remote MCP entries are merged into `~/.config/opencode/opencode.json`. Use `opencode mcp auth <name>` for the OAuth-enabled Cloudflare and Linear servers. GitHub uses the dedicated machine-local PAT file. ai-memory uses the local loopback service without bearer authentication.
+The script installs OpenCode if missing, installs the native ai-memory AUR tool if needed, copies `AGENTS.md`, merges global routing and integrations, adds the OpenCode Learn server and TUI plugins, initializes and starts ai-memory, merges the canonical marked function block into `~/.bash_aliases`, refreshes the generated ai-memory plugin and skills, configures RTK, installs Plannotator, and installs required skills. It converges the selected ai-memory LLM profile and keeps zero-LLM mode until that profile's credential is ready. Upstream skills are installed live and tracked local skills are copied on every run. The Cloudflare skills bundle (`https://github.com/cloudflare/skills`) is installed as a group without `-s` so every upstream skill is pulled in. The Cloudflare, GitHub, Linear, and ai-memory remote MCP entries are merged into `~/.config/opencode/opencode.json`. Use `opencode mcp auth <name>` for the OAuth-enabled Cloudflare and Linear servers. GitHub uses the dedicated machine-local PAT file. ai-memory uses the local loopback service without bearer authentication.
 
 For an ai-memory upgrade, first create a backup outside the repository. Then update the package and rerun apply. Apply refreshes the generated OpenCode plugin, routing instructions, and skills for the installed version.
 

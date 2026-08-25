@@ -106,7 +106,7 @@ Use available skills and tools when they match the task.
 
 This workstation loads generated ai-memory routing from `~/.config/opencode/ai-memory.md`. Do not install or refresh an ai-memory routing block in a project `AGENTS.md` unless the user or that project explicitly requires it. Use the dotfiles apply script to refresh the global generated routing.
 
-Expected global capabilities: `caveman`, `rtk`, `grill-me`, `grill-with-docs`, `find-skills`, `implement`, `code-review`, `tdd`, `teach`, `probe`, `learn-profile`, `learn-verify`, `learn-visual`.
+Expected global capabilities: `caveman`, `rtk`, `grill-me`, `grill-with-docs`, `find-skills`, `implement`, `code-review`, `tdd`, `teach`, and the OpenCode `/learn` system.
 
 Treat `rtk` as a shell/tool safety and command rewriting layer.
 
@@ -118,4 +118,6 @@ Use `code-review` to review a change against repository standards and its source
 
 Prefer `tdd` for non-trivial feature work and bug fixes.
 
-Use `teach` for the Alvar learning workflow when the user wants to learn a subject, workflow, tool, or codebase area. Use its supporting `probe`, `learn-profile`, `learn-verify`, and `learn-visual` skills when their narrower task applies.
+Use `teach` when the user wants a persistent teaching workspace with missions, source material, HTML lessons, reference pages, and learning records.
+
+Use `/learn` when the user wants an adaptive session with prior-knowledge probing, a dependency plan, one-node teaching loops, graded quizzes, a Markdown log, or inspected teaching visuals. The `learn` primary agent inherits the selected session model. Its research subagent uses `opencode-go/deepseek-v4-flash`; its SVG and Mermaid subagents use `opencode-go/deepseek-v4-flash-vision-exp`.

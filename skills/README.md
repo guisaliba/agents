@@ -33,9 +33,6 @@ Skills installed or copied by `agents/apply.sh`:
 | `handoff` | `mattpocock/skills@productivity/handoff` | Compact the conversation into a handoff document for the next agent. |
 | `implement` | `mattpocock/skills@engineering/implement` | Implement work from a specification or tickets, verify it, and run a code review. |
 | `improve` | `shadcn/improve` | Improve codebase architecture. |
-| `learn-profile` | `vasanthsreeram/Alvarmethod` | Record durable learner preferences for the Alvar teaching workflow. |
-| `learn-verify` | `vasanthsreeram/Alvarmethod` | Verify teaching claims against sources. |
-| `learn-visual` | `vasanthsreeram/Alvarmethod` | Create and inspect a teaching diagram for one idea. |
 | `logging-best-practices` | `boristane/agent-skills` | Wide-event (canonical log line) logging guidance for writing, reviewing, and designing logging strategy. |
 | `ai-memory-retrieval` | installed ai-memory binary | Search and rank recent observations, wiki pages, handoffs, and workstream history. |
 | `ai-memory-handoff` | installed ai-memory binary | Create, inspect, accept, and route cross-session handoffs. |
@@ -50,8 +47,7 @@ Skills installed or copied by `agents/apply.sh`:
 | `plannotator-visual-explainer` | Plannotator installer (extras) | Generate self-contained HTML visualizations with Plannotator theming. |
 | `setup-matt-pocock-skills` | `mattpocock/skills@engineering/setup-matt-pocock-skills` | Per-repo setup for the engineering skills: issue tracker, triage labels, and domain docs. |
 | `tdd` | `mattpocock/skills@engineering/tdd` | Red-green-refactor implementation workflow. |
-| `probe` | `vasanthsreeram/Alvarmethod` | Map the edge of a learner's understanding before teaching. |
-| `teach` | `vasanthsreeram/Alvarmethod` | Run the Alvar probe, plan, one-step teaching, and lock-in quiz loop. |
+| `teach` | `mattpocock/skills@productivity/teach` | Create a persistent teaching workspace with missions, sources, HTML lessons, reference pages, and learning records. |
 | `to-tickets` | `mattpocock/skills@engineering/to-tickets` | Break a plan or spec into tracer-bullet tickets with declared blocking edges, published to the configured tracker. |
 | `triage` | `mattpocock/skills@engineering/triage` | Move tracker issues through the configured triage roles and create agent-ready briefs. |
 | `writing-for-agents` | `mattpocock/skills@productivity/writing-for-agents` | Write predictable skills and agent instruction documents. |
@@ -122,8 +118,8 @@ npx -y skills remove <skill-name> -g -y
 
 `architecture-map` is installed directly from `https://github.com/almendili/skills` with `-s architecture-map`; it does not need a registry entry.
 
-The five Alvar skills are installed individually from the same upstream repository. `teach` is the only canonical teaching skill. The other four skills supply its learner profile, probe, verification, and visual workflows.
+`teach` is installed from Matt Pocock's upstream source. The retired Alvar `teach`, `probe`, `learn-profile`, `learn-verify`, and `learn-visual` directories are removed before the required skills are installed. Alvar's adaptive method now lives in the separate OpenCode Learn plugin and `/learn` command documented in `agents/README.md`.
 
-The global AGENTS instructions expect agents to use these skills for requirement discovery, concise output, skill discovery, TDD-oriented implementation, two-axis code review, and the Alvar learning workflow.
+The global AGENTS instructions expect agents to use these skills for requirement discovery, concise output, skill discovery, TDD-oriented implementation, two-axis code review, and persistent teaching workspaces. OpenCode Learn is a plugin, not a shared skill.
 
 The separate generated `~/.config/opencode/ai-memory.md` file tells OpenCode when to load the ai-memory skills. The lifecycle plugin captures routine bounded events automatically. Agents must not write routine memory notes after each turn. They write a durable page only when the user explicitly asks to remember or preserve information.
