@@ -120,4 +120,4 @@ Prefer `tdd` for non-trivial feature work and bug fixes.
 
 Use `teach` when the user wants a persistent teaching workspace with missions, source material, HTML lessons, reference pages, and learning records.
 
-Use `/learn` when the user wants an adaptive session with prior-knowledge probing, a dependency plan, one-node teaching loops, graded quizzes, a Markdown log, or inspected teaching visuals. The `learn` primary agent inherits the selected session model. Its research subagent uses `opencode-go/deepseek-v4-flash`; its SVG and Mermaid subagents use `opencode-go/deepseek-v4-flash-vision-exp`.
+Use `/learn` when the user wants an adaptive session with prior-knowledge probing, a dependency plan, one-node teaching loops, graded quizzes, a Markdown log, or inspected teaching visuals. The `learn` primary agent inherits the selected session model. Its research and SVG/Mermaid maker subagents run on the model routes shipped by the learn repository itself; apply passes no text or visual model overrides.

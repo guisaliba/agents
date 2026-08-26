@@ -14,8 +14,8 @@ Subagents:
 
 Learn:
   learn primary        -> current session model
-  learn-researcher     -> DeepSeek V4 Flash (opencode-go/deepseek-v4-flash)
-  learn visual makers  -> DeepSeek V4 Flash Vision Experimental (opencode-go/deepseek-v4-flash-vision-exp)
+  learn-researcher     -> GPT-5.6 Luna (opencode-go/gpt-5.6-luna), from the learn repository defaults
+  learn visual makers  -> GPT-5.6 Luna (opencode-go/gpt-5.6-luna), from the learn repository defaults
 ```
 
 `general` keeps its normal built-in write and command capabilities. No custom agent or capability restriction is used. The primary agent must review the actual changes from delegated implementation, check integration points, and run applicable verification before final acceptance. This rule is in the canonical `agents/AGENTS.md`.
@@ -35,7 +35,7 @@ OpenCode uses these global paths:
 - commands: `~/.config/opencode/commands/`
 - shared skills: `~/.agents/skills`
 
-`agents/apply.sh` is the deployment source of truth. It copies the complete `agents/AGENTS.md` to the global instruction path. It merges the global model, explicit Plan model, default agent, available built-in subagent models, Plannotator plugin, OpenCode Learn server plugin, and managed MCP servers into the runtime JSON. It installs the tracked themes and sets the managed theme in `tui.json`. Both merges preserve unrelated valid configuration. Invalid JSON or invalid managed structures cause a safe failure without overwrite.
+`agents/apply.sh` is the deployment source of truth. It copies the complete `agents/AGENTS.md` to the global instruction path. It fetches the managed OpenCode Learn checkout, installs its dependencies, and merges the global model, explicit Plan model, default agent, available built-in subagent models, Plannotator plugin, OpenCode Learn server plugin, and managed MCP servers into the runtime JSON. It installs the tracked themes and sets the managed theme in `tui.json`. Both merges preserve unrelated valid configuration. Invalid JSON or invalid managed structures cause a safe failure without overwrite.
 
 ## Theme
 
@@ -52,15 +52,21 @@ Managed integrations:
 
 - rtk via `rtk init -g --opencode`
 - plannotator via plugin `@plannotator/opencode@latest` and commands at `~/.config/opencode/commands/plannotator-*`
-- OpenCode Learn via `github:guisaliba/learn#main` in both server and TUI configuration
+- OpenCode Learn via the managed local checkout at `~/.local/share/opencode/learn` in both server and TUI configuration
 - official GitHub MCP Server via the managed global `mcp.github` entry
 - ai-memory via the managed global `mcp.ai-memory` entry and the upstream-generated plugin
 
-OpenCode reads `~/.agents/skills/*/SKILL.md` for global skill discovery.
+OpenCode reads `~/.agents/skills/*/SKILL.md` for global skill discovery. OpenCode Learn is a plugin, not a global skill.
+
+### Learn Checkout
+
+Apply maintains `~/.local/share/opencode/learn` from the `main` branch of `https://github.com/guisaliba/learn.git`. It uses a fast-forward-only update and refuses a dirty checkout, a wrong remote, or a non-`main` branch. The checkout is separate from the development repository at `~/projects/active/self/learn`.
+
+The default repository URL is public HTTPS. Set `LEARN_REPOSITORY_URL` to an SSH or other authenticated Git URL when the repository is private. Git credentials are not stored in this repository or in OpenCode configuration. OpenCode `1.18.22` or newer and Bun `1.3` or newer must be installed before apply. Learn dependencies are installed with `bun install --frozen-lockfile`.
 
 ## Learning Systems
 
-`/learn` is the OpenCode-native adaptive workflow. It probes prior knowledge, presents a dependency plan, teaches one node at a time, grades quizzes through the TUI, can update a Markdown log, and can create inspected SVG or Mermaid visuals. The server and TUI plugin entries are both required. Mermaid rendering requires Chrome or Chromium.
+`/learn` is the OpenCode-native adaptive workflow. It probes prior knowledge, presents a dependency plan, teaches one node at a time, grades quizzes through the TUI, can update a Markdown log, and can create inspected SVG or Mermaid visuals. The server and TUI plugin entries are both required. Mermaid rendering requires Chrome or Chromium. Apply sets `PUPPETEER_SKIP_DOWNLOAD=true` because this setup uses a system browser through `CHROME_PATH` or a standard browser path instead of downloading a second Puppeteer browser.
 
 `/teach` is Matt Pocock's separate workspace workflow. It uses a mission, trusted resources, HTML lessons, reference pages, and learning records. It does not replace `/learn`, and `/learn` does not replace it.
 

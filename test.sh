@@ -35,9 +35,14 @@ AI_MEMORY_MIN_VERSION="1.28.0"
 AI_MEMORY_LLM_PROFILE_EXPECTED="opencode-go-deepseek"
 AI_MEMORY_LLM_PROVIDER_EXPECTED="opencode"
 AI_MEMORY_LLM_MODEL_EXPECTED="deepseek-v4-flash"
-LEARN_PLUGIN_SPEC="github:guisaliba/learn#main"
-LEARN_TEXT_MODEL_EXPECTED="opencode-go/deepseek-v4-flash"
-LEARN_VISUAL_MODEL_EXPECTED="opencode-go/deepseek-v4-flash-vision-exp"
+BUN_MIN_VERSION="1.3.0"
+LEARN_REPOSITORY_URL_EXPECTED="https://github.com/guisaliba/learn.git"
+LEARN_BRANCH="main"
+LEARN_INSTALL_DIR="$HOME/.local/share/opencode/learn"
+LEARN_PLUGIN_SPEC="$LEARN_INSTALL_DIR"
+LEARN_LEGACY_PLUGIN_BASE="github:guisaliba/learn"
+LEARN_OLDER_PLUGIN_BASE="github:guisaliba/opencode-learn"
+LEARN_MIN_OPENCODE_VERSION="1.18.22"
 OPENCODE_TUI_THEME_EXPECTED="lucent-orng"
 OPENCODE_SHELL_BLOCK_START="# >>> dotfiles OpenCode ai-memory wrapper >>>"
 OPENCODE_SHELL_BLOCK_END="# <<< dotfiles OpenCode ai-memory wrapper <<<"
@@ -504,7 +509,7 @@ require_ai_memory_llm_policy() {
 }
 
 test_opencode_json_merge() {
-  local fixture_root fixture_home fixture_config fixture_token token_before first_config
+  local fixture_root fixture_home fixture_config fixture_token fixture_learn_plugin token_before first_config
   local malformed_home malformed_config malformed_before malformed_log
   local invalid_home invalid_config invalid_before invalid_log
   local instructions_home instructions_config instructions_before instructions_log
@@ -512,6 +517,7 @@ test_opencode_json_merge() {
   fixture_home="$fixture_root/home"
   fixture_config="$fixture_home/.config/opencode/opencode.json"
   fixture_token="$fixture_home/.config/opencode/secrets/github-mcp-pat"
+  fixture_learn_plugin="$fixture_home/.local/share/opencode/learn"
   token_before="$fixture_root/token-before"
   first_config="$fixture_root/first-opencode.json"
 
@@ -535,6 +541,7 @@ config = {
     },
     "plugin": [
         "user/plugin",
+        ["github:guisaliba/opencode-learn#v0.0.1", {"textModel": "stale/model"}],
         ["github:guisaliba/learn#v0.0.1", {"textModel": "stale/model"}],
         "github:guisaliba/learn#main",
     ],
@@ -563,6 +570,7 @@ PY
 
   if (
     HOME="$fixture_home"
+    LEARN_INSTALL_DIR="$fixture_learn_plugin"
     source "$DOTFILES_DIR/agents/apply.sh"
     ensure_github_mcp_token_file
     merge_opencode_json
@@ -580,17 +588,17 @@ PY
   require_json_array_count "$fixture_config" "instructions" "$AI_MEMORY_INSTRUCTIONS_REFERENCE" "1"
   require_json_array_count "$fixture_config" "plugin" "user/plugin" "1"
   require_json_array_count "$fixture_config" "plugin" "@plannotator/opencode@latest" "1"
-  require_json_array_count "$fixture_config" "plugin" "$LEARN_PLUGIN_SPEC" "0"
+  require_json_array_count "$fixture_config" "plugin" "$fixture_learn_plugin" "1"
+  require_json_array_item_count \
+    "$fixture_config" \
+    "plugin" \
+    '["github:guisaliba/opencode-learn#v0.0.1",{"textModel":"stale/model"}]' \
+    "0"
   require_json_array_item_count \
     "$fixture_config" \
     "plugin" \
     '["github:guisaliba/learn#v0.0.1",{"textModel":"stale/model"}]' \
     "0"
-  require_json_array_item_count \
-    "$fixture_config" \
-    "plugin" \
-    "[\"$LEARN_PLUGIN_SPEC\",{\"textModel\":\"$LEARN_TEXT_MODEL_EXPECTED\",\"visualModel\":\"$LEARN_VISUAL_MODEL_EXPECTED\"}]" \
-    "1"
   require_json_literal "$fixture_config" "agent.general.temperature" "0.25"
   require_json_value "$fixture_config" "agent.custom.model" "user/custom-model"
   require_json_value "$fixture_config" "mcp.custom.url" "https://example.invalid/mcp"
@@ -610,6 +618,7 @@ PY
   cp "$fixture_token" "$token_before"
   if (
     HOME="$fixture_home"
+    LEARN_INSTALL_DIR="$fixture_learn_plugin"
     source "$DOTFILES_DIR/agents/apply.sh"
     ensure_github_mcp_token_file
     merge_opencode_json
@@ -687,10 +696,11 @@ PY
 }
 
 test_opencode_tui_json_merge() {
-  local fixture_root fixture_home fixture_config first_config malformed_home malformed_config malformed_before malformed_log
+  local fixture_root fixture_home fixture_config fixture_learn_plugin first_config malformed_home malformed_config malformed_before malformed_log
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
   fixture_config="$fixture_home/.config/opencode/tui.json"
+  fixture_learn_plugin="$fixture_home/.local/share/opencode/learn"
   first_config="$fixture_root/first-tui.json"
   mkdir -p "$(dirname "$fixture_config")"
   python3 - "$fixture_config" <<'PY'
@@ -703,6 +713,7 @@ config = {
     "theme": "user-theme",
     "plugin": [
         "user/tui-plugin",
+        ["github:guisaliba/opencode-learn#v0.0.1", {"ipcRoot": "/stale"}],
         ["github:guisaliba/learn#v0.0.1", {"ipcRoot": "/stale"}],
         "github:guisaliba/learn#main",
     ],
@@ -712,6 +723,7 @@ PY
 
   if (
     HOME="$fixture_home"
+    LEARN_INSTALL_DIR="$fixture_learn_plugin"
     source "$DOTFILES_DIR/agents/apply.sh"
     merge_opencode_tui_json
   ) >/dev/null 2>&1; then
@@ -721,7 +733,12 @@ PY
   fi
   require_json_value "$fixture_config" "theme" "$OPENCODE_TUI_THEME_EXPECTED"
   require_json_array_count "$fixture_config" "plugin" "user/tui-plugin" "1"
-  require_json_array_count "$fixture_config" "plugin" "$LEARN_PLUGIN_SPEC" "1"
+  require_json_array_count "$fixture_config" "plugin" "$fixture_learn_plugin" "1"
+  require_json_array_item_count \
+    "$fixture_config" \
+    "plugin" \
+    '["github:guisaliba/opencode-learn#v0.0.1",{"ipcRoot":"/stale"}]' \
+    "0"
   require_json_array_item_count \
     "$fixture_config" \
     "plugin" \
@@ -731,6 +748,7 @@ PY
   cp "$fixture_config" "$first_config"
   if (
     HOME="$fixture_home"
+    LEARN_INSTALL_DIR="$fixture_learn_plugin"
     source "$DOTFILES_DIR/agents/apply.sh"
     merge_opencode_tui_json
   ) >/dev/null 2>&1; then
@@ -758,6 +776,151 @@ PY
   fi
   require_same_file "$malformed_before" "$malformed_config"
   require_contains "$malformed_log" "Expected 'plugin' to be an array or string"
+
+  rm -rf -- "$fixture_root"
+}
+
+test_learn_plugin_sync() {
+  local fixture_root fixture_home remote source install_dir wrong_remote wrong_target invalid_target
+  local stub_bin bun_log source_server
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  remote="$fixture_root/remote.git"
+  source="$fixture_root/source"
+  install_dir="$fixture_home/.local/share/opencode/learn"
+  wrong_remote="$fixture_root/wrong.git"
+  wrong_target="$fixture_root/wrong-target"
+  invalid_target="$fixture_root/not-a-repository"
+  stub_bin="$fixture_root/bin"
+  bun_log="$fixture_root/bun.log"
+  source_server="$source/src/server.ts"
+
+  git init --bare "$remote" >/dev/null
+  git init "$source" >/dev/null
+  git -C "$source" branch -M main
+  git -C "$source" config user.email fixture@example.invalid
+  git -C "$source" config user.name fixture
+  mkdir -p "$source/src"
+  printf '%s\n' '{"name":"learn","version":"0.1.0"}' >"$source/package.json"
+  printf '%s\n' 'lockfileVersion: 1' >"$source/bun.lock"
+  printf '%s\n' 'node_modules/' >"$source/.gitignore"
+  printf '%s\n' 'export const fixture = true' >"$source_server"
+  printf '%s\n' 'export const fixture = true' >"$source/src/tui.ts"
+  git -C "$source" add package.json bun.lock .gitignore src
+  git -C "$source" commit -m fixture >/dev/null
+  git -C "$source" remote add origin "$remote"
+  git -C "$source" push -u origin main >/dev/null
+
+  mkdir -p "$stub_bin"
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf "%s\\n" "$PUPPETEER_SKIP_DOWNLOAD|$*" >>"$LEARN_BUN_LOG"' \
+    'mkdir -p "$PWD/node_modules/@opencode-ai/plugin"' \
+    'printf "%s\\n" "{}" >"$PWD/node_modules/@opencode-ai/plugin/package.json"' \
+    >"$stub_bin/bun"
+  chmod +x "$stub_bin/bun"
+
+  if (
+    HOME="$fixture_home"
+    LEARN_REPOSITORY_URL="$remote"
+    LEARN_INSTALL_DIR="$install_dir"
+    PATH="$stub_bin:$PATH"
+    export LEARN_BUN_LOG="$bun_log"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    sync_learn_plugin
+  ) >/dev/null 2>&1; then
+    ok "Learn sync fixture clones and installs"
+  else
+    not_ok "Learn sync fixture failed to clone and install"
+  fi
+  require_file "$install_dir/package.json"
+  require_file "$install_dir/src/server.ts"
+  require_file "$install_dir/src/tui.ts"
+  require_file "$install_dir/node_modules/@opencode-ai/plugin/package.json"
+  require_text_count "$bun_log" "true|install --frozen-lockfile" "1"
+
+  printf '%s\n' 'export const updated = true' >>"$source_server"
+  git -C "$source" add src/server.ts
+  git -C "$source" commit -m update >/dev/null
+  git -C "$source" push origin main >/dev/null
+  if (
+    HOME="$fixture_home"
+    LEARN_REPOSITORY_URL="$remote"
+    LEARN_INSTALL_DIR="$install_dir"
+    PATH="$stub_bin:$PATH"
+    export LEARN_BUN_LOG="$bun_log"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    sync_learn_plugin
+  ) >/dev/null 2>&1; then
+    ok "Learn sync fixture fast-forwards an existing checkout"
+  else
+    not_ok "Learn sync fixture failed to fast-forward an existing checkout"
+  fi
+  require_contains "$install_dir/src/server.ts" "export const updated = true"
+  require_text_count "$bun_log" "true|install --frozen-lockfile" "2"
+
+  printf '%s\n' 'local change' >>"$install_dir/src/server.ts"
+  if (
+    HOME="$fixture_home"
+    LEARN_REPOSITORY_URL="$remote"
+    LEARN_INSTALL_DIR="$install_dir"
+    PATH="$stub_bin:$PATH"
+    export LEARN_BUN_LOG="$bun_log"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    sync_learn_plugin
+  ) >/dev/null 2>&1; then
+    not_ok "dirty Learn checkout was accepted"
+  else
+    ok "dirty Learn checkout is rejected"
+  fi
+
+  mkdir -p "$invalid_target"
+  printf '%s\n' 'preserve me' >"$invalid_target/marker"
+  if (
+    HOME="$fixture_home"
+    LEARN_REPOSITORY_URL="$remote"
+    LEARN_INSTALL_DIR="$invalid_target"
+    PATH="$stub_bin:$PATH"
+    export LEARN_BUN_LOG="$bun_log"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    sync_learn_plugin
+  ) >/dev/null 2>&1; then
+    not_ok "non-Git Learn target was accepted"
+  else
+    ok "non-Git Learn target is rejected"
+  fi
+  require_contains "$invalid_target/marker" "preserve me"
+
+  git init --bare "$wrong_remote" >/dev/null
+  git clone --quiet --branch main --single-branch "$remote" "$wrong_target"
+  git -C "$wrong_target" remote set-url origin "$wrong_remote"
+  if (
+    HOME="$fixture_home"
+    LEARN_REPOSITORY_URL="$remote"
+    LEARN_INSTALL_DIR="$wrong_target"
+    PATH="$stub_bin:$PATH"
+    export LEARN_BUN_LOG="$bun_log"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    sync_learn_plugin
+  ) >/dev/null 2>&1; then
+    not_ok "wrong Learn remote was accepted"
+  else
+    ok "wrong Learn remote is rejected"
+  fi
+
+  if (
+    HOME="$fixture_home"
+    LEARN_REPOSITORY_URL="$remote"
+    LEARN_INSTALL_DIR="$source/src"
+    PATH="$stub_bin:$PATH"
+    export LEARN_BUN_LOG="$bun_log"
+    source "$DOTFILES_DIR/agents/apply.sh"
+    sync_learn_plugin
+  ) >/dev/null 2>&1; then
+    not_ok "nested Learn worktree path was accepted"
+  else
+    ok "nested Learn worktree path is rejected"
+  fi
 
   rm -rf -- "$fixture_root"
 }
@@ -1491,6 +1654,9 @@ require_file "$DOTFILES_DIR/agents/test.sh"
 require_file "$DOTFILES_DIR/agents/opencode/README.md"
 require_file "$DOTFILES_DIR/agents/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
 require_json "$DOTFILES_DIR/agents/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
+require_contains "$DOTFILES_DIR/agents/apply.sh" "sync_learn_plugin"
+require_contains "$DOTFILES_DIR/agents/apply.sh" "PUPPETEER_SKIP_DOWNLOAD=true"
+require_contains "$DOTFILES_DIR/agents/apply.sh" "$LEARN_REPOSITORY_URL_EXPECTED"
 require_file "$DOTFILES_DIR/agents/skills/README.md"
 require_file "$AGENT_STACK_HELPER"
 require_file "$SKILLS_MANIFEST"
@@ -1533,6 +1699,7 @@ printf '\n--- OpenCode Merge Fixtures ---\n'
 
 test_opencode_json_merge
 test_opencode_tui_json_merge
+test_learn_plugin_sync
 
 # ai-memory secret-file fixture checks
 printf '\n--- ai-memory File Fixtures ---\n'
@@ -1580,6 +1747,7 @@ printf '\n--- Local Machine ---\n'
 
 require_command python3
 require_command bash
+require_command bun
 require_command opencode
 require_command ai-memory
 require_command rtk
@@ -1592,12 +1760,38 @@ plannotator --help >/dev/null 2>&1 && ok "plannotator help runs" || not_ok "plan
 
 if (
   source "$DOTFILES_DIR/agents/apply.sh"
+  require_minimum_version bun "$BUN_MIN_VERSION"
+) >/dev/null 2>&1; then
+  ok "bun is installed at version $BUN_MIN_VERSION or newer"
+else
+  not_ok "bun is missing, is older than $BUN_MIN_VERSION, or is unreadable"
+fi
+
+if (
+  source "$DOTFILES_DIR/agents/apply.sh"
+  require_minimum_version opencode "$LEARN_MIN_OPENCODE_VERSION"
+) >/dev/null 2>&1; then
+  ok "opencode is installed at version $LEARN_MIN_OPENCODE_VERSION or newer"
+else
+  not_ok "opencode is missing, is older than $LEARN_MIN_OPENCODE_VERSION, or is unreadable"
+fi
+
+if (
+  source "$DOTFILES_DIR/agents/apply.sh"
   verify_native_ai_memory
+) >/dev/null 2>&1; then
+  ok "ai-memory is a native Linux executable"
+else
+  not_ok "ai-memory is not a native Linux executable or is unreadable"
+fi
+
+if (
+  source "$DOTFILES_DIR/agents/apply.sh"
   require_minimum_version ai-memory "$AI_MEMORY_MIN_VERSION"
 ) >/dev/null 2>&1; then
-  ok "ai-memory is native and its version is supported"
+  ok "ai-memory is installed at version $AI_MEMORY_MIN_VERSION or newer"
 else
-  not_ok "ai-memory is not native, is older than $AI_MEMORY_MIN_VERSION, or is unreadable"
+  not_ok "ai-memory is missing, is older than $AI_MEMORY_MIN_VERSION, or is unreadable"
 fi
 
 if command -v ai-jail >/dev/null 2>&1; then
@@ -1632,12 +1826,8 @@ require_json_value "$HOME/.config/opencode/opencode.json" "agent.plan.model" "op
 require_json_value "$HOME/.config/opencode/opencode.json" "agent.general.model" "opencode-go/deepseek-v4-flash"
 require_json_value "$HOME/.config/opencode/opencode.json" "agent.explore.model" "opencode-go/deepseek-v4-flash"
 require_json_array_count "$HOME/.config/opencode/opencode.json" "instructions" "$AI_MEMORY_INSTRUCTIONS_REFERENCE" "1"
-require_json_array_count "$HOME/.config/opencode/opencode.json" "plugin" "$LEARN_PLUGIN_SPEC" "0"
-require_json_array_item_count \
-  "$HOME/.config/opencode/opencode.json" \
-  "plugin" \
-  "[\"$LEARN_PLUGIN_SPEC\",{\"textModel\":\"$LEARN_TEXT_MODEL_EXPECTED\",\"visualModel\":\"$LEARN_VISUAL_MODEL_EXPECTED\"}]" \
-  "1"
+require_json_array_count "$HOME/.config/opencode/opencode.json" "plugin" "$LEARN_PLUGIN_SPEC" "1"
+require_json_array_count "$HOME/.config/opencode/opencode.json" "plugin" "$LEARN_LEGACY_PLUGIN_BASE" "0"
 require_json_literal "$HOME/.config/opencode/opencode.json" "mcp.ai-memory" "$AI_MEMORY_MCP_EXPECTED_JSON"
 require_json_value "$HOME/.config/opencode/opencode.json" "mcp.github.type" "remote"
 require_json_value "$HOME/.config/opencode/opencode.json" "mcp.github.url" "https://api.githubcopilot.com/mcp/"
@@ -1667,6 +1857,19 @@ require_same_file \
   "$DOTFILES_DIR/agents/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json" \
   "$HOME/.config/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
 require_json_array_count "$HOME/.config/opencode/tui.json" "plugin" "$LEARN_PLUGIN_SPEC" "1"
+require_json_array_count "$HOME/.config/opencode/tui.json" "plugin" "$LEARN_LEGACY_PLUGIN_BASE" "0"
+require_dir "$LEARN_INSTALL_DIR"
+require_file "$LEARN_INSTALL_DIR/package.json"
+require_file "$LEARN_INSTALL_DIR/bun.lock"
+require_file "$LEARN_INSTALL_DIR/src/server.ts"
+require_file "$LEARN_INSTALL_DIR/src/tui.ts"
+require_file "$LEARN_INSTALL_DIR/node_modules/@opencode-ai/plugin/package.json"
+if [[ -d "$LEARN_INSTALL_DIR/.git" ]] && \
+  [[ "$(git -C "$LEARN_INSTALL_DIR" rev-parse HEAD 2>/dev/null)" == "$(git -C "$LEARN_INSTALL_DIR" rev-parse "origin/$LEARN_BRANCH" 2>/dev/null)" ]]; then
+  ok "managed Learn checkout matches origin/$LEARN_BRANCH"
+else
+  not_ok "managed Learn checkout does not match origin/$LEARN_BRANCH"
+fi
 
 for retired in learn-profile learn-verify learn-visual probe; do
   if [[ ! -e "$HOME/.agents/skills/$retired" ]]; then

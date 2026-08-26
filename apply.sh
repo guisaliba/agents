@@ -10,7 +10,7 @@ set -Eeuo pipefail
 # Usage:
 #   ./agents/apply.sh
 #
-# Prerequisites: curl, git, npm, npx, python3, systemctl.
+# Prerequisites: bun, curl, git, npm, npx, python3, systemctl.
 # AUR package installation also needs yay when ai-memory is absent.
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,9 +31,14 @@ AI_MEMORY_INSTRUCTIONS_FILE="$HOME/.config/opencode/ai-memory.md"
 AI_MEMORY_INSTRUCTIONS_REFERENCE="~/.config/opencode/ai-memory.md"
 AI_MEMORY_USER_SERVICE_FILE="$HOME/.config/systemd/user/ai-memory.service"
 AI_MEMORY_DEFAULT_LLM_PROFILE="opencode-go-deepseek"
-LEARN_PLUGIN_SPEC="github:guisaliba/learn#main"
-LEARN_TEXT_MODEL="opencode-go/deepseek-v4-flash"
-LEARN_VISUAL_MODEL="opencode-go/deepseek-v4-flash-vision-exp"
+BUN_MIN_VERSION="${BUN_MIN_VERSION:-1.3.0}"
+LEARN_REPOSITORY_URL="${LEARN_REPOSITORY_URL:-https://github.com/guisaliba/learn.git}"
+LEARN_BRANCH="${LEARN_BRANCH:-main}"
+LEARN_INSTALL_DIR="${LEARN_INSTALL_DIR:-$HOME/.local/share/opencode/learn}"
+LEARN_PLUGIN_SPEC="$LEARN_INSTALL_DIR"
+LEARN_LEGACY_PLUGIN_BASE="github:guisaliba/learn"
+LEARN_OLDER_PLUGIN_BASE="github:guisaliba/opencode-learn"
+LEARN_MIN_OPENCODE_VERSION="${LEARN_MIN_OPENCODE_VERSION:-1.18.22}"
 OPENCODE_TUI_THEME="lucent-orng"
 OPENCODE_THEMES_SOURCE_DIR="$DOTFILES_DIR/agents/opencode/themes"
 BASH_ALIASES_SOURCE="$DOTFILES_DIR/bash/.bash_aliases"
@@ -57,7 +62,7 @@ have() {
 check_prerequisites() {
   log "Checking prerequisites"
   local missing=()
-  for cmd in bash curl git npm npx python3 systemctl; do
+  for cmd in bash bun curl git npm npx python3 systemctl; do
     if ! have "$cmd"; then
       missing+=("$cmd")
     fi
@@ -256,6 +261,86 @@ install_opencode() {
   have opencode || die "OpenCode install did not put opencode on PATH"
 }
 
+sync_learn_plugin() {
+  local actual_remote expected_remote checkout_root required
+
+  log "Updating the managed OpenCode Learn checkout"
+
+  [[ "$LEARN_INSTALL_DIR" = /* ]] || \
+    die "LEARN_INSTALL_DIR must be an absolute path: $LEARN_INSTALL_DIR"
+
+  if [[ -L "$LEARN_INSTALL_DIR" ]]; then
+    die "Learn install directory must not be a symlink: $LEARN_INSTALL_DIR"
+  fi
+
+  if [[ ! -e "$LEARN_INSTALL_DIR" ]]; then
+    mkdir -p "$(dirname "$LEARN_INSTALL_DIR")"
+    git clone --branch "$LEARN_BRANCH" --single-branch \
+      "$LEARN_REPOSITORY_URL" "$LEARN_INSTALL_DIR" || \
+      die "Could not clone OpenCode Learn from $LEARN_REPOSITORY_URL"
+  else
+    [[ -d "$LEARN_INSTALL_DIR" ]] || \
+      die "Learn install path is not a directory: $LEARN_INSTALL_DIR"
+
+    git -C "$LEARN_INSTALL_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || \
+      die "Learn install directory is not a Git checkout: $LEARN_INSTALL_DIR"
+    checkout_root="$(git -C "$LEARN_INSTALL_DIR" rev-parse --show-toplevel)" || \
+      die "Could not resolve Learn checkout root: $LEARN_INSTALL_DIR"
+    [[ "$(cd "$checkout_root" && pwd -P)" == "$(cd "$LEARN_INSTALL_DIR" && pwd -P)" ]] || \
+      die "Learn install directory must be the Git worktree root: $LEARN_INSTALL_DIR"
+
+    actual_remote="$(git -C "$LEARN_INSTALL_DIR" remote get-url origin 2>/dev/null)" || \
+      die "Learn checkout has no origin remote: $LEARN_INSTALL_DIR"
+    read -r actual_remote expected_remote < <(
+      python3 - "$actual_remote" "$LEARN_REPOSITORY_URL" <<'PY'
+from urllib.parse import urlparse
+import sys
+
+
+def identity(value):
+    value = value.strip()
+    if value.startswith("git@") and ":" in value:
+        user_host, path = value.split(":", 1)
+        value = f"{user_host.split('@', 1)[-1]}/{path}"
+    elif value.startswith("ssh://"):
+        parsed = urlparse(value)
+        value = f"{parsed.hostname or ''}{parsed.path}"
+    elif "://" in value:
+        parsed = urlparse(value)
+        value = f"{parsed.hostname or parsed.netloc}{parsed.path}"
+    return value.rstrip("/").removesuffix(".git")
+
+
+print(identity(sys.argv[1]), identity(sys.argv[2]))
+PY
+    )
+    [[ "$actual_remote" == "$expected_remote" ]] || \
+      die "Learn checkout origin does not match $LEARN_REPOSITORY_URL: $actual_remote"
+    [[ "$(git -C "$LEARN_INSTALL_DIR" branch --show-current)" == "$LEARN_BRANCH" ]] || \
+      die "Learn checkout must use branch $LEARN_BRANCH: $LEARN_INSTALL_DIR"
+    [[ -z "$(git -C "$LEARN_INSTALL_DIR" status --porcelain --untracked-files=all)" ]] || \
+      die "Learn checkout has uncommitted changes; refusing to update: $LEARN_INSTALL_DIR"
+
+    git -C "$LEARN_INSTALL_DIR" fetch --prune origin "$LEARN_BRANCH" || \
+      die "Could not fetch OpenCode Learn branch $LEARN_BRANCH"
+    git -C "$LEARN_INSTALL_DIR" merge --ff-only "origin/$LEARN_BRANCH" || \
+      die "Learn checkout cannot fast-forward to origin/$LEARN_BRANCH"
+  fi
+
+  for required in package.json bun.lock src/server.ts src/tui.ts; do
+    [[ -f "$LEARN_INSTALL_DIR/$required" ]] || \
+      die "Learn checkout is missing required file: $LEARN_INSTALL_DIR/$required"
+  done
+
+  (
+    cd "$LEARN_INSTALL_DIR"
+    PUPPETEER_SKIP_DOWNLOAD=true bun install --frozen-lockfile
+  ) || die "Could not install OpenCode Learn dependencies"
+
+  [[ -f "$LEARN_INSTALL_DIR/node_modules/@opencode-ai/plugin/package.json" ]] || \
+    die "OpenCode Learn dependencies are incomplete: @opencode-ai/plugin is missing"
+}
+
 merge_opencode_shell_override() {
   log "Making interactive Bash OpenCode starts use ai-memory managed workstreams"
 
@@ -427,8 +512,8 @@ merge_opencode_json() {
     "$GITHUB_MCP_TOKEN_REFERENCE" \
     "$AI_MEMORY_INSTRUCTIONS_REFERENCE" \
     "$LEARN_PLUGIN_SPEC" \
-    "$LEARN_TEXT_MODEL" \
-    "$LEARN_VISUAL_MODEL" <<'PY'
+    "$LEARN_LEGACY_PLUGIN_BASE" \
+    "$LEARN_OLDER_PLUGIN_BASE" <<'PY'
 import json
 import os
 import sys
@@ -438,9 +523,8 @@ manage_scout = sys.argv[2] == "true"
 github_mcp_token_reference = sys.argv[3]
 ai_memory_instructions_reference = sys.argv[4]
 learn_plugin_spec = sys.argv[5]
-learn_plugin_base = learn_plugin_spec.partition("#")[0]
-learn_text_model = sys.argv[6]
-learn_visual_model = sys.argv[7]
+learn_legacy_plugin_base = sys.argv[6]
+learn_older_plugin_base = sys.argv[7]
 data = {}
 
 if os.path.exists(path):
@@ -549,21 +633,17 @@ plugins = [
     item
     for item in plugins
     if not (
-        plugin_spec(item) == learn_plugin_base
-        or plugin_spec(item).startswith(f"{learn_plugin_base}#")
+        plugin_spec(item) == learn_plugin_spec
+        or plugin_spec(item) == learn_legacy_plugin_base
+        or plugin_spec(item).startswith(f"{learn_legacy_plugin_base}#")
+        or plugin_spec(item) == learn_older_plugin_base
+        or plugin_spec(item).startswith(f"{learn_older_plugin_base}#")
     )
 ]
 if not any(plugin_spec(item) == plugin for item in plugins):
     plugins.append(plugin)
-plugins.append(
-    [
-        learn_plugin_spec,
-        {
-            "textModel": learn_text_model,
-            "visualModel": learn_visual_model,
-        },
-    ]
-)
+# No model options: the Learn plugin runs on the defaults shipped by its own repository.
+plugins.append(learn_plugin_spec)
 data["plugin"] = plugins
 
 cloudflare_mcps = {
@@ -616,15 +696,21 @@ merge_opencode_tui_json() {
   local config="$HOME/.config/opencode/tui.json"
   mkdir -p "$(dirname "$config")"
 
-  python3 - "$config" "$LEARN_PLUGIN_SPEC" "$OPENCODE_TUI_THEME" <<'PY'
+  python3 - \
+    "$config" \
+    "$LEARN_PLUGIN_SPEC" \
+    "$LEARN_LEGACY_PLUGIN_BASE" \
+    "$LEARN_OLDER_PLUGIN_BASE" \
+    "$OPENCODE_TUI_THEME" <<'PY'
 import json
 import os
 import sys
 
 path = sys.argv[1]
 learn_plugin_spec = sys.argv[2]
-theme_name = sys.argv[3]
-learn_plugin_base = learn_plugin_spec.partition("#")[0]
+learn_legacy_plugin_base = sys.argv[3]
+learn_older_plugin_base = sys.argv[4]
+theme_name = sys.argv[5]
 data = {}
 
 if os.path.exists(path):
@@ -677,8 +763,11 @@ plugins = [
     item
     for item in plugins
     if not (
-        plugin_spec(item) == learn_plugin_base
-        or plugin_spec(item).startswith(f"{learn_plugin_base}#")
+        plugin_spec(item) == learn_plugin_spec
+        or plugin_spec(item) == learn_legacy_plugin_base
+        or plugin_spec(item).startswith(f"{learn_legacy_plugin_base}#")
+        or plugin_spec(item) == learn_older_plugin_base
+        or plugin_spec(item).startswith(f"{learn_older_plugin_base}#")
     )
 ]
 plugins.append(learn_plugin_spec)
@@ -693,6 +782,7 @@ PY
 setup_opencode() {
   copy_agents_md
   ensure_github_mcp_token_file
+  sync_learn_plugin
   merge_opencode_json
   install_opencode_themes
   merge_opencode_tui_json
@@ -1203,7 +1293,9 @@ main() {
   log "Starting OpenCode agent stack setup"
 
   check_prerequisites
+  require_minimum_version bun "$BUN_MIN_VERSION"
   install_opencode
+  require_minimum_version opencode "$LEARN_MIN_OPENCODE_VERSION"
   install_ai_memory
   report_optional_ai_jail
   verify_ai_memory_unauthenticated_loopback
