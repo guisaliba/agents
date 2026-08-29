@@ -7,8 +7,11 @@ local	auto-pr-review	agents/skills/auto-pr-review	yes
 upstream	architecture-map	https://github.com/almendili/skills	yes
 upstream	caveman	JuliusBrussee/caveman	no
 upstream	code-review	mattpocock/skills@engineering/code-review	yes
+upstream	codebase-design	mattpocock/skills@engineering/codebase-design	no
+upstream	domain-modeling	mattpocock/skills@engineering/domain-modeling	no
 upstream	grill-me	mattpocock/skills@productivity/grill-me	no
 upstream	grill-with-docs	mattpocock/skills@engineering/grill-with-docs	no
+upstream	grilling	mattpocock/skills@productivity/grilling	no
 upstream	handoff	mattpocock/skills@productivity/handoff	no
 upstream	implement	mattpocock/skills@engineering/implement	yes
 upstream	setup-matt-pocock-skills	mattpocock/skills@engineering/setup-matt-pocock-skills	no

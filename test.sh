@@ -1369,8 +1369,11 @@ test_required_skill_installation() {
     '-y skills add https://github.com/almendili/skills -g -a opencode -s architecture-map -y --copy' \
     '-y skills add JuliusBrussee/caveman -g -a opencode -s caveman -y --copy' \
     '-y skills add mattpocock/skills@engineering/code-review -g -a opencode -s code-review -y --copy' \
+    '-y skills add mattpocock/skills@engineering/codebase-design -g -a opencode -s codebase-design -y --copy' \
+    '-y skills add mattpocock/skills@engineering/domain-modeling -g -a opencode -s domain-modeling -y --copy' \
     '-y skills add mattpocock/skills@productivity/grill-me -g -a opencode -s grill-me -y --copy' \
     '-y skills add mattpocock/skills@engineering/grill-with-docs -g -a opencode -s grill-with-docs -y --copy' \
+    '-y skills add mattpocock/skills@productivity/grilling -g -a opencode -s grilling -y --copy' \
     '-y skills add mattpocock/skills@productivity/handoff -g -a opencode -s handoff -y --copy' \
     '-y skills add mattpocock/skills@engineering/implement -g -a opencode -s implement -y --copy' \
     '-y skills add mattpocock/skills@engineering/setup-matt-pocock-skills -g -a opencode -s setup-matt-pocock-skills -y --copy' \
