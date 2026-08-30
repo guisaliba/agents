@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+
+import argparse
+import fcntl
+import subprocess
+import sys
+from contextlib import contextmanager
+from pathlib import Path
+
+
+class SyncError(RuntimeError):
+    pass
+
+
+def git(repo: Path, *args: str, check: bool = True) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if check and result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or "git command failed"
+        raise SyncError(detail)
+    return result.stdout.strip()
+
+
+def nul_paths(output: str) -> set[str]:
+    return {item for item in output.split("\0") if item}
+
+
+def changes(repo: Path) -> set[str]:
+    return (
+        nul_paths(git(repo, "diff", "--name-only", "-z"))
+        | nul_paths(git(repo, "diff", "--cached", "--name-only", "-z"))
+        | nul_paths(git(repo, "ls-files", "--others", "--exclude-standard", "-z"))
+    )
+
+
+def ensure_repo(path: Path, label: str) -> None:
+    if not path.is_dir():
+        raise SyncError(f"{label} repository not found: {path}")
+    top = Path(git(path, "rev-parse", "--show-toplevel")).resolve()
+    if top != path.resolve():
+        raise SyncError(f"{label} path is not its repository root: {path}")
+    branch = git(path, "branch", "--show-current")
+    if branch != "main":
+        raise SyncError(f"{label} repository must be on main, found: {branch or 'detached HEAD'}")
+    git(path, "remote", "get-url", "origin")
+
+
+def relation(repo: Path) -> str:
+    head = git(repo, "rev-parse", "HEAD")
+    remote = git(repo, "rev-parse", "origin/main")
+    if head == remote:
+        return "equal"
+    if subprocess.run(
+        ["git", "-C", str(repo), "merge-base", "--is-ancestor", head, remote],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    ).returncode == 0:
+        return "behind"
+    if subprocess.run(
+        ["git", "-C", str(repo), "merge-base", "--is-ancestor", remote, head],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    ).returncode == 0:
+        return "ahead"
+    return "diverged"
+
+
+def fetch(repo: Path) -> None:
+    git(repo, "fetch", "--quiet", "origin", "main")
+
+
+def require_allowed(actual: set[str], allowed: set[str], message: str) -> None:
+    invalid = sorted(path for path in actual if path not in allowed)
+    if invalid:
+        raise SyncError(f"{message}: {', '.join(invalid)}")
+
+
+def require_task_changes_only(actual: set[str]) -> None:
+    invalid = sorted(path for path in actual if not path.startswith("tasks/"))
+    if invalid:
+        raise SyncError(f"journal has changes outside tasks/: {', '.join(invalid)}")
+
+
+@contextmanager
+def repository_lock(brain: Path):
+    git_dir = Path(git(brain, "rev-parse", "--absolute-git-dir"))
+    lock_path = git_dir / "daily-tasks.lock"
+    with lock_path.open("a+", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        yield
+
+
+def pull(brain: Path, journal: Path) -> None:
+    if changes(brain) or changes(journal):
+        raise SyncError("pull requires clean brain and journal repositories")
+
+    fetch(brain)
+    fetch(journal)
+    for repo, label in ((brain, "brain"), (journal, "journal")):
+        state = relation(repo)
+        if state == "behind":
+            git(repo, "merge", "--ff-only", "origin/main")
+        elif state == "ahead":
+            raise SyncError(f"local {label} has unpublished commits")
+        elif state == "diverged":
+            raise SyncError(f"local {label} diverged from origin/main")
+
+    if changes(brain) or changes(journal):
+        raise SyncError("remote brain and journal commits do not reference the same submodule state")
+    print("daily task repositories are current")
+
+
+def validate_unpublished_commits(repo: Path, allowed_prefix: str) -> None:
+    names = nul_paths(git(repo, "diff", "--name-only", "-z", "origin/main..HEAD"))
+    invalid = sorted(path for path in names if not path.startswith(allowed_prefix))
+    if invalid:
+        raise SyncError(f"unpublished commits include disallowed paths: {', '.join(invalid)}")
+
+
+def publish(brain: Path, journal: Path) -> None:
+    journal_changes = changes(journal)
+    require_task_changes_only(journal_changes)
+    require_allowed(changes(brain), {"journal"}, "brain has changes outside the journal gitlink")
+
+    fetch(journal)
+    journal_state = relation(journal)
+    if journal_state == "behind":
+        if journal_changes:
+            raise SyncError("remote journal changed while local task changes are pending")
+        git(journal, "merge", "--ff-only", "origin/main")
+    elif journal_state == "diverged":
+        raise SyncError("local journal diverged from origin/main")
+    elif journal_state == "ahead":
+        validate_unpublished_commits(journal, "tasks/")
+
+    if journal_changes:
+        git(journal, "add", "--", "tasks/")
+        require_task_changes_only(changes(journal))
+        git(journal, "commit", "-m", "chore(tasks): update daily tasks")
+
+    if relation(journal) == "ahead":
+        try:
+            git(journal, "push", "origin", "main")
+        except SyncError as error:
+            raise SyncError(f"journal push failed; local commit was preserved: {error}") from error
+
+    fetch(brain)
+    brain_state = relation(brain)
+    if brain_state == "behind":
+        raise SyncError("remote brain changed before the journal gitlink could be published")
+    if brain_state == "diverged":
+        raise SyncError("local brain diverged from origin/main")
+    if brain_state == "ahead":
+        validate_unpublished_commits(brain, "journal")
+
+    parent_changes = changes(brain)
+    require_allowed(parent_changes, {"journal"}, "brain has changes outside the journal gitlink")
+    if "journal" in parent_changes:
+        git(brain, "add", "--", "journal")
+        git(brain, "commit", "-m", "chore(journal): update submodule")
+
+    if relation(brain) == "ahead":
+        try:
+            git(brain, "push", "origin", "main")
+        except SyncError as error:
+            raise SyncError(f"brain push failed; local commit was preserved: {error}") from error
+
+    if not journal_changes and not parent_changes and journal_state == "equal" and brain_state == "equal":
+        print("nothing to publish")
+    else:
+        print("daily task changes published")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Safely synchronize daily tasks in the journal submodule")
+    parser.add_argument("operation", choices=("pull", "publish"))
+    parser.add_argument("brain_root", type=Path)
+    args = parser.parse_args()
+
+    brain = args.brain_root.expanduser().resolve()
+    journal = brain / "journal"
+    try:
+        ensure_repo(brain, "brain")
+        ensure_repo(journal, "journal")
+        with repository_lock(brain):
+            if args.operation == "pull":
+                pull(brain, journal)
+            else:
+                publish(brain, journal)
+    except SyncError as error:
+        print(f"journal-task-sync: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

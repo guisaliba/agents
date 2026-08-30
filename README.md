@@ -14,7 +14,7 @@ This folder contains OpenCode agent setup configuration.
 - `skills/README.md`: shared skills notes.
 - `../bash/.bash_aliases`: canonical marked Bash function block for the managed `opencode` command and its `opencode-raw` escape hatch.
 
-`skills.tsv` does not vendor skill payloads. The `local` rows identify the two tracked skill exceptions copied by `apply.sh`; `upstream` rows identify skills fetched individually; `ai-memory`, `plannotator`, and `cloudflare` rows identify outputs owned by their existing dedicated installers. The test script uses the same inventory to validate installed directories and the selected `SKILL.md` files.
+`skills.tsv` does not vendor upstream skill payloads. The `local` rows identify tracked skill exceptions copied by `apply.sh`; `upstream` rows identify skills fetched individually; `ai-memory`, `plannotator`, and `cloudflare` rows identify outputs owned by their existing dedicated installers. The test script uses the same inventory to validate installed directories and the selected `SKILL.md` files.
 
 ## Runtime Wiring
 
@@ -272,4 +272,4 @@ Do not vendor upstream skill, generated ai-memory instruction, or plugin payload
 
 Default rule: install live, do not track copies.
 
-Exceptions: `find-skills` and `auto-pr-review` are local tracked skills under `agents/skills/`. `agents/apply.sh` copies them to `~/.agents/skills/` on every setup run. The `lucent-orng.json` theme under `agents/opencode/themes/` is a tracked exception for the same reason: apply must guarantee the managed TUI theme even when an OpenCode release changes its built-in set.
+Exceptions: `find-skills`, `auto-pr-review`, and `daily-tasks` are local tracked skills under `agents/skills/`. `agents/apply.sh` copies them to `~/.agents/skills/` on every setup run. The `lucent-orng.json` theme under `agents/opencode/themes/` is a tracked exception for the same reason: apply must guarantee the managed TUI theme even when an OpenCode release changes its built-in set.

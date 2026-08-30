@@ -27,6 +27,7 @@ Skills installed or copied by `agents/apply.sh`:
 | `architecture-map` | `almendili/skills@architecture-map` | Build interactive isometric architecture maps from a codebase's measured structure and real call paths. |
 | `caveman` | `JuliusBrussee/caveman@caveman` | Opt-in concise agent output and token-efficient communication. |
 | `code-review` | `mattpocock/skills@engineering/code-review` | Review a change against repository standards and its source specification as separate axes. |
+| `daily-tasks` | local at `agents/skills/daily-tasks` | Plan, update, review, and safely sync private daily task files in the brain vault. |
 | `find-skills` | local at `agents/skills/find-skills` | Discover and install skills from the open agent skills ecosystem. |
 | `grill-me` | `mattpocock/skills@productivity/grill-me` | Requirement discovery. |
 | `grill-with-docs` | `mattpocock/skills@engineering/grill-with-docs` | Requirement discovery grounded in repo docs. |
@@ -97,6 +98,7 @@ Local tracked skills (copied by `agents/apply.sh`):
 | Skill | Source | Purpose |
 | --- | --- | --- |
 | `auto-pr-review` | local at `agents/skills/auto-pr-review` | Work the post-open PR review loop: read unresolved reviewer comments, judge accept/reject, fix the valid ones, reply and resolve each thread citing the commit, then @-mention the reviewer for a re-review. |
+| `daily-tasks` | local at `agents/skills/daily-tasks` | Maintain the private daily task record and publish only task files plus the parent journal gitlink. |
 
 ## Installing skills
 

@@ -1355,6 +1355,9 @@ test_required_skill_installation() {
   fi
   require_dir "$fixture_home/.agents/skills/find-skills"
   require_dir "$fixture_home/.agents/skills/auto-pr-review"
+  require_dir "$fixture_home/.agents/skills/daily-tasks"
+  require_file "$fixture_home/.agents/skills/daily-tasks/SKILL.md"
+  require_executable "$fixture_home/.agents/skills/daily-tasks/scripts/journal-task-sync"
   require_dir "$fixture_home/.agents/skills/user-owned"
   for removed in learn-profile learn-verify learn-visual probe teach; do
     if [[ ! -e "$fixture_home/.agents/skills/$removed" ]]; then
@@ -1388,6 +1391,14 @@ test_required_skill_installation() {
   require_same_file "$expected_log" "$install_log"
 
   rm -rf -- "$fixture_root"
+}
+
+test_daily_task_sync() {
+  if python3 "$DOTFILES_DIR/agents/skills/daily-tasks/tests/test_journal_task_sync.py"; then
+    ok "daily task sync integration tests pass"
+  else
+    not_ok "daily task sync integration tests failed"
+  fi
 }
 
 test_opencode_shell_override() {
@@ -1661,6 +1672,8 @@ require_contains "$DOTFILES_DIR/agents/apply.sh" "sync_learn_plugin"
 require_contains "$DOTFILES_DIR/agents/apply.sh" "PUPPETEER_SKIP_DOWNLOAD=true"
 require_contains "$DOTFILES_DIR/agents/apply.sh" "$LEARN_REPOSITORY_URL_EXPECTED"
 require_file "$DOTFILES_DIR/agents/skills/README.md"
+require_file "$DOTFILES_DIR/agents/skills/daily-tasks/SKILL.md"
+require_executable "$DOTFILES_DIR/agents/skills/daily-tasks/scripts/journal-task-sync"
 require_file "$AGENT_STACK_HELPER"
 require_file "$SKILLS_MANIFEST"
 require_file "$DOTFILES_DIR/bash/.bash_aliases"
@@ -1677,6 +1690,7 @@ require_skill_manifest_entry "upstream" "architecture-map" "https://github.com/a
 require_skill_manifest_entry "upstream" "code-review" "mattpocock/skills@engineering/code-review" "yes"
 require_skill_manifest_entry "upstream" "implement" "mattpocock/skills@engineering/implement" "yes"
 require_skill_manifest_entry "upstream" "teach" "mattpocock/skills@productivity/teach" "yes"
+require_skill_manifest_entry "local" "daily-tasks" "agents/skills/daily-tasks" "yes"
 if [[ "$manifest_valid" == true ]]; then
   while IFS=$'\t' read -r provider name source_ref require_skill_file; do
     case "$provider" in
@@ -1718,6 +1732,11 @@ test_agent_stack_helpers
 printf '\n--- Skill Installation Fixtures ---\n'
 
 test_required_skill_installation
+
+# Daily task sync fixture checks
+printf '\n--- Daily Task Sync Fixtures ---\n'
+
+test_daily_task_sync
 
 # Bash command override fixture checks
 printf '\n--- OpenCode Bash Override Fixtures ---\n'
