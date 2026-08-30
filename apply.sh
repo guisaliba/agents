@@ -8,15 +8,15 @@ set -Eeuo pipefail
 # Installs/updates skills live on every run.
 #
 # Usage:
-#   ./agents/apply.sh
+#   ./apply.sh
 #
 # Prerequisites: bun, curl, git, npm, npx, python3, systemctl.
 # AUR package installation also needs yay when ai-memory is absent.
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-DOTFILES_DIR="${DOTFILES_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
-AGENT_STACK_HELPER="$SCRIPT_DIR/lib/agent_stack.py"
-SKILLS_MANIFEST="$SCRIPT_DIR/skills.tsv"
+REPO_DIR="$SCRIPT_DIR"
+AGENT_STACK_HELPER="$REPO_DIR/lib/agent_stack.py"
+SKILLS_MANIFEST="$REPO_DIR/skills.tsv"
 RTK_VERSION="${RTK_VERSION:-v0.38.0}"
 GITHUB_MCP_TOKEN_FILE="$HOME/.config/opencode/secrets/github-mcp-pat"
 GITHUB_MCP_TOKEN_REFERENCE="~/.config/opencode/secrets/github-mcp-pat"
@@ -40,8 +40,8 @@ LEARN_LEGACY_PLUGIN_BASE="github:guisaliba/learn"
 LEARN_OLDER_PLUGIN_BASE="github:guisaliba/opencode-learn"
 LEARN_MIN_OPENCODE_VERSION="${LEARN_MIN_OPENCODE_VERSION:-1.18.22}"
 OPENCODE_TUI_THEME="lucent-orng"
-OPENCODE_THEMES_SOURCE_DIR="$DOTFILES_DIR/agents/opencode/themes"
-BASH_ALIASES_SOURCE="$DOTFILES_DIR/bash/.bash_aliases"
+OPENCODE_THEMES_SOURCE_DIR="$REPO_DIR/opencode/themes"
+BASH_ALIASES_SOURCE="${BASH_ALIASES_SOURCE:-$REPO_DIR/shell/opencode.bash}"
 BASH_ALIASES_FILE="$HOME/.bash_aliases"
 OPENCODE_SHELL_BLOCK_START="# >>> dotfiles OpenCode ai-memory wrapper >>>"
 OPENCODE_SHELL_BLOCK_END="# <<< dotfiles OpenCode ai-memory wrapper <<<"
@@ -438,7 +438,7 @@ PY
 copy_agents_md() {
   log "Copying canonical AGENTS.md to OpenCode global config"
 
-  local src="$DOTFILES_DIR/agents/AGENTS.md"
+  local src="$REPO_DIR/AGENTS.md"
   [[ -f "$src" ]] || die "Missing canonical agent instructions: $src"
 
   mkdir -p "$HOME/.config/opencode"
@@ -951,7 +951,7 @@ managed_names = {
     "AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL",
     "AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED",
 }
-managed_comment = "# Managed by dotfiles/agents/apply.sh."
+managed_comment = "# Managed by guisaliba/agents apply.sh."
 
 
 try:
@@ -1059,7 +1059,7 @@ def systemd_quote(value):
 
 content = "\n".join(
     [
-        "# Managed by dotfiles/agents/apply.sh.",
+        "# Managed by guisaliba/agents apply.sh.",
         "[Unit]",
         "Description=ai-memory MCP server (user service)",
         "Documentation=https://github.com/akitaonrails/ai-memory",
@@ -1278,7 +1278,7 @@ install_required_skills() {
   while IFS=$'\t' read -r provider name source_ref require_skill_file; do
     case "$provider" in
       local)
-        install_local_skill "$DOTFILES_DIR/$source_ref" "$name"
+        install_local_skill "$REPO_DIR/$source_ref" "$name"
         ;;
       upstream)
         install_skill "$source_ref" "$name"
@@ -1305,7 +1305,7 @@ main() {
   install_plugins
   install_required_skills
 
-  log "Setup complete. Open a new Bash shell or source ~/.bash_aliases, then run ./agents/test.sh to verify."
+  log "Setup complete. Open a new Bash shell or source ~/.bash_aliases, then run ./test.sh to verify."
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

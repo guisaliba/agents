@@ -1,8 +1,8 @@
 # provider<TAB>name<TAB>source<TAB>require_skill_file
 # local rows are tracked payloads copied from this repository.
-local	find-skills	agents/skills/find-skills	yes
-local	auto-pr-review	agents/skills/auto-pr-review	yes
-local	daily-tasks	agents/skills/daily-tasks	yes
+local	find-skills	skills/find-skills	yes
+local	auto-pr-review	skills/auto-pr-review	yes
+local	daily-tasks	skills/daily-tasks	yes
 
 # upstream rows are installed individually by apply.sh.
 upstream	architecture-map	https://github.com/almendili/skills	yes

@@ -18,9 +18,9 @@ if [[ $# -gt 0 ]]; then
 fi
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-DOTFILES_DIR="${DOTFILES_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
-AGENT_STACK_HELPER="$DOTFILES_DIR/agents/lib/agent_stack.py"
-SKILLS_MANIFEST="$DOTFILES_DIR/agents/skills.tsv"
+REPO_DIR="$SCRIPT_DIR"
+AGENT_STACK_HELPER="$REPO_DIR/lib/agent_stack.py"
+SKILLS_MANIFEST="$REPO_DIR/skills.tsv"
 
 failures=0
 GITHUB_MCP_TOKEN_FILE="$HOME/.config/opencode/secrets/github-mcp-pat"
@@ -491,7 +491,7 @@ PY
 
 require_ai_memory_llm_policy() {
   if (
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     profile="$(ai_memory_env_value DOTFILES_AI_MEMORY_LLM_PROFILE)"
     profile_spec="$(ai_memory_profile_spec "$profile")"
     IFS='|' read -r expected_provider expected_model credential <<<"$profile_spec"
@@ -571,7 +571,7 @@ PY
   if (
     HOME="$fixture_home"
     LEARN_INSTALL_DIR="$fixture_learn_plugin"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     ensure_github_mcp_token_file
     merge_opencode_json
   ) >/dev/null 2>&1; then
@@ -619,7 +619,7 @@ PY
   if (
     HOME="$fixture_home"
     LEARN_INSTALL_DIR="$fixture_learn_plugin"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     ensure_github_mcp_token_file
     merge_opencode_json
   ) >/dev/null 2>&1; then
@@ -644,7 +644,7 @@ PY
   cp "$malformed_config" "$malformed_before"
   if (
     HOME="$malformed_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     merge_opencode_json
   ) >"$malformed_log" 2>&1; then
     not_ok "malformed OpenCode mcp structure was accepted"
@@ -663,7 +663,7 @@ PY
   cp "$invalid_config" "$invalid_before"
   if (
     HOME="$invalid_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     merge_opencode_json
   ) >"$invalid_log" 2>&1; then
     not_ok "invalid OpenCode JSON was accepted"
@@ -682,7 +682,7 @@ PY
   cp "$instructions_config" "$instructions_before"
   if (
     HOME="$instructions_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     merge_opencode_json
   ) >"$instructions_log" 2>&1; then
     not_ok "invalid OpenCode instructions structure was accepted"
@@ -724,7 +724,7 @@ PY
   if (
     HOME="$fixture_home"
     LEARN_INSTALL_DIR="$fixture_learn_plugin"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     merge_opencode_tui_json
   ) >/dev/null 2>&1; then
     ok "OpenCode TUI merge fixture applies"
@@ -749,7 +749,7 @@ PY
   if (
     HOME="$fixture_home"
     LEARN_INSTALL_DIR="$fixture_learn_plugin"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     merge_opencode_tui_json
   ) >/dev/null 2>&1; then
     ok "OpenCode TUI merge fixture applies a second time"
@@ -767,7 +767,7 @@ PY
   cp "$malformed_config" "$malformed_before"
   if (
     HOME="$malformed_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     merge_opencode_tui_json
   ) >"$malformed_log" 2>&1; then
     not_ok "invalid OpenCode TUI plugin structure was accepted"
@@ -826,7 +826,7 @@ test_learn_plugin_sync() {
     LEARN_INSTALL_DIR="$install_dir"
     PATH="$stub_bin:$PATH"
     export LEARN_BUN_LOG="$bun_log"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     sync_learn_plugin
   ) >/dev/null 2>&1; then
     ok "Learn sync fixture clones and installs"
@@ -849,7 +849,7 @@ test_learn_plugin_sync() {
     LEARN_INSTALL_DIR="$install_dir"
     PATH="$stub_bin:$PATH"
     export LEARN_BUN_LOG="$bun_log"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     sync_learn_plugin
   ) >/dev/null 2>&1; then
     ok "Learn sync fixture fast-forwards an existing checkout"
@@ -866,7 +866,7 @@ test_learn_plugin_sync() {
     LEARN_INSTALL_DIR="$install_dir"
     PATH="$stub_bin:$PATH"
     export LEARN_BUN_LOG="$bun_log"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     sync_learn_plugin
   ) >/dev/null 2>&1; then
     not_ok "dirty Learn checkout was accepted"
@@ -882,7 +882,7 @@ test_learn_plugin_sync() {
     LEARN_INSTALL_DIR="$invalid_target"
     PATH="$stub_bin:$PATH"
     export LEARN_BUN_LOG="$bun_log"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     sync_learn_plugin
   ) >/dev/null 2>&1; then
     not_ok "non-Git Learn target was accepted"
@@ -900,7 +900,7 @@ test_learn_plugin_sync() {
     LEARN_INSTALL_DIR="$wrong_target"
     PATH="$stub_bin:$PATH"
     export LEARN_BUN_LOG="$bun_log"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     sync_learn_plugin
   ) >/dev/null 2>&1; then
     not_ok "wrong Learn remote was accepted"
@@ -914,7 +914,7 @@ test_learn_plugin_sync() {
     LEARN_INSTALL_DIR="$source/src"
     PATH="$stub_bin:$PATH"
     export LEARN_BUN_LOG="$bun_log"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     sync_learn_plugin
   ) >/dev/null 2>&1; then
     not_ok "nested Learn worktree path was accepted"
@@ -949,7 +949,7 @@ test_ai_memory_env_file() {
 
   if (
     HOME="$fixture_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     ensure_ai_memory_env_file
   ) >/dev/null 2>&1; then
     ok "ai-memory environment fixture applies"
@@ -971,7 +971,7 @@ test_ai_memory_env_file() {
     'AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED=true' >"$fixture_env"
   if (
     HOME="$fixture_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     configure_ai_memory_env_file
   ) >/dev/null 2>&1; then
     ok "ai-memory provider policy fixture applies"
@@ -983,7 +983,7 @@ test_ai_memory_env_file() {
   cp "$fixture_env" "$first_env"
   if (
     HOME="$fixture_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     configure_ai_memory_env_file
   ) >/dev/null 2>&1; then
     ok "ai-memory provider policy fixture applies a second time"
@@ -1009,7 +1009,7 @@ test_ai_memory_env_file() {
     >"$no_key_home/.local/share/opencode/auth.json"
   if (
     HOME="$no_key_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     configure_ai_memory_env_file
   ) >/dev/null 2>&1; then
     ok "default DeepSeek profile stays disabled without its API key"
@@ -1035,7 +1035,7 @@ test_ai_memory_env_file() {
   cp "$oauth_auth" "$oauth_before"
   if (
     HOME="$oauth_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     configure_ai_memory_env_file
   ) >/dev/null 2>&1; then
     ok "ai-memory OpenAI subscription profile enables with its OAuth token"
@@ -1060,7 +1060,7 @@ test_ai_memory_env_file() {
   cp "$malformed_env" "$malformed_env_before"
   if (
     HOME="$malformed_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     configure_ai_memory_env_file
   ) >"$malformed_log" 2>&1; then
     not_ok "malformed ai-memory OAuth state was accepted"
@@ -1079,7 +1079,7 @@ test_ai_memory_env_file() {
     'OPENCODE_API_KEY=fixture-secret' >"$opencode_env"
   if (
     HOME="$opencode_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     configure_ai_memory_env_file
   ) >/dev/null 2>&1; then
     ok "OpenCode Go DeepSeek profile enables with its separate key"
@@ -1099,7 +1099,7 @@ test_ai_memory_env_file() {
     'OPENAI_API_KEY=fixture-secret' >"$openai_api_env"
   if (
     HOME="$openai_api_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     configure_ai_memory_env_file
   ) >/dev/null 2>&1; then
     ok "OpenAI API Luna profile enables with its Platform key"
@@ -1121,7 +1121,7 @@ test_ai_memory_env_file() {
   cp "$oauth_auth" "$disabled_home/.local/share/ai-memory/auth.json"
   if (
     HOME="$disabled_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     configure_ai_memory_env_file
   ) >/dev/null 2>&1; then
     ok "disabled ai-memory profile stays in zero-LLM mode"
@@ -1142,7 +1142,7 @@ test_ai_memory_env_file() {
   cp "$invalid_env" "$invalid_before"
   if (
     HOME="$invalid_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     configure_ai_memory_env_file
   ) >"$invalid_log" 2>&1; then
     not_ok "invalid ai-memory profile was accepted"
@@ -1154,7 +1154,7 @@ test_ai_memory_env_file() {
 
   if (
     HOME="$fixture_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     verify_ai_memory_no_static_auth_files
   ) >/dev/null 2>&1; then
     ok "ai-memory default auth files allow unauthenticated loopback"
@@ -1174,7 +1174,7 @@ test_ai_memory_env_file() {
     printf '%s=%s\n' "$auth_name" 'fixture-token' >"$env_auth_home/.config/ai-memory/env"
     if (
       HOME="$env_auth_home"
-      source "$DOTFILES_DIR/agents/apply.sh"
+      source "$REPO_DIR/apply.sh"
       verify_ai_memory_no_static_auth_files
     ) >/dev/null 2>&1; then
       not_ok "ai-memory environment auth variable was accepted: $auth_name"
@@ -1188,7 +1188,7 @@ test_ai_memory_env_file() {
   printf '%s\n' '[auth]' 'bearer_token = "fixture-token"' >"$config_auth_home/.config/ai-memory/config.toml"
   if (
     HOME="$config_auth_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     verify_ai_memory_no_static_auth_files
   ) >/dev/null 2>&1; then
     not_ok "ai-memory config bearer token was accepted"
@@ -1222,7 +1222,7 @@ test_agent_stack_helpers() {
     'EMPTY_VALUE=""' >"$fixture_env"
   if (
     HOME="$fixture_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     [[ "$(ai_memory_env_value TEST_VALUE)" == "second value" ]]
     ! ai_memory_env_has_nonempty_value EMPTY_VALUE
   ); then
@@ -1234,7 +1234,7 @@ test_agent_stack_helpers() {
   printf '%s\n' 'AI_MEMORY_AUTH_TOKEN = "fixture-token"' >"$fixture_env"
   if (
     HOME="$fixture_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     verify_ai_memory_no_static_auth_files
   ) >/dev/null 2>&1; then
     not_ok "quoted ai-memory auth assignment was accepted"
@@ -1247,7 +1247,7 @@ test_agent_stack_helpers() {
   ln -s "$real_target" "$fixture_token"
   if (
     HOME="$fixture_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     ensure_github_mcp_token_file
   ) >/dev/null 2>&1; then
     not_ok "GitHub MCP token symlink was accepted"
@@ -1259,7 +1259,7 @@ test_agent_stack_helpers() {
   mkdir "$fixture_token"
   if (
     HOME="$fixture_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     ensure_github_mcp_token_file
   ) >/dev/null 2>&1; then
     not_ok "GitHub MCP token directory was accepted"
@@ -1272,7 +1272,7 @@ test_agent_stack_helpers() {
   ln -s "$real_target" "$fixture_config"
   if (
     HOME="$fixture_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     initialize_ai_memory
   ) >/dev/null 2>&1; then
     not_ok "ai-memory config symlink was accepted"
@@ -1284,7 +1284,7 @@ test_agent_stack_helpers() {
   ln -s "$real_target" "$fixture_auth"
   if (
     HOME="$fixture_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     ai_memory_openai_oauth_state
   ) >/dev/null 2>&1; then
     not_ok "ai-memory auth symlink was accepted"
@@ -1308,7 +1308,7 @@ test_agent_stack_helpers() {
 
   cp "$SKILLS_MANIFEST" "$duplicate_manifest"
   printf '%s\n' $'upstream\tduplicate\tduplicate/source\tno' >>"$duplicate_manifest"
-  printf '%s\n' $'local\tduplicate\tagents/skills/find-skills\tno' >>"$duplicate_manifest"
+  printf '%s\n' $'local\tduplicate\tskills/find-skills\tno' >>"$duplicate_manifest"
   if python3 "$AGENT_STACK_HELPER" manifest "$duplicate_manifest" >/dev/null 2>&1; then
     not_ok "duplicate skill manifest name was accepted"
   else
@@ -1346,7 +1346,7 @@ test_required_skill_installation() {
     PATH="$stub_bin:/usr/bin:/bin"
     export SKILL_INSTALL_LOG="$install_log"
     export SKILL_STDIN_LOG="$stdin_log"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     install_required_skills
   ) >/dev/null 2>&1; then
     ok "manifest-driven skill installation applies"
@@ -1394,7 +1394,7 @@ test_required_skill_installation() {
 }
 
 test_daily_task_sync() {
-  if python3 "$DOTFILES_DIR/agents/skills/daily-tasks/tests/test_journal_task_sync.py"; then
+  if python3 "$REPO_DIR/skills/daily-tasks/tests/test_journal_task_sync.py"; then
     ok "daily task sync integration tests pass"
   else
     not_ok "daily task sync integration tests failed"
@@ -1405,6 +1405,7 @@ test_opencode_shell_override() {
   local fixture_root fixture_home aliases first_aliases stub_bin
   local ai_memory_log raw_log expected yolo_log
   local malformed_home malformed_aliases malformed_before malformed_log
+  local temp_source_home temp_source temp_source_aliases temp_source_first
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
   aliases="$fixture_home/.bash_aliases"
@@ -1424,7 +1425,7 @@ test_opencode_shell_override() {
 
   if (
     HOME="$fixture_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     merge_opencode_shell_override
   ) >/dev/null 2>&1; then
     ok "OpenCode Bash override fixture applies"
@@ -1442,7 +1443,7 @@ test_opencode_shell_override() {
 
   if (
     HOME="$fixture_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     merge_opencode_shell_override
   ) >/dev/null 2>&1; then
     ok "OpenCode Bash override fixture applies a second time"
@@ -1532,7 +1533,7 @@ test_opencode_shell_override() {
   cp "$malformed_aliases" "$malformed_before"
   if (
     HOME="$malformed_home"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     merge_opencode_shell_override
   ) >"$malformed_log" 2>&1; then
     not_ok "malformed OpenCode Bash wrapper markers were accepted"
@@ -1541,6 +1542,47 @@ test_opencode_shell_override() {
   fi
   require_same_file "$malformed_before" "$malformed_aliases"
   require_contains "$malformed_log" "Expected one balanced OpenCode wrapper block"
+
+  temp_source_home="$fixture_root/temp-source-home"
+  temp_source="$fixture_root/temp-source"
+  temp_source_aliases="$temp_source_home/.bash_aliases"
+  temp_source_first="$fixture_root/temp-source-first"
+  mkdir -p "$temp_source_home"
+  printf '%s\n' \
+    'alias source-only-alias=printf-source-only' \
+    "$OPENCODE_SHELL_BLOCK_START" \
+    'opencode() { command ai-memory run opencode "$@"; }' \
+    'opencode-raw() { command opencode "$@"; }' \
+    "$OPENCODE_SHELL_BLOCK_END" \
+    'alias source-trailing-alias=printf-source-trailing' >"$temp_source"
+  if (
+    HOME="$temp_source_home"
+    BASH_ALIASES_SOURCE="$temp_source"
+    source "$REPO_DIR/apply.sh"
+    merge_opencode_shell_override
+  ) >/dev/null 2>&1; then
+    ok "OpenCode Bash override fixture uses a temporary BASH_ALIASES_SOURCE"
+  else
+    not_ok "OpenCode Bash override fixture with a temporary source failed"
+  fi
+  require_text_count "$temp_source_aliases" "$OPENCODE_SHELL_BLOCK_START" "1"
+  require_text_count "$temp_source_aliases" "$OPENCODE_SHELL_BLOCK_END" "1"
+  require_contains "$temp_source_aliases" 'opencode() { command ai-memory run opencode "$@"; }'
+  require_contains "$temp_source_aliases" 'opencode-raw() {'
+  require_text_count "$temp_source_aliases" "alias source-only-alias" "0"
+  require_text_count "$temp_source_aliases" "alias source-trailing-alias" "0"
+  cp "$temp_source_aliases" "$temp_source_first"
+  if (
+    HOME="$temp_source_home"
+    BASH_ALIASES_SOURCE="$temp_source"
+    source "$REPO_DIR/apply.sh"
+    merge_opencode_shell_override
+  ) >/dev/null 2>&1; then
+    ok "OpenCode Bash override fixture with a temporary source applies a second time"
+  else
+    not_ok "OpenCode Bash override fixture with a temporary source second apply failed"
+  fi
+  require_same_file "$temp_source_first" "$temp_source_aliases"
 
   rm -rf -- "$fixture_root"
 }
@@ -1553,7 +1595,7 @@ test_optional_ai_jail() {
 
   if (
     PATH="$stub_bin:/usr/bin:/bin"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     report_optional_ai_jail
   ) >/dev/null 2>&1; then
     ok "apply accepts an unavailable optional ai-jail command"
@@ -1577,7 +1619,7 @@ test_native_ai_memory_requirement() {
 
   if (
     PATH="$stub_bin:/usr/bin:/bin"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     install_ai_memory
   ) >"$wrapper_log" 2>&1; then
     not_ok "Docker ai-memory wrapper was accepted as a native binary"
@@ -1589,7 +1631,7 @@ test_native_ai_memory_requirement() {
   cp /bin/true "$stub_bin/ai-memory"
   if (
     PATH="$stub_bin:/usr/bin:/bin"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     verify_native_ai_memory
   ) >/dev/null 2>&1; then
     ok "native Linux executable satisfies the ai-memory binary check"
@@ -1613,7 +1655,7 @@ test_ai_memory_user_service_installation() {
   chmod +x "$stub_bin/ai-memory"
 
   printf '%s\n' \
-    '# Managed by dotfiles/agents/apply.sh.' \
+    '# Managed by guisaliba/agents apply.sh.' \
     '[Unit]' \
     'Description=ai-memory MCP server (user service)' \
     'Documentation=https://github.com/akitaonrails/ai-memory' \
@@ -1633,7 +1675,7 @@ test_ai_memory_user_service_installation() {
   if (
     HOME="$fixture_home"
     PATH="$stub_bin:/usr/bin:/bin"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     install_ai_memory_user_service
   ) >/dev/null 2>&1; then
     ok "missing ai-memory user service is installed"
@@ -1647,7 +1689,7 @@ test_ai_memory_user_service_installation() {
   if (
     HOME="$fixture_home"
     PATH="$stub_bin:/usr/bin:/bin"
-    source "$DOTFILES_DIR/agents/apply.sh"
+    source "$REPO_DIR/apply.sh"
     install_ai_memory_user_service
   ) >/dev/null 2>&1; then
     ok "ai-memory user service installation applies a second time"
@@ -1662,23 +1704,25 @@ test_ai_memory_user_service_installation() {
 # Repo structure checks
 printf '\n--- Repo Structure ---\n'
 
-require_file "$DOTFILES_DIR/agents/AGENTS.md"
-require_file "$DOTFILES_DIR/agents/apply.sh"
-require_file "$DOTFILES_DIR/agents/test.sh"
-require_file "$DOTFILES_DIR/agents/opencode/README.md"
-require_file "$DOTFILES_DIR/agents/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
-require_json "$DOTFILES_DIR/agents/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
-require_contains "$DOTFILES_DIR/agents/apply.sh" "sync_learn_plugin"
-require_contains "$DOTFILES_DIR/agents/apply.sh" "PUPPETEER_SKIP_DOWNLOAD=true"
-require_contains "$DOTFILES_DIR/agents/apply.sh" "$LEARN_REPOSITORY_URL_EXPECTED"
-require_file "$DOTFILES_DIR/agents/skills/README.md"
-require_file "$DOTFILES_DIR/agents/skills/daily-tasks/SKILL.md"
-require_executable "$DOTFILES_DIR/agents/skills/daily-tasks/scripts/journal-task-sync"
-require_file "$AGENT_STACK_HELPER"
-require_file "$SKILLS_MANIFEST"
-require_file "$DOTFILES_DIR/bash/.bash_aliases"
-require_executable "$DOTFILES_DIR/agents/apply.sh"
-require_executable "$DOTFILES_DIR/agents/test.sh"
+require_file "$REPO_DIR/AGENTS.md"
+require_file "$REPO_DIR/README.md"
+require_file "$REPO_DIR/LICENSE"
+require_file "$REPO_DIR/apply.sh"
+require_file "$REPO_DIR/test.sh"
+require_file "$REPO_DIR/opencode/README.md"
+require_file "$REPO_DIR/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
+require_json "$REPO_DIR/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
+require_contains "$REPO_DIR/apply.sh" "sync_learn_plugin"
+require_contains "$REPO_DIR/apply.sh" "PUPPETEER_SKIP_DOWNLOAD=true"
+require_contains "$REPO_DIR/apply.sh" "$LEARN_REPOSITORY_URL_EXPECTED"
+require_file "$REPO_DIR/skills/README.md"
+require_file "$REPO_DIR/skills/daily-tasks/SKILL.md"
+require_executable "$REPO_DIR/skills/daily-tasks/scripts/journal-task-sync"
+require_file "$REPO_DIR/lib/agent_stack.py"
+require_file "$REPO_DIR/skills.tsv"
+require_file "$REPO_DIR/shell/opencode.bash"
+require_executable "$REPO_DIR/apply.sh"
+require_executable "$REPO_DIR/test.sh"
 if manifest_rows="$(python3 "$AGENT_STACK_HELPER" manifest "$SKILLS_MANIFEST" 2>/dev/null)"; then
   manifest_valid=true
   ok "skill manifest is valid"
@@ -1690,15 +1734,15 @@ require_skill_manifest_entry "upstream" "architecture-map" "https://github.com/a
 require_skill_manifest_entry "upstream" "code-review" "mattpocock/skills@engineering/code-review" "yes"
 require_skill_manifest_entry "upstream" "implement" "mattpocock/skills@engineering/implement" "yes"
 require_skill_manifest_entry "upstream" "teach" "mattpocock/skills@productivity/teach" "yes"
-require_skill_manifest_entry "local" "daily-tasks" "agents/skills/daily-tasks" "yes"
+require_skill_manifest_entry "local" "daily-tasks" "skills/daily-tasks" "yes"
 if [[ "$manifest_valid" == true ]]; then
   while IFS=$'\t' read -r provider name source_ref require_skill_file; do
     case "$provider" in
       local)
-        require_dir "$DOTFILES_DIR/$source_ref"
+        require_dir "$REPO_DIR/$source_ref"
         ;;
       upstream)
-        if [[ ! -e "$DOTFILES_DIR/agents/skills/$name" ]]; then
+        if [[ ! -e "$REPO_DIR/skills/$name" ]]; then
           ok "$name is not locally vendored"
         else
           not_ok "$name must be installed from upstream, not locally vendored"
@@ -1707,9 +1751,9 @@ if [[ "$manifest_valid" == true ]]; then
     esac
   done <<<"$manifest_rows"
 fi
-require_contains "$DOTFILES_DIR/agents/AGENTS.md" "When you are the primary agent, you are the final owner of delegated work."
-require_text_count "$DOTFILES_DIR/bash/.bash_aliases" "$OPENCODE_SHELL_BLOCK_START" "1"
-require_text_count "$DOTFILES_DIR/bash/.bash_aliases" "$OPENCODE_SHELL_BLOCK_END" "1"
+require_contains "$REPO_DIR/AGENTS.md" "When you are the primary agent, you are the final owner of delegated work."
+require_text_count "$REPO_DIR/shell/opencode.bash" "$OPENCODE_SHELL_BLOCK_START" "1"
+require_text_count "$REPO_DIR/shell/opencode.bash" "$OPENCODE_SHELL_BLOCK_END" "1"
 
 # OpenCode merge fixture checks
 printf '\n--- OpenCode Merge Fixtures ---\n'
@@ -1781,7 +1825,7 @@ ai-memory --help >/dev/null 2>&1 && ok "ai-memory help runs" || not_ok "ai-memor
 plannotator --help >/dev/null 2>&1 && ok "plannotator help runs" || not_ok "plannotator help failed"
 
 if (
-  source "$DOTFILES_DIR/agents/apply.sh"
+  source "$REPO_DIR/apply.sh"
   require_minimum_version bun "$BUN_MIN_VERSION"
 ) >/dev/null 2>&1; then
   ok "bun is installed at version $BUN_MIN_VERSION or newer"
@@ -1790,7 +1834,7 @@ else
 fi
 
 if (
-  source "$DOTFILES_DIR/agents/apply.sh"
+  source "$REPO_DIR/apply.sh"
   require_minimum_version opencode "$LEARN_MIN_OPENCODE_VERSION"
 ) >/dev/null 2>&1; then
   ok "opencode is installed at version $LEARN_MIN_OPENCODE_VERSION or newer"
@@ -1799,7 +1843,7 @@ else
 fi
 
 if (
-  source "$DOTFILES_DIR/agents/apply.sh"
+  source "$REPO_DIR/apply.sh"
   verify_native_ai_memory
 ) >/dev/null 2>&1; then
   ok "ai-memory is a native Linux executable"
@@ -1808,7 +1852,7 @@ else
 fi
 
 if (
-  source "$DOTFILES_DIR/agents/apply.sh"
+  source "$REPO_DIR/apply.sh"
   require_minimum_version ai-memory "$AI_MEMORY_MIN_VERSION"
 ) >/dev/null 2>&1; then
   ok "ai-memory is installed at version $AI_MEMORY_MIN_VERSION or newer"
@@ -1829,7 +1873,7 @@ require_file "$HOME/.config/opencode/AGENTS.md"
 require_contains "$HOME/.config/opencode/AGENTS.md" "Required Capabilities"
 require_contains "$HOME/.config/opencode/AGENTS.md" "ASD-STE100"
 require_contains "$HOME/.config/opencode/AGENTS.md" "When you are the primary agent, you are the final owner of delegated work."
-require_same_file "$DOTFILES_DIR/agents/AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
+require_same_file "$REPO_DIR/AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
 require_file "$HOME/.bash_aliases"
 require_text_count "$HOME/.bash_aliases" "$OPENCODE_SHELL_BLOCK_START" "1"
 require_text_count "$HOME/.bash_aliases" "$OPENCODE_SHELL_BLOCK_END" "1"
@@ -1876,7 +1920,7 @@ require_json_value "$HOME/.config/opencode/tui.json" "theme" "$OPENCODE_TUI_THEM
 require_file "$HOME/.config/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
 require_json "$HOME/.config/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
 require_same_file \
-  "$DOTFILES_DIR/agents/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json" \
+  "$REPO_DIR/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json" \
   "$HOME/.config/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
 require_json_array_count "$HOME/.config/opencode/tui.json" "plugin" "$LEARN_PLUGIN_SPEC" "1"
 require_json_array_count "$HOME/.config/opencode/tui.json" "plugin" "$LEARN_LEGACY_PLUGIN_BASE" "0"
@@ -1929,7 +1973,7 @@ if [[ -f "$HOME/.local/share/ai-memory/auth.json" ]]; then
   require_file_mode "$HOME/.local/share/ai-memory/auth.json" "600"
 fi
 if (
-  source "$DOTFILES_DIR/agents/apply.sh"
+  source "$REPO_DIR/apply.sh"
   verify_ai_memory_unauthenticated_loopback
 ) >/dev/null 2>&1; then
   ok "ai-memory loopback service has no bearer authentication"
@@ -1946,7 +1990,7 @@ require_contains "$HOME/.config/opencode/plugins/ai-memory.ts" 'const SERVER = "
 require_contains "$HOME/.config/opencode/plugins/ai-memory.ts" 'const DEFAULT_PROJECT_STRATEGY = "repo-root";'
 require_file "$AI_MEMORY_USER_SERVICE_FILE"
 require_file_mode "$AI_MEMORY_USER_SERVICE_FILE" "644"
-require_contains "$AI_MEMORY_USER_SERVICE_FILE" "# Managed by dotfiles/agents/apply.sh."
+require_contains "$AI_MEMORY_USER_SERVICE_FILE" "# Managed by guisaliba/agents apply.sh."
 require_contains "$AI_MEMORY_USER_SERVICE_FILE" "--data-dir %h/.local/share/ai-memory"
 
 systemctl --user is-enabled --quiet ai-memory.service >/dev/null 2>&1 && \

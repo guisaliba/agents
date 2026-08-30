@@ -1,10 +1,14 @@
 # Agents
 
-This folder contains OpenCode agent setup configuration.
+This standalone repository provides the OpenCode agentic setup used by the
+dotfiles workstation installer. The public source is
+`https://github.com/guisaliba/agents`.
 
 ## Files
 
 - `AGENTS.md`: canonical global instructions used by OpenCode.
+- `README.md`: this file.
+- `LICENSE`: MIT license for this standalone repository.
 - `apply.sh`: installs and configures OpenCode, its TUI, ai-memory, the managed Bash entry point, model routing, the local OpenCode Learn checkout, RTK, Plannotator, required skills, and the remote MCP servers. It reports whether the optional ai-jail command is available but does not install it.
 - `test.sh`: deterministic local checks for harness wiring.
 - `lib/agent_stack.py`: shared safe file, environment-assignment, and skill-manifest primitives used by the scripts.
@@ -12,7 +16,7 @@ This folder contains OpenCode agent setup configuration.
 - `opencode/README.md`: OpenCode-specific notes.
 - `opencode/themes/`: tracked OpenCode TUI themes that `apply.sh` installs.
 - `skills/README.md`: shared skills notes.
-- `../bash/.bash_aliases`: canonical marked Bash function block for the managed `opencode` command and its `opencode-raw` escape hatch.
+- `shell/opencode.bash`: canonical marked Bash function block for the managed `opencode` command and its `opencode-raw` escape hatch.
 
 `skills.tsv` does not vendor upstream skill payloads. The `local` rows identify tracked skill exceptions copied by `apply.sh`; `upstream` rows identify skills fetched individually; `ai-memory`, `plannotator`, and `cloudflare` rows identify outputs owned by their existing dedicated installers. The test script uses the same inventory to validate installed directories and the selected `SKILL.md` files.
 
@@ -33,19 +37,19 @@ Subagents:
   scout   -> DeepSeek V4 Flash when OpenCode exposes native Scout
 ```
 
-`general` keeps its normal built-in write, command, implementation, refactoring, debugging, and test capabilities. No custom agent or extra permission restriction is part of this policy. When a subagent changes the workspace, the primary agent must inspect the changes and run applicable verification before final acceptance. The complete rule is in `agents/AGENTS.md`.
+`general` keeps its normal built-in write, command, implementation, refactoring, debugging, and test capabilities. No custom agent or extra permission restriction is part of this policy. When a subagent changes the workspace, the primary agent must inspect the changes and run applicable verification before final acceptance. The complete rule is in `AGENTS.md`.
 
-`agents/apply.sh` merges the managed routing fields into `~/.config/opencode/opencode.json`. The global model selects Sol for `build`, and a direct agent override pins `plan` to Sol. The merge preserves unrelated root fields, agent entries, agent-specific fields, plugins, MCP servers, permissions, providers, and commands. If an existing runtime file has invalid JSON, a non-object root, an invalid managed agent object, or a non-object `mcp` field, apply stops without overwriting the file.
+`apply.sh` merges the managed routing fields into `~/.config/opencode/opencode.json`. The global model selects Sol for `build`, and a direct agent override pins `plan` to Sol. The merge preserves unrelated root fields, agent entries, agent-specific fields, plugins, MCP servers, permissions, providers, and commands. If an existing runtime file has invalid JSON, a non-object root, an invalid managed agent object, or a non-object `mcp` field, apply stops without overwriting the file.
 
-Scout availability currently differs between OpenCode documentation and released/runtime implementations. Apply checks a clean OpenCode agent list. If OpenCode exposes native `scout (subagent)`, apply pins it to DeepSeek. If it does not, apply removes only this repository's prior Scout model override and does not create a custom or unrestricted fallback. `agents/test.sh` verifies the same boundary, so another supported device reports its effective Scout capability.
+Scout availability currently differs between OpenCode documentation and released/runtime implementations. Apply checks a clean OpenCode agent list. If OpenCode exposes native `scout (subagent)`, apply pins it to DeepSeek. If it does not, apply removes only this repository's prior Scout model override and does not create a custom or unrestricted fallback. `test.sh` verifies the same boundary, so another supported device reports its effective Scout capability.
 
 ### OpenCode Theme
 
-Apply sets `"theme": "lucent-orng"` in `~/.config/opencode/tui.json` on every run. It also copies every tracked theme from `agents/opencode/themes/` to `~/.config/opencode/themes/`. The theme key belongs to `tui.json`; the current config schema rejects a top-level `theme` in `opencode.json`.
+Apply sets `"theme": "lucent-orng"` in `~/.config/opencode/tui.json` on every run. It also copies every tracked theme from `opencode/themes/` to `~/.config/opencode/themes/`. The theme key belongs to `tui.json`; the current config schema rejects a top-level `theme` in `opencode.json`.
 
-The tracked `lucent-orng.json` pins the upstream TUI asset at commit `b72b50006b24666da9f2088dbce907d6b24b6901`. A user-directory file with this name overrides the binary's built-in copy of the same name. This keeps the selected look stable across OpenCode releases. The provenance and refresh steps are in `agents/opencode/README.md`.
+The tracked `lucent-orng.json` pins the upstream TUI asset at commit `b72b50006b24666da9f2088dbce907d6b24b6901`. A user-directory file with this name overrides the binary's built-in copy of the same name. This keeps the selected look stable across OpenCode releases. The provenance and refresh steps are in `opencode/README.md`.
 
-The script copies the complete canonical `agents/AGENTS.md` to `~/.config/opencode/AGENTS.md`. The source and deployed file must match exactly after apply.
+The script copies the complete canonical `AGENTS.md` to `~/.config/opencode/AGENTS.md`. The source and deployed file must match exactly after apply.
 
 ### OpenCode Learn
 
@@ -73,13 +77,13 @@ The native per-user service stores its private state under `~/.local/share/ai-me
 
 This opinionated setup uses an unauthenticated loopback service. Apply fails before it changes OpenCode configuration when `AI_MEMORY_AUTH_TOKEN`, `AI_MEMORY_AUTH__BEARER_TOKEN`, or `AI_MEMORY_AUTH__ACTOR_PROXY_BEARER_TOKEN` is active in the shell, systemd user manager, or environment file. It also rejects `[auth].bearer_token` and `[auth].actor_proxy_bearer_token` in `config.toml`. Do not set those values with this design. They would require authenticated MCP, hook, managed-launcher, and jail wiring that this setup intentionally does not generate.
 
-`dotfiles` owns the service policy, the exact MCP entry, and the `instructions` reference in `opencode.json`. The current ai-memory binary generates and owns these files:
+`agents` owns the service policy, the exact MCP entry, and the `instructions` reference in `opencode.json`. The current ai-memory binary generates and owns these files:
 
 - `~/.config/opencode/plugins/ai-memory.ts`
 - `~/.config/opencode/ai-memory.md`
 - `~/.agents/skills/ai-memory-*`
 
-The generated instruction file is separate from `~/.config/opencode/AGENTS.md`. OpenCode loads the global AGENTS file automatically and loads the generated file through its global `instructions` array. This keeps the canonical tracked `agents/AGENTS.md` byte-for-byte equal to its deployed copy and lets each installed ai-memory release refresh its own routing text.
+The generated instruction file is separate from `~/.config/opencode/AGENTS.md`. OpenCode loads the global AGENTS file automatically and loads the generated file through its global `instructions` array. This keeps the canonical tracked `AGENTS.md` byte-for-byte equal to its deployed copy and lets each installed ai-memory release refresh its own routing text.
 
 Apply passes the managed config path and `http://127.0.0.1:49374` explicitly to the hook generator. A stale default config or client `AI_MEMORY_SERVER_URL` cannot redirect the generated OpenCode plugin.
 
@@ -93,7 +97,7 @@ The managed ledger records OpenCode as the harness. It does not promise a comple
 
 #### Managed-By-Default Bash Entry Point
 
-Apply takes the canonical marked block from `bash/.bash_aliases` and merges only that block into `~/.bash_aliases`. It preserves unrelated aliases and functions. Open a new Bash shell or run `source ~/.bash_aliases` after apply.
+Apply takes the canonical marked block from `shell/opencode.bash` and merges only that block into `~/.bash_aliases`. It preserves unrelated aliases and functions. Open a new Bash shell or run `source ~/.bash_aliases` after apply.
 
 The block defines an unexported Bash function. It changes normal interactive commands as follows:
 
@@ -141,11 +145,11 @@ Apply preserves user-owned keys and unrelated values. It manages the profile, pr
 The default OpenCode Go flow is:
 
 ```sh
-./agents/apply.sh
+./apply.sh
 # Edit ~/.config/ai-memory/env and add:
 # OPENCODE_API_KEY=<your OpenCode Go API key>
-./agents/apply.sh
-./agents/test.sh
+./apply.sh
+./test.sh
 ```
 
 Use an API key from the OpenCode Go account that supplies DeepSeek V4 Flash. ai-memory calls the OpenCode Go API directly. It does not run this service job inside the OpenCode TUI, and it does not inherit the TUI login, selected model, or model effort. Do not put the key in Git.
@@ -180,7 +184,7 @@ ai-jail ai-memory run opencode --yolo
 
 The interactive function rejects `opencode --yolo` and native `opencode --auto` so dangerous mode cannot look jailed when it is not. `ai-jail opencode --yolo` also bypasses the function because `opencode` is an argument to ai-jail, not the Bash command word. Use the full explicit form above.
 
-Current ai-jail can detect this command and apply both its `ai-memory` and `opencode` command policies. It cannot know that bare `ai-memory run` will later select OpenCode, and its narrow parser does not identify OpenCode when `--yolo` is before the harness. The fully configured jail command and its capability risks are in `agents/opencode/README.md`.
+Current ai-jail can detect this command and apply both its `ai-memory` and `opencode` command policies. It cannot know that bare `ai-memory run` will later select OpenCode, and its narrow parser does not identify OpenCode when `--yolo` is before the harness. The fully configured jail command and its capability risks are in `opencode/README.md`.
 
 ### GitHub MCP
 
@@ -188,7 +192,7 @@ Apply manages the official remote GitHub MCP Server as the global `mcp.github` e
 
 Authentication is machine-specific. OpenCode reads a dedicated PAT from `~/.config/opencode/secrets/github-mcp-pat` through its documented `{file:...}` interpolation. Apply creates an empty `0600` placeholder when the file is absent and never replaces its contents. The token is not stored in this repository or copied into the runtime JSON. Apply and the deterministic test suite do not require a live token, network access, or a GitHub response.
 
-After apply, write only the PAT to the protected file. Do not include quotes or the `Bearer` prefix. The detailed setup command is in `agents/opencode/README.md`.
+After apply, write only the PAT to the protected file. Do not include quotes or the `Bearer` prefix. The detailed setup command is in `opencode/README.md`.
 
 Restart OpenCode after apply or any GitHub MCP token-file change. Then inspect the connection with:
 
@@ -199,7 +203,7 @@ opencode mcp debug github
 
 If the server reports `401 Unauthorized`, check that the token file is non-empty, contains only a valid PAT, and grants access to the required repositories and operations. If tools are missing, confirm the managed allow-list and restart OpenCode. `opencode mcp auth github` is not used because the managed PAT configuration sets `oauth` to `false`.
 
-Use GitHub MCP for GitHub platform objects and hosted state. Use local `git` for worktree and Git graph operations. Use `gh` when MCP coverage is insufficient, when local checkout integration is necessary, for Actions logs or artifacts that MCP does not expose adequately, or for `gh api`. File edits in a checked-out repository stay in the local diff and normal Git workflow. The detailed operating notes are in `agents/opencode/README.md`, and the agent selection rule is in `agents/AGENTS.md`.
+Use GitHub MCP for GitHub platform objects and hosted state. Use local `git` for worktree and Git graph operations. Use `gh` when MCP coverage is insufficient, when local checkout integration is necessary, for Actions logs or artifacts that MCP does not expose adequately, or for `gh api`. File edits in a checked-out repository stay in the local diff and normal Git workflow. The detailed operating notes are in `opencode/README.md`, and the agent selection rule is in `AGENTS.md`.
 
 ### RTK
 
@@ -236,14 +240,14 @@ plannotator last
 From the repo root:
 
 ```sh
-./agents/apply.sh
-./agents/test.sh
+./apply.sh
+./test.sh
 ```
 
 For a repository-only check that does not require an applied workstation:
 
 ```sh
-./agents/test.sh --repo-only
+./test.sh --repo-only
 ```
 
 Prerequisites are Bash, Bun 1.3 or newer, `curl`, `git`, `npm`, `npx`, Python 3.11 or newer, and a working systemd user manager. When ai-memory is absent, apply also needs `yay` and installs the native `ai-memory-bin` AUR package. The script requires OpenCode 1.18.22 or newer and a native Linux ai-memory executable at version 1.28.0 or newer. It rejects an older OpenCode version and the upstream Docker wrapper before it changes OpenCode configuration. ai-jail is optional and must be installed separately when sandboxed dangerous-mode sessions are required. Chrome or Chromium is required for `/learn` Mermaid visuals. On a new machine, authenticate the providers that supply `openai/gpt-5.6-sol`, `opencode-go/deepseek-v4-flash`, and `opencode-go/gpt-5.6-luna` with `opencode-raw auth login` before use. Also put a separate OpenCode Go API key in `~/.config/ai-memory/env` to enable the default ai-memory service model. Model policy is stored in Git. Provider API keys, OAuth tokens, session credentials, the ai-memory token pepper, and memory data are not.
@@ -258,8 +262,8 @@ For an ai-memory upgrade, first create a backup outside the repository. Then upd
 ai-memory --data-dir "$HOME/.local/share/ai-memory" \
   backup --to "$HOME/ai-memory-backup.tar.gz"
 yay -S ai-memory-bin
-./agents/apply.sh
-./agents/test.sh
+./apply.sh
+./test.sh
 ```
 
 ## Policy
@@ -272,4 +276,4 @@ Do not vendor upstream skill, generated ai-memory instruction, or plugin payload
 
 Default rule: install live, do not track copies.
 
-Exceptions: `find-skills`, `auto-pr-review`, and `daily-tasks` are local tracked skills under `agents/skills/`. `agents/apply.sh` copies them to `~/.agents/skills/` on every setup run. The `lucent-orng.json` theme under `agents/opencode/themes/` is a tracked exception for the same reason: apply must guarantee the managed TUI theme even when an OpenCode release changes its built-in set.
+Exceptions: `find-skills`, `auto-pr-review`, and `daily-tasks` are local tracked skills under `skills/`. `apply.sh` copies them to `~/.agents/skills/` on every setup run. The `lucent-orng.json` theme under `opencode/themes/` is a tracked exception for the same reason: apply must guarantee the managed TUI theme even when an OpenCode release changes its built-in set.

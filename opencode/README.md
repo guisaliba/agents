@@ -18,9 +18,9 @@ Learn:
   learn visual makers  -> GPT-5.6 Luna (opencode-go/gpt-5.6-luna), from the learn repository defaults
 ```
 
-`general` keeps its normal built-in write and command capabilities. No custom agent or capability restriction is used. The primary agent must review the actual changes from delegated implementation, check integration points, and run applicable verification before final acceptance. This rule is in the canonical `agents/AGENTS.md`.
+`general` keeps its normal built-in write and command capabilities. No custom agent or capability restriction is used. The primary agent must review the actual changes from delegated implementation, check integration points, and run applicable verification before final acceptance. This rule is in the canonical `AGENTS.md`.
 
-Apply checks Scout against a clean OpenCode agent list. It adds the fixed DeepSeek model override only for native `scout (subagent)`. If native Scout is unavailable, it leaves Scout absent instead of creating an `all` agent. This makes platform or release differences visible in `agents/test.sh` without a custom fallback.
+Apply checks Scout against a clean OpenCode agent list. It adds the fixed DeepSeek model override only for native `scout (subagent)`. If native Scout is unavailable, it leaves Scout absent instead of creating an `all` agent. This makes platform or release differences visible in `test.sh` without a custom fallback.
 
 ## Ownership
 
@@ -35,14 +35,14 @@ OpenCode uses these global paths:
 - commands: `~/.config/opencode/commands/`
 - shared skills: `~/.agents/skills`
 
-`agents/apply.sh` is the deployment source of truth. It copies the complete `agents/AGENTS.md` to the global instruction path. It fetches the managed OpenCode Learn checkout, installs its dependencies, and merges the global model, explicit Plan model, default agent, available built-in subagent models, Plannotator plugin, OpenCode Learn server plugin, and managed MCP servers into the runtime JSON. It installs the tracked themes and sets the managed theme in `tui.json`. Both merges preserve unrelated valid configuration. Invalid JSON or invalid managed structures cause a safe failure without overwrite.
+`apply.sh` is the deployment source of truth. It copies the complete `AGENTS.md` to the global instruction path. It fetches the managed OpenCode Learn checkout, installs its dependencies, and merges the global model, explicit Plan model, default agent, available built-in subagent models, Plannotator plugin, OpenCode Learn server plugin, and managed MCP servers into the runtime JSON. It installs the tracked themes and sets the managed theme in `tui.json`. Both merges preserve unrelated valid configuration. Invalid JSON or invalid managed structures cause a safe failure without overwrite.
 
 ## Theme
 
 Apply owns two theme parts:
 
 - `tui.json`: the `"theme"` key. Apply always converges it to `lucent-orng`. Do not put a `theme` key in `opencode.json`; the current schema rejects it there.
-- `~/.config/opencode/themes/*.json`: apply copies every tracked theme from `agents/opencode/themes/`.
+- `~/.config/opencode/themes/*.json`: apply copies every tracked theme from `opencode/themes/`.
 
 The tracked `lucent-orng.json` is a byte-exact copy of the upstream TUI asset at [anomalyco/opencode](https://github.com/anomalyco/opencode), path `packages/tui/src/theme/assets/lucent-orng.json`, commit `b72b50006b24666da9f2088dbce907d6b24b6901`. To refresh it, download that asset again and replace the tracked file.
 
@@ -89,7 +89,7 @@ The managed MCP entry is:
 }
 ```
 
-`agents/apply.sh` owns this JSON shape. It preserves other instruction paths and keeps exactly one ai-memory path. The installed ai-memory binary owns the generated instruction file, lifecycle plugin, and its five Agent Skills. Do not edit these generated files by hand.
+`apply.sh` owns this JSON shape. It preserves other instruction paths and keeps exactly one ai-memory path. The installed ai-memory binary owns the generated instruction file, lifecycle plugin, and its five Agent Skills. Do not edit these generated files by hand.
 
 Apply runs the equivalent of:
 
@@ -124,13 +124,13 @@ opencode mcp debug ai-memory
 
 ai-memory integrates with the OpenCode harness, not with one session model. The fixed Sol and DeepSeek routes in this repository and manual switches to Kimi, Luna, GLM, or another OpenCode Go model use the same capture and workstream integration.
 
-The internal ai-memory LLM is separate. It never inherits the model, model effort, or credentials selected in an OpenCode session. The default profile uses `opencode` plus `deepseek-v4-flash` after a separate `OPENCODE_API_KEY` is put in the ai-memory environment file. The profile and alternative provider procedures are in `agents/README.md`.
+The internal ai-memory LLM is separate. It never inherits the model, model effort, or credentials selected in an OpenCode session. The default profile uses `opencode` plus `deepseek-v4-flash` after a separate `OPENCODE_API_KEY` is put in the ai-memory environment file. The profile and alternative provider procedures are in `README.md`.
 
 The managed OpenCode importer follows the linked native session ID. It does not promise to recursively import each child-subagent session. A completed subtask result that is visible in the linked parent session can enter the ledger. Hidden reasoning and model metadata do not enter the portable ledger.
 
 ### Managed-By-Default Interactive Sessions
 
-The tracked `bash/.bash_aliases` contains the canonical OpenCode function. Apply merges only its marked block into `~/.bash_aliases`, so it does not replace unrelated Bash customizations. Reload it after apply:
+The tracked `shell/opencode.bash` contains the canonical OpenCode function. Apply merges only its marked block into `~/.bash_aliases`, so it does not replace unrelated Bash customizations. Reload it after apply:
 
 ```sh
 source ~/.bash_aliases
@@ -328,11 +328,11 @@ Keep `gh` for operations that MCP does not expose or does not represent well, lo
 ## Apply And Verify
 
 ```sh
-./agents/apply.sh
+./apply.sh
 source ~/.bash_aliases
 opencode-raw auth login
-./agents/apply.sh
-./agents/test.sh
+./apply.sh
+./test.sh
 ```
 
 The first apply installs OpenCode and the managed Bash functions. Provider authentication is machine-specific and required for the configured session models. The second apply is safe and refreshes the generated integrations after authentication. API keys, OAuth tokens, and session credentials are not stored in this repository.

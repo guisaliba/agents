@@ -1,6 +1,8 @@
 # Skills
 
-Shared skills are installed into:
+The OpenCode agentic setup is provided by the public
+[`guisaliba/agents`](https://github.com/guisaliba/agents) repository. Shared
+skills are installed into:
 
 ```text
 ~/.agents/skills
@@ -8,27 +10,27 @@ Shared skills are installed into:
 
 ## Architecture
 
-Most skills are installed live from upstream sources by `agents/apply.sh`. Do not vendor skill payloads under `agents/skills/` unless the skill has no upstream source.
+Most skills are installed live from upstream sources by `guisaliba/agents/apply.sh`. Do not vendor skill payloads under `skills/` unless the skill has no upstream source.
 
-The installed ai-memory binary is the source for its five managed skills. `agents/apply.sh` runs `ai-memory install-skills --scope global --agent agents` on each apply. Do not install these five through `npx` and do not track a copy in this repository.
+The installed ai-memory binary is the source for its five managed skills. `apply.sh` runs `ai-memory install-skills --scope global --agent agents` on each apply. Do not install these five through `npx` and do not track a copy in this repository.
 
-Local tracked skills are versioned directly under `agents/skills/<skill-name>/`. `agents/apply.sh` copies them to `~/.agents/skills/`; it does not fetch them from upstream.
+Local tracked skills are versioned directly under `skills/<skill-name>/`. `apply.sh` copies them to `~/.agents/skills/`; it does not fetch them from upstream.
 
 ## Skill discovery
 
 OpenCode discovers global skills from `~/.agents/skills/*/SKILL.md` automatically. No extra path config is needed.
 
-## Skills managed by `agents/apply.sh`
+## Skills managed by `apply.sh`
 
-Skills installed or copied by `agents/apply.sh`:
+Skills installed or copied by `apply.sh`:
 
 | Skill | Source | Purpose |
 | --- | --- | --- |
 | `architecture-map` | `almendili/skills@architecture-map` | Build interactive isometric architecture maps from a codebase's measured structure and real call paths. |
 | `caveman` | `JuliusBrussee/caveman@caveman` | Opt-in concise agent output and token-efficient communication. |
 | `code-review` | `mattpocock/skills@engineering/code-review` | Review a change against repository standards and its source specification as separate axes. |
-| `daily-tasks` | local at `agents/skills/daily-tasks` | Plan, update, review, and safely sync private daily task files in the brain vault. |
-| `find-skills` | local at `agents/skills/find-skills` | Discover and install skills from the open agent skills ecosystem. |
+| `daily-tasks` | local at `skills/daily-tasks` | Plan, update, review, and safely sync private daily task files in the brain vault. |
+| `find-skills` | local at `skills/find-skills` | Discover and install skills from the open agent skills ecosystem. |
 | `grill-me` | `mattpocock/skills@productivity/grill-me` | Requirement discovery. |
 | `grill-with-docs` | `mattpocock/skills@engineering/grill-with-docs` | Requirement discovery grounded in repo docs. |
 | `handoff` | `mattpocock/skills@productivity/handoff` | Compact the conversation into a handoff document for the next agent. |
@@ -55,7 +57,7 @@ Skills installed or copied by `agents/apply.sh`:
 
 ### Cloudflare skills
 
-The Cloudflare skills bundle is installed live as a group from `https://github.com/cloudflare/skills` by `agents/apply.sh`. It is added without `-s` so every skill in the upstream `skills/` directory is installed. Do not track copies of these skills under `agents/skills/`; update them by re-running `apply.sh`.
+The Cloudflare skills bundle is installed live as a group from `https://github.com/cloudflare/skills` by `apply.sh`. It is added without `-s` so every skill in the upstream `skills/` directory is installed. Do not track copies of these skills under `skills/`; update them by re-running `apply.sh`.
 
 | Skill | Purpose |
 | --- | --- |
@@ -75,7 +77,7 @@ The Cloudflare skills bundle is installed live as a group from `https://github.c
 
 ### Remote MCP servers
 
-`agents/apply.sh` also merges the Cloudflare remote MCP servers from `https://github.com/cloudflare/skills` into the `mcp` block of `~/.config/opencode/opencode.json`. These are remote MCP endpoints (OpenCode `type: "remote"`), not skills, and authenticate via OAuth on first use.
+`apply.sh` also merges the Cloudflare remote MCP servers from `https://github.com/cloudflare/skills` into the `mcp` block of `~/.config/opencode/opencode.json`. These are remote MCP endpoints (OpenCode `type: "remote"`), not skills, and authenticate via OAuth on first use.
 
 | Server | URL | Purpose |
 | --- | --- | --- |
@@ -93,12 +95,12 @@ The Linear remote MCP server is merged the same way:
 
 Authenticate a server with `opencode mcp auth <name>`; list status with `opencode mcp list`.
 
-Local tracked skills (copied by `agents/apply.sh`):
+Local tracked skills (copied by `apply.sh`):
 
 | Skill | Source | Purpose |
 | --- | --- | --- |
-| `auto-pr-review` | local at `agents/skills/auto-pr-review` | Work the post-open PR review loop: read unresolved reviewer comments, judge accept/reject, fix the valid ones, reply and resolve each thread citing the commit, then @-mention the reviewer for a re-review. |
-| `daily-tasks` | local at `agents/skills/daily-tasks` | Maintain the private daily task record and publish only task files plus the parent journal gitlink. |
+| `auto-pr-review` | local at `skills/auto-pr-review` | Work the post-open PR review loop: read unresolved reviewer comments, judge accept/reject, fix the valid ones, reply and resolve each thread citing the commit, then @-mention the reviewer for a re-review. |
+| `daily-tasks` | local at `skills/daily-tasks` | Maintain the private daily task record and publish only task files plus the parent journal gitlink. |
 
 ## Installing skills
 
@@ -120,7 +122,7 @@ npx -y skills remove <skill-name> -g -y
 
 `architecture-map` is installed directly from `https://github.com/almendili/skills` with `-s architecture-map`; it does not need a registry entry.
 
-`teach` is installed from Matt Pocock's upstream source. The retired Alvar `teach`, `probe`, `learn-profile`, `learn-verify`, and `learn-visual` directories are removed before the required skills are installed. Alvar's adaptive method now lives in the separate OpenCode Learn plugin and `/learn` command documented in `agents/README.md`.
+`teach` is installed from Matt Pocock's upstream source. The retired Alvar `teach`, `probe`, `learn-profile`, `learn-verify`, and `learn-visual` directories are removed before the required skills are installed. Alvar's adaptive method now lives in the separate OpenCode Learn plugin and `/learn` command documented in `README.md`.
 
 The global AGENTS instructions expect agents to use these skills for requirement discovery, concise output, skill discovery, TDD-oriented implementation, two-axis code review, and persistent teaching workspaces. OpenCode Learn is a plugin, not a shared skill.
 
