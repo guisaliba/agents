@@ -2,6 +2,8 @@
 
 import argparse
 import fcntl
+import os
+import shlex
 import subprocess
 import sys
 from contextlib import contextmanager
@@ -12,10 +14,19 @@ class SyncError(RuntimeError):
     pass
 
 
+def git_environment() -> dict[str, str]:
+    environment = os.environ.copy()
+    ssh_config = Path.home() / ".ssh" / "config"
+    if ssh_config.is_file():
+        environment.setdefault("GIT_SSH_COMMAND", f"ssh -F {shlex.quote(str(ssh_config))}")
+    return environment
+
+
 def git(repo: Path, *args: str, check: bool = True) -> str:
     result = subprocess.run(
         ["git", "-C", str(repo), *args],
         check=False,
+        env=git_environment(),
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 
 import os
+import runpy
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "journal-task-sync"
@@ -101,6 +103,18 @@ class JournalTaskSyncTest(unittest.TestCase):
         task.parent.mkdir(parents=True, exist_ok=True)
         task.write_text(text, encoding="utf-8")
         return task
+
+    def test_git_environment_uses_user_ssh_config(self) -> None:
+        home = self.root / "home"
+        ssh_config = home / ".ssh" / "config"
+        ssh_config.parent.mkdir(parents=True)
+        ssh_config.write_text("Host github.com\n", encoding="utf-8")
+
+        with patch.dict(os.environ, {"HOME": str(home)}):
+            git_environment = runpy.run_path(str(SCRIPT))["git_environment"]
+            environment = git_environment()
+
+        self.assertEqual(environment["GIT_SSH_COMMAND"], f"ssh -F {ssh_config}")
 
     def test_publish_pushes_task_commit_and_parent_gitlink(self) -> None:
         self.write_task()
