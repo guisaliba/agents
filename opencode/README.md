@@ -43,11 +43,9 @@ The pinned asset provenance is recorded by the tracked theme file history.
 
 ## Integrations
 
-- [Learn](../learn/README.md) provides the `/learn` plugin.
+- [Plugins](../plugins/README.md) documents Learn, Plannotator, and RTK.
+- [MCP servers](../mcps/README.md) documents GitHub, Linear, and Cloudflare.
 - [ai-memory](../ai-memory/README.md) provides memory and workstreams.
-- [GitHub MCP](../github-mcp/README.md) provides hosted GitHub tools.
-- [RTK](../rtk/README.md) compacts command output.
-- [Plannotator](../plannotator/README.md) provides review workflows.
 - [Shell entry point](../shell/README.md) manages interactive sessions.
 - [Skills](../skills/README.md) owns global skill installation.
 

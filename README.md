@@ -25,12 +25,10 @@ component documentation before applying it.
 | Component | Documentation |
 | --- | --- |
 | OpenCode runtime | [opencode/README.md](opencode/README.md) |
-| Learn plugin | [learn/README.md](learn/README.md) |
+| OpenCode plugins | [plugins/README.md](plugins/README.md) |
+| OpenCode MCP servers | [mcps/README.md](mcps/README.md) |
 | ai-memory service | [ai-memory/README.md](ai-memory/README.md) |
 | ai-jail policy | [ai-jail/README.md](ai-jail/README.md) |
-| GitHub MCP | [github-mcp/README.md](github-mcp/README.md) |
-| RTK | [rtk/README.md](rtk/README.md) |
-| Plannotator | [plannotator/README.md](plannotator/README.md) |
 | Bash entry point | [shell/README.md](shell/README.md) |
 | Skills | [skills/README.md](skills/README.md) |
 | Shared helper | [lib/README.md](lib/README.md) |

@@ -122,7 +122,7 @@ npx -y skills remove <skill-name> -g -y
 
 `architecture-map` is installed directly from `https://github.com/almendili/skills` with `-s architecture-map`; it does not need a registry entry.
 
-`teach` is installed from Matt Pocock's upstream source. The retired Alvar `teach`, `probe`, `learn-profile`, `learn-verify`, and `learn-visual` directories are removed before the required skills are installed. Alvar's adaptive method now lives in the separate OpenCode Learn plugin and `/learn` command documented in [`../learn/README.md`](../learn/README.md).
+`teach` is installed from Matt Pocock's upstream source. The retired Alvar `teach`, `probe`, `learn-profile`, `learn-verify`, and `learn-visual` directories are removed before the required skills are installed. Alvar's adaptive method now lives in the separate OpenCode Learn plugin and `/learn` command documented in [`../plugins/learn/README.md`](../plugins/learn/README.md).
 
 The global AGENTS instructions expect agents to use these skills for requirement discovery, concise output, skill discovery, TDD-oriented implementation, two-axis code review, and persistent teaching workspaces. OpenCode Learn is a plugin, not a shared skill.
 
