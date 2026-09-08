@@ -33,7 +33,7 @@ path. Global model, agent, plugin, MCP, and instruction entries are merged by
 
 ## Theme
 
-The TUI theme key belongs in `tui.json` and is converged to `lucent-orng`.
+The TUI theme key belongs in `tui.json`.
 Tracked themes under `opencode/themes/` are copied to the global theme path.
 The pinned asset provenance is recorded by the tracked theme file history.
 

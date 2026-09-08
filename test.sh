@@ -43,7 +43,7 @@ LEARN_PLUGIN_SPEC="$LEARN_INSTALL_DIR"
 LEARN_LEGACY_PLUGIN_BASE="github:guisaliba/learn"
 LEARN_OLDER_PLUGIN_BASE="github:guisaliba/opencode-learn"
 LEARN_MIN_OPENCODE_VERSION="1.18.22"
-OPENCODE_TUI_THEME_EXPECTED="lucent-orng"
+OPENCODE_TUI_THEME_EXPECTED="orng"
 OPENCODE_SHELL_BLOCK_START="# >>> dotfiles OpenCode ai-memory wrapper >>>"
 OPENCODE_SHELL_BLOCK_END="# <<< dotfiles OpenCode ai-memory wrapper <<<"
 
