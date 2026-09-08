@@ -23,14 +23,13 @@ GITHUB_MCP_TOKEN_REFERENCE="~/.config/opencode/secrets/github-mcp-pat"
 AI_MEMORY_AUR_PACKAGE="${AI_MEMORY_AUR_PACKAGE:-ai-memory-bin}"
 AI_MEMORY_MIN_VERSION="${AI_MEMORY_MIN_VERSION:-1.28.0}"
 AI_MEMORY_DATA_DIR="$HOME/.local/share/ai-memory"
-AI_MEMORY_AUTH_FILE="$AI_MEMORY_DATA_DIR/auth.json"
 AI_MEMORY_CONFIG_FILE="$HOME/.config/ai-memory/config.toml"
 AI_MEMORY_ENV_FILE="$HOME/.config/ai-memory/env"
 AI_MEMORY_LOOPBACK_SERVER_URL="http://127.0.0.1:49374"
 AI_MEMORY_INSTRUCTIONS_FILE="$HOME/.config/opencode/ai-memory.md"
 AI_MEMORY_INSTRUCTIONS_REFERENCE="~/.config/opencode/ai-memory.md"
 AI_MEMORY_USER_SERVICE_FILE="$HOME/.config/systemd/user/ai-memory.service"
-AI_MEMORY_DEFAULT_LLM_PROFILE="opencode-go-deepseek"
+AI_MEMORY_DEFAULT_LLM_PROFILE="opencode-go-muse"
 BUN_MIN_VERSION="${BUN_MIN_VERSION:-1.3.0}"
 LEARN_REPOSITORY_URL="${LEARN_REPOSITORY_URL:-https://github.com/guisaliba/learn.git}"
 LEARN_BRANCH="${LEARN_BRANCH:-main}"
@@ -497,7 +496,12 @@ merge_opencode_json() {
 
   local config="$HOME/.config/opencode/opencode.json"
   local manage_scout=false
+  local profile profile_spec provider model credential subagent_model
   mkdir -p "$(dirname "$config")"
+
+  profile="$(ai_memory_selected_profile)" || return 1
+  profile_spec="$(ai_memory_profile_spec "$profile")"
+  IFS='|' read -r provider model credential subagent_model <<<"$profile_spec"
 
   if native_scout_available; then
     manage_scout=true
@@ -509,6 +513,7 @@ merge_opencode_json() {
   python3 - \
     "$config" \
     "$manage_scout" \
+    "$subagent_model" \
     "$GITHUB_MCP_TOKEN_REFERENCE" \
     "$AI_MEMORY_INSTRUCTIONS_REFERENCE" \
     "$LEARN_PLUGIN_SPEC" \
@@ -520,11 +525,12 @@ import sys
 
 path = sys.argv[1]
 manage_scout = sys.argv[2] == "true"
-github_mcp_token_reference = sys.argv[3]
-ai_memory_instructions_reference = sys.argv[4]
-learn_plugin_spec = sys.argv[5]
-learn_legacy_plugin_base = sys.argv[6]
-learn_older_plugin_base = sys.argv[7]
+subagent_model = sys.argv[3]
+github_mcp_token_reference = sys.argv[4]
+ai_memory_instructions_reference = sys.argv[5]
+learn_plugin_spec = sys.argv[6]
+learn_legacy_plugin_base = sys.argv[7]
+learn_older_plugin_base = sys.argv[8]
 data = {}
 
 if os.path.exists(path):
@@ -545,9 +551,8 @@ if not isinstance(data, dict):
 
 data.setdefault("$schema", "https://opencode.ai/config.json")
 
-sol_model = "openai/gpt-5.6-sol"
-deepseek_model = "opencode-go/deepseek-v4-flash"
-data["model"] = sol_model
+primary_model = "openai/gpt-5.6-sol"
+data["model"] = primary_model
 data["default_agent"] = "build"
 
 agents = data.get("agent", {})
@@ -557,12 +562,12 @@ if not isinstance(agents, dict):
     )
 
 managed_models = {
-    "plan": sol_model,
-    "general": deepseek_model,
-    "explore": deepseek_model,
+    "plan": primary_model,
+    "general": subagent_model,
+    "explore": subagent_model,
 }
 if manage_scout:
-    managed_models["scout"] = deepseek_model
+    managed_models["scout"] = subagent_model
 
 for name, model in managed_models.items():
     config = agents.get(name, {})
@@ -573,18 +578,6 @@ for name, model in managed_models.items():
         )
     config["model"] = model
     agents[name] = config
-
-if not manage_scout and "scout" in agents:
-    scout = agents["scout"]
-    if not isinstance(scout, dict):
-        raise SystemExit(
-            f"ERROR: Expected 'agent.scout' to be an object in {path}. "
-            "File was not changed."
-        )
-    if scout.get("model") == deepseek_model:
-        scout.pop("model")
-        if not scout:
-            agents.pop("scout")
 
 data["agent"] = agents
 
@@ -811,70 +804,13 @@ ai_memory_env_has_nonempty_value() {
   [[ -n "$value" ]]
 }
 
-ai_memory_openai_oauth_state() {
-  python3 "$AGENT_STACK_HELPER" \
-    guard-regular-file \
-    "$AI_MEMORY_AUTH_FILE" \
-    "ai-memory auth path"
-
-  python3 - "$AI_MEMORY_AUTH_FILE" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-path = Path(sys.argv[1])
-if not path.exists():
-    print("missing")
-    raise SystemExit(0)
-
-try:
-    root = json.loads(path.read_text(encoding="utf-8"))
-except (OSError, json.JSONDecodeError) as exc:
-    raise SystemExit(f"ERROR: Cannot read valid ai-memory auth JSON at {path}: {exc}")
-
-if not isinstance(root, dict):
-    raise SystemExit(f"ERROR: ai-memory auth file must contain a JSON object: {path}")
-if "openai" not in root:
-    print("missing")
-    raise SystemExit(0)
-
-entry = root["openai"]
-valid = (
-    isinstance(entry, dict)
-    and entry.get("type") == "oauth"
-    and isinstance(entry.get("access"), str)
-    and bool(entry["access"].strip())
-    and isinstance(entry.get("refresh"), str)
-    and bool(entry["refresh"].strip())
-    and isinstance(entry.get("expires"), int)
-    and not isinstance(entry.get("expires"), bool)
-    and entry["expires"] > 0
-    and (
-        "accountId" not in entry
-        or entry["accountId"] is None
-        or isinstance(entry["accountId"], str)
-    )
-)
-if not valid:
-    raise SystemExit(f"ERROR: Invalid OpenAI OAuth entry in ai-memory auth file: {path}")
-
-print("ready")
-PY
-}
-
 ai_memory_profile_spec() {
   case "$1" in
-    openai-subscription-luna)
-      printf '%s\n' 'openai-oauth|gpt-5.6-luna|openai-oauth'
+    opencode-go-muse)
+      printf '%s\n' 'opencode|muse-spark-1.3-contributor|opencode-api-key|opencode-go/muse-spark-1.3-contributor'
       ;;
     opencode-go-deepseek)
-      printf '%s\n' 'opencode|deepseek-v4-flash|opencode-api-key'
-      ;;
-    openai-api-luna)
-      printf '%s\n' 'openai|gpt-5.6-luna|openai-api-key'
-      ;;
-    disabled)
-      printf '%s\n' '||disabled'
+      printf '%s\n' 'opencode|deepseek-v4-flash|opencode-api-key|opencode-go/deepseek-v4-flash'
       ;;
     *)
       return 1
@@ -882,22 +818,20 @@ ai_memory_profile_spec() {
   esac
 }
 
+ai_memory_selected_profile() {
+  local profile
+
+  profile="$(ai_memory_env_value DOTFILES_AI_MEMORY_LLM_PROFILE 2>/dev/null || true)"
+  profile="${profile:-$AI_MEMORY_DEFAULT_LLM_PROFILE}"
+  ai_memory_profile_spec "$profile" >/dev/null || \
+    die "Unsupported DOTFILES_AI_MEMORY_LLM_PROFILE '$profile'. Use opencode-go-muse or opencode-go-deepseek."
+  printf '%s\n' "$profile"
+}
+
 ai_memory_profile_credential_ready() {
   case "$1" in
-    openai-oauth)
-      local oauth_state
-      oauth_state="$(ai_memory_openai_oauth_state)" || \
-        die "Invalid ai-memory OpenAI OAuth state. Repair $AI_MEMORY_AUTH_FILE or log in again before apply."
-      [[ "$oauth_state" == "ready" ]]
-      ;;
     opencode-api-key)
       ai_memory_env_has_nonempty_value OPENCODE_API_KEY
-      ;;
-    openai-api-key)
-      ai_memory_env_has_nonempty_value OPENAI_API_KEY
-      ;;
-    disabled)
-      return 1
       ;;
     *)
       return 1
@@ -906,15 +840,13 @@ ai_memory_profile_credential_ready() {
 }
 
 configure_ai_memory_env_file() {
-  local profile profile_spec provider model credential provider_state
+  local profile profile_spec provider model credential subagent_model provider_state
   ensure_ai_memory_env_file
   log "Converging the ai-memory provider and paid-job policy"
 
-  profile="$(ai_memory_env_value DOTFILES_AI_MEMORY_LLM_PROFILE 2>/dev/null || true)"
-  profile="${profile:-$AI_MEMORY_DEFAULT_LLM_PROFILE}"
-  profile_spec="$(ai_memory_profile_spec "$profile")" || \
-    die "Unsupported DOTFILES_AI_MEMORY_LLM_PROFILE '$profile'. Use openai-subscription-luna, opencode-go-deepseek, openai-api-luna, or disabled."
-  IFS='|' read -r provider model credential <<<"$profile_spec"
+  profile="$(ai_memory_selected_profile)" || return 1
+  profile_spec="$(ai_memory_profile_spec "$profile")"
+  IFS='|' read -r provider model credential subagent_model <<<"$profile_spec"
 
   provider_state="zero-llm"
   if ai_memory_profile_credential_ready "$credential"; then
@@ -993,14 +925,8 @@ PY
 
   if [[ "$provider_state" == "enabled" ]]; then
     log "ai-memory LLM enabled by $profile"
-  elif [[ "$profile" == "disabled" ]]; then
-    log "ai-memory LLM is disabled by the selected profile"
-  elif [[ "$credential" == "openai-oauth" ]]; then
-    log "ai-memory remains in zero-LLM mode. Run ai-memory --data-dir $AI_MEMORY_DATA_DIR --config $AI_MEMORY_CONFIG_FILE auth login openai-oauth, then rerun apply."
   elif [[ "$credential" == "opencode-api-key" ]]; then
     log "ai-memory remains in zero-LLM mode. Add OPENCODE_API_KEY to $AI_MEMORY_ENV_FILE, then rerun apply."
-  else
-    log "ai-memory remains in zero-LLM mode. Add OPENAI_API_KEY to $AI_MEMORY_ENV_FILE, then rerun apply."
   fi
 }
 

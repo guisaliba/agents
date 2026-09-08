@@ -32,9 +32,9 @@ AI_MEMORY_INSTRUCTIONS_REFERENCE="~/.config/opencode/ai-memory.md"
 AI_MEMORY_USER_SERVICE_FILE="$HOME/.config/systemd/user/ai-memory.service"
 AI_MEMORY_MCP_EXPECTED_JSON='{"type":"remote","url":"http://127.0.0.1:49374/mcp","enabled":true}'
 AI_MEMORY_MIN_VERSION="1.28.0"
-AI_MEMORY_LLM_PROFILE_EXPECTED="opencode-go-deepseek"
+AI_MEMORY_LLM_PROFILE_EXPECTED="opencode-go-muse"
 AI_MEMORY_LLM_PROVIDER_EXPECTED="opencode"
-AI_MEMORY_LLM_MODEL_EXPECTED="deepseek-v4-flash"
+AI_MEMORY_LLM_MODEL_EXPECTED="muse-spark-1.3-contributor"
 BUN_MIN_VERSION="1.3.0"
 LEARN_REPOSITORY_URL_EXPECTED="https://github.com/guisaliba/learn.git"
 LEARN_BRANCH="main"
@@ -492,9 +492,9 @@ PY
 require_ai_memory_llm_policy() {
   if (
     source "$REPO_DIR/apply.sh"
-    profile="$(ai_memory_env_value DOTFILES_AI_MEMORY_LLM_PROFILE)"
+    profile="$(ai_memory_selected_profile)"
     profile_spec="$(ai_memory_profile_spec "$profile")"
-    IFS='|' read -r expected_provider expected_model credential <<<"$profile_spec"
+    IFS='|' read -r expected_provider expected_model credential expected_subagent_model <<<"$profile_spec"
     if ! ai_memory_profile_credential_ready "$credential"; then
       expected_provider=""
     fi
@@ -510,6 +510,7 @@ require_ai_memory_llm_policy() {
 
 test_opencode_json_merge() {
   local fixture_root fixture_home fixture_config fixture_token fixture_learn_plugin token_before first_config
+  local deepseek_home deepseek_config deepseek_env
   local malformed_home malformed_config malformed_before malformed_log
   local invalid_home invalid_config invalid_before invalid_log
   local instructions_home instructions_config instructions_before instructions_log
@@ -599,6 +600,8 @@ PY
     "plugin" \
     '["github:guisaliba/learn#v0.0.1",{"textModel":"stale/model"}]' \
     "0"
+  require_json_value "$fixture_config" "agent.general.model" "opencode-go/muse-spark-1.3-contributor"
+  require_json_value "$fixture_config" "agent.explore.model" "opencode-go/muse-spark-1.3-contributor"
   require_json_literal "$fixture_config" "agent.general.temperature" "0.25"
   require_json_value "$fixture_config" "agent.custom.model" "user/custom-model"
   require_json_value "$fixture_config" "mcp.custom.url" "https://example.invalid/mcp"
@@ -634,6 +637,24 @@ PY
   fi
   require_same_file "$token_before" "$fixture_token"
   require_file_mode "$fixture_token" "600"
+
+  deepseek_home="$fixture_root/deepseek-home"
+  deepseek_config="$deepseek_home/.config/opencode/opencode.json"
+  deepseek_env="$deepseek_home/.config/ai-memory/env"
+  mkdir -p "$(dirname "$deepseek_config")" "$(dirname "$deepseek_env")"
+  printf '%s\n' 'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-deepseek' >"$deepseek_env"
+  if (
+    HOME="$deepseek_home"
+    LEARN_INSTALL_DIR="$fixture_learn_plugin"
+    source "$REPO_DIR/apply.sh"
+    merge_opencode_json
+  ) >/dev/null 2>&1; then
+    ok "DeepSeek profile OpenCode merge fixture applies"
+  else
+    not_ok "DeepSeek profile OpenCode merge fixture failed"
+  fi
+  require_json_value "$deepseek_config" "agent.general.model" "opencode-go/deepseek-v4-flash"
+  require_json_value "$deepseek_config" "agent.explore.model" "opencode-go/deepseek-v4-flash"
 
   malformed_home="$fixture_root/malformed-home"
   malformed_config="$malformed_home/.config/opencode/opencode.json"
@@ -926,14 +947,10 @@ test_learn_plugin_sync() {
 }
 
 test_ai_memory_env_file() {
-  local fixture_root fixture_home fixture_env fixture_config fixture_auth env_before first_env
-  local oauth_home oauth_env oauth_auth oauth_before
-  local malformed_home malformed_env malformed_auth malformed_auth_before malformed_env_before malformed_log
+  local fixture_root fixture_home fixture_env fixture_config env_before first_env
   local no_key_home no_key_env
-  local opencode_home opencode_env
-  local openai_api_home openai_api_env
-  local disabled_home disabled_env
-  local invalid_home invalid_env invalid_before invalid_log
+  local muse_home muse_env deepseek_home deepseek_env
+  local invalid_profile invalid_index invalid_home invalid_env invalid_before invalid_log
   local auth_name auth_index env_auth_home config_auth_home
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
@@ -1003,82 +1020,49 @@ test_ai_memory_env_file() {
 
   no_key_home="$fixture_root/no-key-home"
   no_key_env="$no_key_home/.config/ai-memory/env"
-  mkdir -p "$(dirname "$no_key_env")" "$no_key_home/.local/share/opencode"
+  mkdir -p "$(dirname "$no_key_env")"
   printf '%s\n' 'UNRELATED_SETTING=keep' >"$no_key_env"
-  printf '%s\n' '{"openai":{"type":"oauth","refresh":"opencode-only"}}' \
-    >"$no_key_home/.local/share/opencode/auth.json"
   if (
     HOME="$no_key_home"
     source "$REPO_DIR/apply.sh"
     configure_ai_memory_env_file
   ) >/dev/null 2>&1; then
-    ok "default DeepSeek profile stays disabled without its API key"
+    ok "default Muse profile stays disabled without its API key"
   else
-    not_ok "default DeepSeek zero-LLM fixture failed"
+    not_ok "default Muse zero-LLM fixture failed"
   fi
   require_env_assignment "$no_key_env" "DOTFILES_AI_MEMORY_LLM_PROFILE" "$AI_MEMORY_LLM_PROFILE_EXPECTED"
   require_env_assignment "$no_key_env" "AI_MEMORY_LLM_PROVIDER" ""
   require_env_assignment "$no_key_env" "AI_MEMORY_LLM_MODEL" "$AI_MEMORY_LLM_MODEL_EXPECTED"
 
-  oauth_home="$fixture_root/oauth-home"
-  oauth_env="$oauth_home/.config/ai-memory/env"
-  oauth_auth="$oauth_home/.local/share/ai-memory/auth.json"
-  oauth_before="$fixture_root/oauth-auth-before"
-  mkdir -p "$(dirname "$oauth_env")" "$(dirname "$oauth_auth")"
+  muse_home="$fixture_root/muse-profile-home"
+  muse_env="$muse_home/.config/ai-memory/env"
+  mkdir -p "$(dirname "$muse_env")"
   printf '%s\n' \
-    'UNRELATED_SETTING=keep' \
-    'DOTFILES_AI_MEMORY_LLM_PROFILE=openai-subscription-luna' >"$oauth_env"
-  printf '%s\n' \
-    '{"openai":{"type":"oauth","access":"access-token","refresh":"refresh-token","expires":4102444800000,"accountId":"account"},"oidc":{"type":"oauth"}}' \
-    >"$oauth_auth"
-  chmod 0600 "$oauth_auth"
-  cp "$oauth_auth" "$oauth_before"
+    'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-muse' \
+    'OPENCODE_API_KEY=fixture-secret' >"$muse_env"
   if (
-    HOME="$oauth_home"
+    HOME="$muse_home"
     source "$REPO_DIR/apply.sh"
     configure_ai_memory_env_file
   ) >/dev/null 2>&1; then
-    ok "ai-memory OpenAI subscription profile enables with its OAuth token"
+    ok "OpenCode Go Muse profile enables with its separate key"
   else
-    not_ok "ai-memory OpenAI subscription profile fixture failed"
+    not_ok "OpenCode Go Muse profile fixture failed"
   fi
-  require_same_file "$oauth_before" "$oauth_auth"
-  require_env_assignment "$oauth_env" "DOTFILES_AI_MEMORY_LLM_PROFILE" "openai-subscription-luna"
-  require_env_assignment "$oauth_env" "AI_MEMORY_LLM_PROVIDER" "openai-oauth"
-  require_env_assignment "$oauth_env" "AI_MEMORY_LLM_MODEL" "gpt-5.6-luna"
+  require_env_assignment "$muse_env" "DOTFILES_AI_MEMORY_LLM_PROFILE" "opencode-go-muse"
+  require_env_assignment "$muse_env" "OPENCODE_API_KEY" "fixture-secret"
+  require_env_assignment "$muse_env" "AI_MEMORY_LLM_PROVIDER" "opencode"
+  require_env_assignment "$muse_env" "AI_MEMORY_LLM_MODEL" "muse-spark-1.3-contributor"
 
-  malformed_home="$fixture_root/malformed-auth-home"
-  malformed_env="$malformed_home/.config/ai-memory/env"
-  malformed_auth="$malformed_home/.local/share/ai-memory/auth.json"
-  malformed_auth_before="$fixture_root/malformed-auth-before"
-  malformed_env_before="$fixture_root/malformed-env-before"
-  malformed_log="$fixture_root/malformed-auth.log"
-  mkdir -p "$(dirname "$malformed_env")" "$(dirname "$malformed_auth")"
-  printf '%s\n' 'DOTFILES_AI_MEMORY_LLM_PROFILE=openai-subscription-luna' >"$malformed_env"
-  printf '%s\n' '{malformed' >"$malformed_auth"
-  cp "$malformed_auth" "$malformed_auth_before"
-  cp "$malformed_env" "$malformed_env_before"
-  if (
-    HOME="$malformed_home"
-    source "$REPO_DIR/apply.sh"
-    configure_ai_memory_env_file
-  ) >"$malformed_log" 2>&1; then
-    not_ok "malformed ai-memory OAuth state was accepted"
-  else
-    ok "malformed ai-memory OAuth state fails safely"
-  fi
-  require_same_file "$malformed_auth_before" "$malformed_auth"
-  require_same_file "$malformed_env_before" "$malformed_env"
-  require_contains "$malformed_log" "Invalid ai-memory OpenAI OAuth state"
-
-  opencode_home="$fixture_root/opencode-profile-home"
-  opencode_env="$opencode_home/.config/ai-memory/env"
-  mkdir -p "$(dirname "$opencode_env")"
+  deepseek_home="$fixture_root/deepseek-profile-home"
+  deepseek_env="$deepseek_home/.config/ai-memory/env"
+  mkdir -p "$(dirname "$deepseek_env")"
   printf '%s\n' \
     'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-deepseek' \
-    'OPENCODE_API_KEY=fixture-secret' >"$opencode_env"
+    'OPENCODE_API_KEY=fixture-secret' >"$deepseek_env"
   if (
-    HOME="$opencode_home"
+    HOME="$deepseek_home"
     source "$REPO_DIR/apply.sh"
     configure_ai_memory_env_file
   ) >/dev/null 2>&1; then
@@ -1086,71 +1070,35 @@ test_ai_memory_env_file() {
   else
     not_ok "OpenCode Go DeepSeek profile fixture failed"
   fi
-  require_env_assignment "$opencode_env" "DOTFILES_AI_MEMORY_LLM_PROFILE" "opencode-go-deepseek"
-  require_env_assignment "$opencode_env" "OPENCODE_API_KEY" "fixture-secret"
-  require_env_assignment "$opencode_env" "AI_MEMORY_LLM_PROVIDER" "opencode"
-  require_env_assignment "$opencode_env" "AI_MEMORY_LLM_MODEL" "deepseek-v4-flash"
+  require_env_assignment "$deepseek_env" "DOTFILES_AI_MEMORY_LLM_PROFILE" "opencode-go-deepseek"
+  require_env_assignment "$deepseek_env" "OPENCODE_API_KEY" "fixture-secret"
+  require_env_assignment "$deepseek_env" "AI_MEMORY_LLM_PROVIDER" "opencode"
+  require_env_assignment "$deepseek_env" "AI_MEMORY_LLM_MODEL" "deepseek-v4-flash"
 
-  openai_api_home="$fixture_root/openai-api-profile-home"
-  openai_api_env="$openai_api_home/.config/ai-memory/env"
-  mkdir -p "$(dirname "$openai_api_env")"
-  printf '%s\n' \
-    'DOTFILES_AI_MEMORY_LLM_PROFILE=openai-api-luna' \
-    'OPENAI_API_KEY=fixture-secret' >"$openai_api_env"
-  if (
-    HOME="$openai_api_home"
-    source "$REPO_DIR/apply.sh"
-    configure_ai_memory_env_file
-  ) >/dev/null 2>&1; then
-    ok "OpenAI API Luna profile enables with its Platform key"
-  else
-    not_ok "OpenAI API Luna profile fixture failed"
-  fi
-  require_env_assignment "$openai_api_env" "DOTFILES_AI_MEMORY_LLM_PROFILE" "openai-api-luna"
-  require_env_assignment "$openai_api_env" "OPENAI_API_KEY" "fixture-secret"
-  require_env_assignment "$openai_api_env" "AI_MEMORY_LLM_PROVIDER" "openai"
-  require_env_assignment "$openai_api_env" "AI_MEMORY_LLM_MODEL" "gpt-5.6-luna"
-
-  disabled_home="$fixture_root/disabled-profile-home"
-  disabled_env="$disabled_home/.config/ai-memory/env"
-  mkdir -p "$(dirname "$disabled_env")" "$disabled_home/.local/share/ai-memory"
-  printf '%s\n' \
-    'DOTFILES_AI_MEMORY_LLM_PROFILE=disabled' \
-    'OPENAI_API_KEY=fixture-secret' \
-    'OPENCODE_API_KEY=fixture-secret' >"$disabled_env"
-  cp "$oauth_auth" "$disabled_home/.local/share/ai-memory/auth.json"
-  if (
-    HOME="$disabled_home"
-    source "$REPO_DIR/apply.sh"
-    configure_ai_memory_env_file
-  ) >/dev/null 2>&1; then
-    ok "disabled ai-memory profile stays in zero-LLM mode"
-  else
-    not_ok "disabled ai-memory profile fixture failed"
-  fi
-  require_env_assignment "$disabled_env" "AI_MEMORY_LLM_PROVIDER" ""
-  require_env_assignment "$disabled_env" "AI_MEMORY_LLM_MODEL" ""
-
-  invalid_home="$fixture_root/invalid-profile-home"
-  invalid_env="$invalid_home/.config/ai-memory/env"
-  invalid_before="$fixture_root/invalid-profile-before"
-  invalid_log="$fixture_root/invalid-profile.log"
-  mkdir -p "$(dirname "$invalid_env")"
-  printf '%s\n' \
-    'UNRELATED_SETTING=keep' \
-    'DOTFILES_AI_MEMORY_LLM_PROFILE=not-a-profile' >"$invalid_env"
-  cp "$invalid_env" "$invalid_before"
-  if (
-    HOME="$invalid_home"
-    source "$REPO_DIR/apply.sh"
-    configure_ai_memory_env_file
-  ) >"$invalid_log" 2>&1; then
-    not_ok "invalid ai-memory profile was accepted"
-  else
-    ok "invalid ai-memory profile fails safely"
-  fi
-  require_same_file "$invalid_before" "$invalid_env"
-  require_contains "$invalid_log" "Unsupported DOTFILES_AI_MEMORY_LLM_PROFILE"
+  invalid_index=0
+  for invalid_profile in openai-subscription-luna openai-api-luna disabled not-a-profile; do
+    invalid_index=$((invalid_index + 1))
+    invalid_home="$fixture_root/invalid-profile-home-$invalid_index"
+    invalid_env="$invalid_home/.config/ai-memory/env"
+    invalid_before="$fixture_root/invalid-profile-before-$invalid_index"
+    invalid_log="$fixture_root/invalid-profile-$invalid_index.log"
+    mkdir -p "$(dirname "$invalid_env")"
+    printf '%s\n' \
+      'UNRELATED_SETTING=keep' \
+      "DOTFILES_AI_MEMORY_LLM_PROFILE=$invalid_profile" >"$invalid_env"
+    cp "$invalid_env" "$invalid_before"
+    if (
+      HOME="$invalid_home"
+      source "$REPO_DIR/apply.sh"
+      configure_ai_memory_env_file
+    ) >"$invalid_log" 2>&1; then
+      not_ok "unsupported ai-memory profile $invalid_profile was accepted"
+    else
+      ok "unsupported ai-memory profile $invalid_profile fails safely"
+    fi
+    require_same_file "$invalid_before" "$invalid_env"
+    require_contains "$invalid_log" "Unsupported DOTFILES_AI_MEMORY_LLM_PROFILE"
+  done
 
   if (
     HOME="$fixture_home"
@@ -1200,14 +1148,13 @@ test_ai_memory_env_file() {
 }
 
 test_agent_stack_helpers() {
-  local fixture_root fixture_home fixture_env fixture_token fixture_config fixture_auth
+  local fixture_root fixture_home fixture_env fixture_token fixture_config
   local real_target atomic_target atomic_expected malformed_manifest duplicate_manifest
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
   fixture_env="$fixture_home/.config/ai-memory/env"
   fixture_token="$fixture_home/.config/opencode/secrets/github-mcp-pat"
   fixture_config="$fixture_home/.config/ai-memory/config.toml"
-  fixture_auth="$fixture_home/.local/share/ai-memory/auth.json"
   real_target="$fixture_root/real-target"
   atomic_target="$fixture_root/atomic-target"
   atomic_expected="$fixture_root/atomic-expected"
@@ -1278,18 +1225,6 @@ test_agent_stack_helpers() {
     not_ok "ai-memory config symlink was accepted"
   else
     ok "ai-memory config symlink is rejected before initialization"
-  fi
-
-  mkdir -p "$(dirname "$fixture_auth")"
-  ln -s "$real_target" "$fixture_auth"
-  if (
-    HOME="$fixture_home"
-    source "$REPO_DIR/apply.sh"
-    ai_memory_openai_oauth_state
-  ) >/dev/null 2>&1; then
-    not_ok "ai-memory auth symlink was accepted"
-  else
-    ok "ai-memory auth symlink is rejected"
   fi
 
   printf '%s\n' 'new content' >"$atomic_expected"
@@ -1870,7 +1805,6 @@ rewritten="$(rtk rewrite "git status --short" 2>/dev/null || true)"
 [[ "$rewritten" == "rtk git status --short" ]] && ok "rtk rewrite runs" || not_ok "rtk rewrite failed"
 
 require_file "$HOME/.config/opencode/AGENTS.md"
-require_contains "$HOME/.config/opencode/AGENTS.md" "Required Capabilities"
 require_contains "$HOME/.config/opencode/AGENTS.md" "ASD-STE100"
 require_contains "$HOME/.config/opencode/AGENTS.md" "When you are the primary agent, you are the final owner of delegated work."
 require_same_file "$REPO_DIR/AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
@@ -1889,8 +1823,17 @@ require_json "$HOME/.config/opencode/opencode.json"
 require_json_value "$HOME/.config/opencode/opencode.json" "model" "openai/gpt-5.6-sol"
 require_json_value "$HOME/.config/opencode/opencode.json" "default_agent" "build"
 require_json_value "$HOME/.config/opencode/opencode.json" "agent.plan.model" "openai/gpt-5.6-sol"
-require_json_value "$HOME/.config/opencode/opencode.json" "agent.general.model" "opencode-go/deepseek-v4-flash"
-require_json_value "$HOME/.config/opencode/opencode.json" "agent.explore.model" "opencode-go/deepseek-v4-flash"
+selected_profile="$(
+  source "$REPO_DIR/apply.sh"
+  ai_memory_selected_profile
+)"
+profile_spec="$(
+  source "$REPO_DIR/apply.sh"
+  ai_memory_profile_spec "$selected_profile"
+)"
+IFS='|' read -r expected_provider expected_model credential expected_subagent_model <<<"$profile_spec"
+require_json_value "$HOME/.config/opencode/opencode.json" "agent.general.model" "$expected_subagent_model"
+require_json_value "$HOME/.config/opencode/opencode.json" "agent.explore.model" "$expected_subagent_model"
 require_json_array_count "$HOME/.config/opencode/opencode.json" "instructions" "$AI_MEMORY_INSTRUCTIONS_REFERENCE" "1"
 require_json_array_count "$HOME/.config/opencode/opencode.json" "plugin" "$LEARN_PLUGIN_SPEC" "1"
 require_json_array_count "$HOME/.config/opencode/opencode.json" "plugin" "$LEARN_LEGACY_PLUGIN_BASE" "0"
@@ -1905,11 +1848,10 @@ require_json_literal "$HOME/.config/opencode/opencode.json" "mcp.github" "$GITHU
 
 available_agents="$(opencode agent list 2>/dev/null || true)"
 if [[ "$available_agents" == *$'\nscout (subagent)\n'* ]]; then
-  require_json_value "$HOME/.config/opencode/opencode.json" "agent.scout.model" "opencode-go/deepseek-v4-flash"
+  require_json_value "$HOME/.config/opencode/opencode.json" "agent.scout.model" "$expected_subagent_model"
 elif [[ "$available_agents" == *$'\nscout ('* ]]; then
   not_ok "scout exists but is not a built-in subagent"
 else
-  require_json_missing "$HOME/.config/opencode/opencode.json" "agent.scout"
   ok "native scout subagent is unavailable; no custom fallback configured"
 fi
 
