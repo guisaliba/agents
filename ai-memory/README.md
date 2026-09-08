@@ -22,9 +22,14 @@ The ai-memory binary owns the generated OpenCode plugin, instructions, and
 five ai-memory skills. Do not edit generated files by hand. The service LLM
 is independent of the OpenCode session model.
 
-The default profile is `opencode-go-deepseek` and stays in zero-LLM mode until
-`OPENCODE_API_KEY` is present in the environment file. Alternative profiles
-are `openai-subscription-luna`, `openai-api-luna`, and `disabled`.
+The default profile is `opencode-go-muse`, which uses
+`opencode-go/muse-spark-1.3-contributor`. The alternative profile is
+`opencode-go-deepseek`. Both profiles stay in zero-LLM mode until
+`OPENCODE_API_KEY` is present in the environment file.
+
+Set `DOTFILES_AI_MEMORY_LLM_PROFILE` in `~/.config/ai-memory/env` to select
+a profile. Apply preserves an explicit valid selection; remove the assignment
+to use the default.
 
 ## Boundary
 

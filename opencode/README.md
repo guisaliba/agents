@@ -11,14 +11,10 @@ Primary:
   build -> openai/gpt-5.6-sol
   plan  -> openai/gpt-5.6-sol
 
-Subagents:
-  general -> opencode-go/deepseek-v4-flash
-  explore -> opencode-go/deepseek-v4-flash
-  scout   -> opencode-go/deepseek-v4-flash when native Scout exists
+Subagents by `DOTFILES_AI_MEMORY_LLM_PROFILE`:
+  opencode-go-muse (default) -> opencode-go/muse-spark-1.3-contributor
+  opencode-go-deepseek       -> opencode-go/deepseek-v4-flash
 ```
-
-Scout is configured only when OpenCode exposes the native `scout (subagent)`.
-Apply does not create a custom Scout fallback.
 
 ## Managed Paths
 
