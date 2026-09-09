@@ -1296,7 +1296,7 @@ test_macos_platform_prerequisites() {
 
   if (
     HOME="$fixture_home"
-    PATH="$stub_bin:/usr/bin:/bin"
+    PATH="$stub_bin:/usr/bin:$brew_prefix/bin:/bin"
     MACOS_TEST_BREW_PREFIX="$brew_prefix"
     MACOS_TEST_INSTALL_LOG="$install_log"
     GOOGLE_CHROME_APP_PATH="$fixture_root/Applications/Google Chrome.app"

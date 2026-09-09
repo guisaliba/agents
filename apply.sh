@@ -77,11 +77,14 @@ agent_stack_platform() {
 }
 
 prepend_path() {
-  local directory="$1"
-  case ":$PATH:" in
-    *":$directory:"*) ;;
-    *) PATH="$directory:$PATH" ;;
-  esac
+  local directory="$1" entry new_path="$1"
+  local path_entries=()
+  IFS=: read -r -a path_entries <<<"$PATH"
+  for entry in "${path_entries[@]}"; do
+    [[ "$entry" == "$directory" ]] && continue
+    new_path="$new_path:$entry"
+  done
+  PATH="$new_path"
   export PATH
 }
 
