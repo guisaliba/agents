@@ -1376,7 +1376,7 @@ start_ai_memory_systemd_user_service() {
 
 start_ai_memory_launch_agent() {
   local domain target
-  domain="gui/$(id -u)"
+  domain="user/$(id -u)"
   target="$domain/$AI_MEMORY_LAUNCH_AGENT_LABEL"
 
   log "Loading and restarting the ai-memory LaunchAgent"

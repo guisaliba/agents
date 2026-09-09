@@ -2568,9 +2568,9 @@ test_macos_ai_memory_launch_agent() {
   printf '%s\n' '#!/bin/bash' 'printf '\''Darwin\n'\''' >"$stub_bin/uname"
   chmod +x "$stub_bin/launchctl" "$stub_bin/uname"
   printf '%s\n' \
-    "bootout gui/$uid/com.github.akitaonrails.ai-memory" \
-    "bootstrap gui/$uid $launch_agent" \
-    "kickstart -k gui/$uid/com.github.akitaonrails.ai-memory" >"$expected_log"
+    "bootout user/$uid/com.github.akitaonrails.ai-memory" \
+    "bootstrap user/$uid $launch_agent" \
+    "kickstart -k user/$uid/com.github.akitaonrails.ai-memory" >"$expected_log"
 
   if (
     HOME="$fixture_home"
