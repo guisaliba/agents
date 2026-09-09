@@ -1375,16 +1375,10 @@ start_ai_memory_systemd_user_service() {
 }
 
 start_ai_memory_launch_agent() {
-  local domain target
-  domain="user/$(id -u)"
-  target="$domain/$AI_MEMORY_LAUNCH_AGENT_LABEL"
-
   log "Loading and restarting the ai-memory LaunchAgent"
   install_ai_memory_launch_agent
-  launchctl bootout "$target" >/dev/null 2>&1 || true
-  launchctl bootstrap "$domain" "$AI_MEMORY_LAUNCH_AGENT_FILE" || \
-    die "ai-memory LaunchAgent bootstrap failed"
-  launchctl kickstart -k "$target" || die "ai-memory LaunchAgent restart failed"
+  launchctl unload "$AI_MEMORY_LAUNCH_AGENT_FILE" >/dev/null 2>&1 || true
+  launchctl load "$AI_MEMORY_LAUNCH_AGENT_FILE" || die "ai-memory LaunchAgent load failed"
 }
 
 start_ai_memory_service() {

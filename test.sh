@@ -2552,7 +2552,7 @@ test_ai_memory_user_service_installation() {
 }
 
 test_macos_ai_memory_launch_agent() {
-  local fixture_root fixture_home stub_bin executable launch_agent launch_log expected_log uid
+  local fixture_root fixture_home stub_bin executable launch_agent launch_log expected_log
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
   stub_bin="$fixture_root/bin"
@@ -2560,7 +2560,6 @@ test_macos_ai_memory_launch_agent() {
   launch_agent="$fixture_home/Library/LaunchAgents/com.github.akitaonrails.ai-memory.plist"
   launch_log="$fixture_root/launchctl.log"
   expected_log="$fixture_root/expected-launchctl.log"
-  uid="$(id -u)"
   mkdir -p "$stub_bin"
   printf '%s\n' '#!/bin/bash' 'exit 0' >"$executable"
   chmod +x "$executable"
@@ -2568,9 +2567,8 @@ test_macos_ai_memory_launch_agent() {
   printf '%s\n' '#!/bin/bash' 'printf '\''Darwin\n'\''' >"$stub_bin/uname"
   chmod +x "$stub_bin/launchctl" "$stub_bin/uname"
   printf '%s\n' \
-    "bootout user/$uid/com.github.akitaonrails.ai-memory" \
-    "bootstrap user/$uid $launch_agent" \
-    "kickstart -k user/$uid/com.github.akitaonrails.ai-memory" >"$expected_log"
+    "unload $launch_agent" \
+    "load $launch_agent" >"$expected_log"
 
   if (
     HOME="$fixture_home"
