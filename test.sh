@@ -1776,6 +1776,7 @@ PY
   mac_bash="$mac_bin/bash"
   mkdir -p "$mac_bin"
   cp "$(type -P true)" "$mac_bash"
+  ln -s "$(type -P python3)" "$mac_bin/python3"
   printf '%s\n' '#!/bin/bash' 'printf '\''Darwin\n'\''' >"$mac_bin/uname"
   chmod +x "$mac_bin/uname"
   if (
@@ -2385,6 +2386,7 @@ test_native_ai_memory_requirement() {
   if (
     PATH="$stub_bin:/usr/bin:/bin"
     source "$REPO_DIR/apply.sh"
+    uname() { [[ "$1" == -s ]] && printf '%s\n' Linux; }
     install_ai_memory
   ) >"$wrapper_log" 2>&1; then
     not_ok "Docker ai-memory wrapper was accepted as a native binary"
@@ -2397,6 +2399,7 @@ test_native_ai_memory_requirement() {
   if (
     PATH="$stub_bin:/usr/bin:/bin"
     source "$REPO_DIR/apply.sh"
+    uname() { [[ "$1" == -s ]] && printf '%s\n' Linux; }
     verify_native_ai_memory
   ) >/dev/null 2>&1; then
     ok "native Linux executable satisfies the ai-memory binary check"
@@ -2526,6 +2529,7 @@ test_ai_memory_user_service_installation() {
     HOME="$fixture_home"
     PATH="$stub_bin:/usr/bin:/bin"
     source "$REPO_DIR/apply.sh"
+    uname() { [[ "$1" == -s ]] && printf '%s\n' Linux; }
     install_ai_memory_user_service
   ) >/dev/null 2>&1; then
     ok "missing ai-memory user service is installed"
@@ -2540,6 +2544,7 @@ test_ai_memory_user_service_installation() {
     HOME="$fixture_home"
     PATH="$stub_bin:/usr/bin:/bin"
     source "$REPO_DIR/apply.sh"
+    uname() { [[ "$1" == -s ]] && printf '%s\n' Linux; }
     install_ai_memory_user_service
   ) >/dev/null 2>&1; then
     ok "ai-memory user service installation applies a second time"
@@ -2891,9 +2896,9 @@ if (
   source "$REPO_DIR/apply.sh"
   verify_native_ai_memory
 ) >/dev/null 2>&1; then
-  ok "ai-memory is a native Linux executable"
+  ok "ai-memory is a native executable for this platform"
 else
-  not_ok "ai-memory is not a native Linux executable or is unreadable"
+  not_ok "ai-memory is not a native executable for this platform or is unreadable"
 fi
 
 if (
