@@ -2552,7 +2552,7 @@ test_ai_memory_user_service_installation() {
 }
 
 test_macos_ai_memory_launch_agent() {
-  local fixture_root fixture_home stub_bin executable launch_agent launch_log expected_log
+  local fixture_root fixture_home stub_bin executable launch_agent launch_log expected_log uid
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
   stub_bin="$fixture_root/bin"
@@ -2560,15 +2560,22 @@ test_macos_ai_memory_launch_agent() {
   launch_agent="$fixture_home/Library/LaunchAgents/com.github.akitaonrails.ai-memory.plist"
   launch_log="$fixture_root/launchctl.log"
   expected_log="$fixture_root/expected-launchctl.log"
+  uid="$(id -u)"
   mkdir -p "$stub_bin"
   printf '%s\n' '#!/bin/bash' 'exit 0' >"$executable"
   chmod +x "$executable"
-  printf '%s\n' '#!/bin/bash' 'printf '\''%s\n'\'' "$*" >>"$AI_MEMORY_TEST_LAUNCHCTL_LOG"' >"$stub_bin/launchctl"
+  printf '%s\n' \
+    '#!/bin/bash' \
+    'printf '\''%s\n'\'' "$*" >>"$AI_MEMORY_TEST_LAUNCHCTL_LOG"' \
+    'if [[ "$1" == print && "${AI_MEMORY_TEST_GUI_AVAILABLE:-1}" == 0 ]]; then exit 1; fi' \
+    >"$stub_bin/launchctl"
   printf '%s\n' '#!/bin/bash' 'printf '\''Darwin\n'\''' >"$stub_bin/uname"
   chmod +x "$stub_bin/launchctl" "$stub_bin/uname"
   printf '%s\n' \
-    "unload $launch_agent" \
-    "load $launch_agent" >"$expected_log"
+    "print gui/$uid" \
+    "bootout gui/$uid/com.github.akitaonrails.ai-memory" \
+    "bootstrap gui/$uid $launch_agent" \
+    "kickstart -k gui/$uid/com.github.akitaonrails.ai-memory" >"$expected_log"
 
   if (
     HOME="$fixture_home"
@@ -2584,7 +2591,7 @@ test_macos_ai_memory_launch_agent() {
   fi
   require_file "$launch_agent"
   require_file_mode "$launch_agent" "600"
-  require_file_mode "$fixture_home/Library/Logs/ai-memory" "711"
+  require_file_mode "$fixture_home/Library/Logs/ai-memory" "700"
   require_same_file "$expected_log" "$launch_log"
   if python3 - "$launch_agent" "$executable" "$fixture_home" <<'PY'
 import plistlib
@@ -2640,6 +2647,23 @@ PY
     not_ok "second macOS ai-memory LaunchAgent installation failed"
   fi
   require_file_mode "$launch_agent" "600"
+
+  : >"$launch_log"
+  printf '%s\n' "print gui/$uid" >"$expected_log"
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    AI_MEMORY_TEST_LAUNCHCTL_LOG="$launch_log"
+    AI_MEMORY_TEST_GUI_AVAILABLE=0
+    export HOME PATH AI_MEMORY_TEST_LAUNCHCTL_LOG AI_MEMORY_TEST_GUI_AVAILABLE
+    source "$REPO_DIR/apply.sh"
+    start_ai_memory_service
+  ) >/dev/null 2>&1; then
+    ok "headless macOS ai-memory LaunchAgent loading is deferred"
+  else
+    not_ok "headless macOS ai-memory LaunchAgent loading was not deferred"
+  fi
+  require_same_file "$expected_log" "$launch_log"
 
   rm -rf -- "$fixture_root"
 }
