@@ -21,6 +21,10 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$SCRIPT_DIR"
 AGENT_STACK_HELPER="$REPO_DIR/lib/agent_stack.py"
 SKILLS_MANIFEST="$REPO_DIR/skills.tsv"
+if [[ "$(uname -s)" == Darwin ]] && command -v brew >/dev/null 2>&1; then
+  PATH="$(brew --prefix)/bin:$PATH"
+  export PATH
+fi
 
 failures=0
 GITHUB_MCP_TOKEN_FILE="$HOME/.config/opencode/secrets/github-mcp-pat"
@@ -1700,7 +1704,13 @@ test_herdr_config_merge() {
   fixture_home="$fixture_root/home"
   config="$fixture_home/.config/herdr/config.toml"
   first_config="$fixture_root/first-config.toml"
-  bash_path="$(readlink -f "$(command -v bash)")"
+  bash_path="$(python3 - "$(command -v bash)" <<'PY'
+import sys
+from pathlib import Path
+
+print(Path(sys.argv[1]).resolve(strict=True))
+PY
+)"
   mkdir -p "$(dirname "$config")"
   printf '%s\n' \
     '# preserve this comment' \
@@ -1722,6 +1732,7 @@ test_herdr_config_merge() {
     HOME="$fixture_home"
     export HOME
     source "$REPO_DIR/herdr/setup.bash"
+    uname() { [[ "$1" == -s ]] && printf '%s\n' Linux; }
     configure_herdr
   ) >/dev/null 2>&1; then
     ok "Herdr configuration fixture applies"
@@ -1749,6 +1760,7 @@ test_herdr_config_merge() {
     HOME="$fixture_home"
     export HOME
     source "$REPO_DIR/herdr/setup.bash"
+    uname() { [[ "$1" == -s ]] && printf '%s\n' Linux; }
     configure_herdr
   ) >/dev/null 2>&1; then
     ok "Herdr configuration fixture applies a second time"
@@ -1762,7 +1774,7 @@ test_herdr_config_merge() {
   mac_bin="$fixture_root/mac-bin"
   mac_bash="$mac_bin/bash"
   mkdir -p "$mac_bin"
-  cp /bin/true "$mac_bash"
+  cp "$(type -P true)" "$mac_bash"
   printf '%s\n' '#!/bin/bash' 'printf '\''Darwin\n'\''' >"$mac_bin/uname"
   chmod +x "$mac_bin/uname"
   if (
@@ -2380,7 +2392,7 @@ test_native_ai_memory_requirement() {
   fi
   require_contains "$wrapper_log" "ai-memory must be a native Linux executable"
 
-  cp /bin/true "$stub_bin/ai-memory"
+  cp "$(type -P true)" "$stub_bin/ai-memory"
   if (
     PATH="$stub_bin:/usr/bin:/bin"
     source "$REPO_DIR/apply.sh"
