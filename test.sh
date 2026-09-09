@@ -1116,7 +1116,8 @@ test_ai_memory_env_file() {
   if (
     HOME="$fixture_home"
     source "$REPO_DIR/apply.sh"
-    verify_ai_memory_no_static_auth_files
+    agent_stack_platform() { printf '%s\n' Darwin; }
+    verify_ai_memory_unauthenticated_loopback
   ) >/dev/null 2>&1; then
     ok "ai-memory default auth files allow unauthenticated loopback"
   else

@@ -418,6 +418,10 @@ verify_ai_memory_unauthenticated_loopback() {
   verify_ai_memory_no_static_auth_files || \
     die "Remove static ai-memory bearer authentication before running apply."
 
+  if [[ "$(agent_stack_platform)" == "Darwin" ]]; then
+    return 0
+  fi
+
   if ! systemctl --user show-environment 2>/dev/null | python3 -c '
 import sys
 
