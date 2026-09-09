@@ -18,6 +18,17 @@ The service uses:
 ~/.config/systemd/user/ai-memory.service
 ```
 
+On macOS, apply installs the pinned native release under
+`~/.local/opt/ai-memory/`, links it from `~/.local/bin/ai-memory`, and uses:
+
+```text
+~/Library/LaunchAgents/com.github.akitaonrails.ai-memory.plist
+~/Library/Logs/ai-memory/
+```
+
+The LaunchAgent loads `~/.config/ai-memory/env` before it starts the service.
+Its plist has mode `0600`. Linux continues to use the systemd user service.
+
 The ai-memory binary owns the generated OpenCode plugin, instructions, and
 five ai-memory skills. Do not edit generated files by hand. The service LLM
 is independent of the OpenCode session model.

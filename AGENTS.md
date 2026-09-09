@@ -56,6 +56,10 @@ Use focused checks first, then broader checks when appropriate.
 
 If checks are skipped, state why. If checks fail, separate failures caused by your change from pre-existing or unrelated failures.
 
+## Herdr
+
+In Herdr panes, start OpenCode through ai-memory and select a named workstream for each independent task. Use a separate Git worktree for each concurrent OpenCode task. Keep the inherited host, session, pane, and socket context. UI focus is not CLI targeting: use the current pane, a returned pane ID, or an explicit host session.
+
 ## Delegation
 
 When you are the primary agent, you are the final owner of delegated work.

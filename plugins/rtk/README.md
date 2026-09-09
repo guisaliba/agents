@@ -21,4 +21,5 @@ rtk gain
 rtk <command>
 ```
 
-RTK is installed live. Its payload is not vendored in this repository.
+RTK is installed live at the version pinned by `RTK_VERSION` in `apply.sh`.
+Its payload is not vendored in this repository.

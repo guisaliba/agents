@@ -6,6 +6,7 @@ not vendored here unless the component explicitly owns a tracked exception.
 | Plugin | Runtime location | Documentation |
 | --- | --- | --- |
 | Learn | `~/.local/share/opencode/learn` | [learn/README.md](learn/README.md) |
+| Herdr | `~/.config/opencode/plugins/herdr-agent-state.js` and `~/.config/opencode/herdr-tui-session.js` | [herdr/README.md](herdr/README.md) |
 | Plannotator | `~/.config/opencode/opencode.json` | [plannotator/README.md](plannotator/README.md) |
 | RTK | `~/.config/opencode/plugins/rtk.ts` | [rtk/README.md](rtk/README.md) |
 

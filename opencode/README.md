@@ -22,6 +22,7 @@ Subagents by `DOTFILES_AI_MEMORY_LLM_PROFILE`:
 ~/.config/opencode/AGENTS.md
 ~/.config/opencode/opencode.json
 ~/.config/opencode/tui.json
+~/.config/opencode/tui.jsonc
 ~/.config/opencode/themes/
 ~/.config/opencode/commands/
 ~/.agents/skills/
@@ -36,10 +37,13 @@ path. Global model, agent, plugin, MCP, and instruction entries are merged by
 The TUI theme key belongs in `tui.json`.
 Tracked themes under `opencode/themes/` are copied to the global theme path.
 The pinned asset provenance is recorded by the tracked theme file history.
+Herdr owns only its plugin entry in `tui.jsonc`; Learn and the theme stay in
+`tui.json`. OpenCode loads both files.
 
 ## Integrations
 
-- [Plugins](../plugins/README.md) documents Learn, Plannotator, and RTK.
+- [Plugins](../plugins/README.md) documents Learn, Herdr, Plannotator, and RTK.
+- [Herdr](../herdr/README.md) documents host sessions and managed launches.
 - [MCP servers](../mcps/README.md) documents GitHub, Linear, and Cloudflare.
 - [ai-memory](../ai-memory/README.md) provides memory and workstreams.
 - [Shell entry point](../shell/README.md) manages interactive sessions.

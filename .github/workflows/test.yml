@@ -9,5 +9,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: bash -n apply.sh test.sh
+      - run: bash -n apply.sh test.sh herdr/setup.bash herdr/apply.sh shell/opencode.bash
       - run: ./test.sh --repo-only

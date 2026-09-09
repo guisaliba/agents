@@ -32,9 +32,13 @@ AI_MEMORY_INSTRUCTIONS_REFERENCE="~/.config/opencode/ai-memory.md"
 AI_MEMORY_USER_SERVICE_FILE="$HOME/.config/systemd/user/ai-memory.service"
 AI_MEMORY_MCP_EXPECTED_JSON='{"type":"remote","url":"http://127.0.0.1:49374/mcp","enabled":true}'
 AI_MEMORY_MIN_VERSION="1.28.0"
+AI_MEMORY_RELEASE_VERSION_EXPECTED="2.1.1"
+AI_MEMORY_MACOS_AARCH64_SHA256_EXPECTED="1cc2acdbbd62cc7ecf6e1fe91515ea77786910b2c102f1fe8781aa6c0357eb64"
 AI_MEMORY_LLM_PROFILE_EXPECTED="opencode-go-muse"
 AI_MEMORY_LLM_PROVIDER_EXPECTED="opencode"
 AI_MEMORY_LLM_MODEL_EXPECTED="muse-spark-1.3-contributor"
+HERDR_BINARY_EXPECTED="$HOME/.local/bin/herdr"
+HERDR_CONFIG_EXPECTED="$HOME/.config/herdr/config.toml"
 BUN_MIN_VERSION="1.3.0"
 LEARN_REPOSITORY_URL_EXPECTED="https://github.com/guisaliba/learn.git"
 LEARN_BRANCH="main"
@@ -46,6 +50,11 @@ LEARN_MIN_OPENCODE_VERSION="1.18.22"
 OPENCODE_TUI_THEME_EXPECTED="orng"
 OPENCODE_SHELL_BLOCK_START="# >>> dotfiles OpenCode ai-memory wrapper >>>"
 OPENCODE_SHELL_BLOCK_END="# <<< dotfiles OpenCode ai-memory wrapper <<<"
+HERDR_VERSION_EXPECTED="0.9.0"
+HERDR_X86_64_SHA256_EXPECTED="4fa1a01158dd8043da92d31b270780b0dcc10603038d9b61cac4d81ab63fb71f"
+HERDR_AARCH64_SHA256_EXPECTED="9c8db20fb7e7427b138d5367113f1621ffd319f2f65d6f009e2594029115f0d2"
+HERDR_MACOS_X86_64_SHA256_EXPECTED="f3b231b2815df9a62f98e060751c29bdacdc6f26761be813d08918c8080e51aa"
+HERDR_MACOS_AARCH64_SHA256_EXPECTED="32b53df09872628059c789a69f02a6b8e29e14ddf26711421f3463f70c1aef17"
 
 ok() {
   printf 'ok: %s\n' "$*"
@@ -1253,6 +1262,772 @@ test_agent_stack_helpers() {
   rm -rf -- "$fixture_root"
 }
 
+test_macos_platform_prerequisites() {
+  local fixture_root fixture_home stub_bin brew_prefix install_log expected_log expected_path
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  stub_bin="$fixture_root/bin"
+  brew_prefix="$fixture_root/homebrew"
+  install_log="$fixture_root/brew-install.log"
+  expected_log="$fixture_root/expected.log"
+  mkdir -p "$fixture_home" "$stub_bin" "$brew_prefix/bin"
+  : >"$install_log"
+
+  printf '%s\n' \
+    '#!/bin/bash' \
+    '[[ "${1:-}" == -s ]] && { printf '\''Darwin\n'\''; exit 0; }' \
+    'exit 2' >"$stub_bin/uname"
+  printf '%s\n' \
+    '#!/bin/bash' \
+    'if [[ "${1:-}" == --prefix ]]; then printf '\''%s\n'\'' "$MACOS_TEST_BREW_PREFIX"; exit 0; fi' \
+    'printf '\''%s\n'\'' "$*" >>"$MACOS_TEST_INSTALL_LOG"' \
+    'case "$*" in' \
+    '  "install bash") printf '\''#!/bin/bash\nexit 0\n'\'' >"$MACOS_TEST_BREW_PREFIX/bin/bash" ;;' \
+    '  "install python") printf '\''#!/bin/bash\nexit 0\n'\'' >"$MACOS_TEST_BREW_PREFIX/bin/python3" ;;' \
+    '  "install --cask google-chrome") mkdir -p "$GOOGLE_CHROME_APP_PATH"; exit 0 ;;' \
+    '  *) exit 2 ;;' \
+    'esac' \
+    'chmod +x "$MACOS_TEST_BREW_PREFIX/bin/${2/python/python3}"' >"$stub_bin/brew"
+  chmod +x "$stub_bin/uname" "$stub_bin/brew"
+
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    MACOS_TEST_BREW_PREFIX="$brew_prefix"
+    MACOS_TEST_INSTALL_LOG="$install_log"
+    GOOGLE_CHROME_APP_PATH="$fixture_root/Applications/Google Chrome.app"
+    export HOME PATH MACOS_TEST_BREW_PREFIX MACOS_TEST_INSTALL_LOG GOOGLE_CHROME_APP_PATH
+    source "$REPO_DIR/apply.sh"
+    prepare_platform_prerequisites
+    prepare_platform_prerequisites
+    prepare_full_stack_prerequisites
+    prepare_full_stack_prerequisites
+    expected_path="$fixture_home/.opencode/bin:$fixture_home/.local/bin:$fixture_home/bin:$brew_prefix/bin:"
+    [[ "$PATH" == "$expected_path"* ]]
+  ) >/dev/null 2>&1; then
+    ok "macOS platform prerequisites install and select Homebrew tools"
+  else
+    not_ok "macOS platform prerequisites did not install and select Homebrew tools"
+  fi
+  printf '%s\n' 'install bash' 'install python' 'install --cask google-chrome' >"$expected_log"
+  require_same_file "$expected_log" "$install_log"
+
+  if (
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Darwin; }
+    have() { [[ "$1" != systemctl ]]; }
+    check_prerequisites
+  ) >/dev/null 2>&1; then
+    ok "macOS prerequisite validation does not require systemd"
+  else
+    not_ok "macOS prerequisite validation still requires a Linux command"
+  fi
+
+  if (
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Linux; }
+    have() { [[ "$1" != systemctl ]]; }
+    check_prerequisites
+  ) >/dev/null 2>&1; then
+    not_ok "Linux prerequisite validation accepted missing systemd"
+  else
+    ok "Linux prerequisite validation still requires systemd"
+  fi
+
+  rm -rf -- "$fixture_root"
+}
+
+test_herdr_binary_installation() {
+  local fixture_root fixture_home stub_bin asset install_dir download_log expected_url
+  local upgrade_home upgrade_dir backup_root backup_files=() temporary_files=()
+  local arm_home arm_dir arm_log arm_url failure_home failure_dir failure_before failure_log
+  local mac_home mac_dir mac_log mac_url mac_native_home mac_native_dir mac_native_stub mac_native_log
+  local unsupported_home unsupported_dir unsupported_before unsupported_log conflict_home conflict_bin conflict_log
+  local newer_home newer_dir newer_log
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  stub_bin="$fixture_root/bin"
+  asset="$fixture_root/herdr-asset"
+  install_dir="$fixture_home/.local/bin"
+  download_log="$fixture_root/download.log"
+  expected_url="https://github.com/herdrdev/herdr/releases/download/v$HERDR_VERSION_EXPECTED/herdr-linux-x86_64"
+  mkdir -p "$stub_bin" "$fixture_home"
+
+  printf '%s\n' \
+    '#!/bin/bash' \
+    'printf '\''herdr 0.9.0\n'\''' >"$asset"
+  chmod +x "$asset"
+  printf '%s\n' \
+    '#!/bin/bash' \
+    'case "${1:-}" in' \
+    '  -s) printf '\''%s\n'\'' "${HERDR_TEST_OS:-Linux}" ;;' \
+    '  -m) printf '\''%s\n'\'' "${HERDR_TEST_ARCH:-x86_64}" ;;' \
+    '  -o) printf '\''%s\n'\'' "${HERDR_TEST_OS_KIND:-GNU/Linux}" ;;' \
+    '  *) exit 2 ;;' \
+    'esac' >"$stub_bin/uname"
+  printf '%s\n' \
+    '#!/bin/bash' \
+    'output=' \
+    'printf '\''%s\n'\'' "$*" >>"$HERDR_TEST_DOWNLOAD_LOG"' \
+    'if [[ "${HERDR_TEST_DOWNLOAD_FAIL:-false}" == true ]]; then exit 22; fi' \
+    'while [[ $# -gt 0 ]]; do' \
+    '  if [[ "$1" == "--output" ]]; then shift; output="$1"; fi' \
+    '  shift' \
+    'done' \
+    'cp "$HERDR_TEST_ASSET" "$output"' >"$stub_bin/curl"
+  printf '%s\n' \
+    '#!/bin/bash' \
+    'printf '\''%s  %s\n'\'' "$HERDR_TEST_SHA256" "$1"' >"$stub_bin/sha256sum"
+  chmod +x "$stub_bin/uname" "$stub_bin/curl" "$stub_bin/sha256sum"
+  for command_name in bash chmod cp date mkdir mktemp mv readlink rm; do
+    ln -s "$(command -v "$command_name")" "$stub_bin/$command_name"
+  done
+
+  if (
+    HOME="$fixture_home"
+    PATH="$install_dir:$stub_bin"
+    HERDR_TEST_ASSET="$asset"
+    HERDR_TEST_DOWNLOAD_LOG="$download_log"
+    HERDR_TEST_SHA256="$HERDR_X86_64_SHA256_EXPECTED"
+    export HOME PATH HERDR_TEST_ASSET HERDR_TEST_DOWNLOAD_LOG HERDR_TEST_SHA256
+    source "$REPO_DIR/herdr/setup.bash"
+    install_herdr_binary
+  ) >/dev/null 2>&1; then
+    ok "pinned Herdr x86_64 fixture installs"
+  else
+    not_ok "pinned Herdr x86_64 fixture failed"
+  fi
+  require_executable "$install_dir/herdr"
+  require_contains "$download_log" "$expected_url"
+
+  if (
+    HOME="$fixture_home"
+    PATH="$install_dir:$stub_bin"
+    HERDR_TEST_ASSET="$asset"
+    HERDR_TEST_DOWNLOAD_LOG="$download_log"
+    HERDR_TEST_SHA256="$HERDR_X86_64_SHA256_EXPECTED"
+    export HOME PATH HERDR_TEST_ASSET HERDR_TEST_DOWNLOAD_LOG HERDR_TEST_SHA256
+    source "$REPO_DIR/herdr/setup.bash"
+    install_herdr_binary
+  ) >/dev/null 2>&1; then
+    ok "pinned Herdr fixture applies a second time"
+  else
+    not_ok "pinned Herdr fixture second apply failed"
+  fi
+  require_text_count "$download_log" "$expected_url" "1"
+
+  upgrade_home="$fixture_root/upgrade-home"
+  upgrade_dir="$upgrade_home/.local/bin"
+  backup_root="$upgrade_home/.local/state/agents/herdr/backups"
+  mkdir -p "$upgrade_dir"
+  printf '%s\n' \
+    '#!/bin/bash' \
+    'printf '\''herdr 0.8.0\n'\''' >"$upgrade_dir/herdr"
+  chmod +x "$upgrade_dir/herdr"
+  if (
+    HOME="$upgrade_home"
+    PATH="$upgrade_dir:$stub_bin"
+    HERDR_BACKUP_ROOT="$backup_root"
+    HERDR_TEST_ASSET="$asset"
+    HERDR_TEST_DOWNLOAD_LOG="$download_log"
+    HERDR_TEST_SHA256="$HERDR_X86_64_SHA256_EXPECTED"
+    export HOME PATH HERDR_BACKUP_ROOT HERDR_TEST_ASSET HERDR_TEST_DOWNLOAD_LOG HERDR_TEST_SHA256
+    source "$REPO_DIR/herdr/setup.bash"
+    install_herdr_binary
+  ) >/dev/null 2>&1; then
+    ok "older managed Herdr fixture upgrades"
+  else
+    not_ok "older managed Herdr fixture upgrade failed"
+  fi
+  if [[ "$($upgrade_dir/herdr --version 2>/dev/null || true)" == "herdr $HERDR_VERSION_EXPECTED" ]]; then
+    ok "Herdr upgrade installs the pinned version"
+  else
+    not_ok "Herdr upgrade did not install the pinned version"
+  fi
+  shopt -s nullglob
+  backup_files=("$backup_root"/*/herdr)
+  shopt -u nullglob
+  if [[ ${#backup_files[@]} -eq 1 && "$(${backup_files[0]} --version 2>/dev/null || true)" == "herdr 0.8.0" ]]; then
+    ok "Herdr upgrade keeps one recovery executable"
+  else
+    not_ok "Herdr upgrade did not keep the prior executable"
+  fi
+
+  arm_home="$fixture_root/arm-home"
+  arm_dir="$arm_home/.local/bin"
+  arm_log="$fixture_root/arm-download.log"
+  arm_url="https://github.com/herdrdev/herdr/releases/download/v$HERDR_VERSION_EXPECTED/herdr-linux-aarch64"
+  if (
+    HOME="$arm_home"
+    PATH="$arm_dir:$stub_bin"
+    HERDR_TEST_ARCH="aarch64"
+    HERDR_TEST_ASSET="$asset"
+    HERDR_TEST_DOWNLOAD_LOG="$arm_log"
+    HERDR_TEST_SHA256="$HERDR_AARCH64_SHA256_EXPECTED"
+    export HOME PATH HERDR_TEST_ARCH HERDR_TEST_ASSET HERDR_TEST_DOWNLOAD_LOG HERDR_TEST_SHA256
+    source "$REPO_DIR/herdr/setup.bash"
+    install_herdr_binary
+  ) >/dev/null 2>&1; then
+    ok "pinned Herdr aarch64 fixture installs"
+  else
+    not_ok "pinned Herdr aarch64 fixture failed"
+  fi
+  require_contains "$arm_log" "$arm_url"
+
+  mac_home="$fixture_root/mac-home"
+  mac_dir="$mac_home/.local/bin"
+  mac_log="$fixture_root/mac-download.log"
+  mac_url="https://github.com/herdrdev/herdr/releases/download/v$HERDR_VERSION_EXPECTED/herdr-macos-aarch64"
+  if (
+    HOME="$mac_home"
+    PATH="$mac_dir:$stub_bin"
+    HERDR_TEST_OS="Darwin"
+    HERDR_TEST_ARCH="arm64"
+    HERDR_TEST_OS_KIND="Darwin"
+    HERDR_TEST_ASSET="$asset"
+    HERDR_TEST_DOWNLOAD_LOG="$mac_log"
+    HERDR_TEST_SHA256="$HERDR_MACOS_AARCH64_SHA256_EXPECTED"
+    export HOME PATH HERDR_TEST_OS HERDR_TEST_ARCH HERDR_TEST_OS_KIND
+    export HERDR_TEST_ASSET HERDR_TEST_DOWNLOAD_LOG HERDR_TEST_SHA256
+    source "$REPO_DIR/herdr/setup.bash"
+    install_herdr_binary
+  ) >/dev/null 2>&1; then
+    ok "pinned Herdr macOS arm64 fixture installs"
+  else
+    not_ok "pinned Herdr macOS arm64 fixture failed"
+  fi
+  require_contains "$mac_log" "$mac_url"
+
+  mac_native_home="$fixture_root/mac-native-home"
+  mac_native_dir="$mac_native_home/.local/bin"
+  mac_native_stub="$fixture_root/mac-native-bin"
+  mac_native_log="$fixture_root/mac-native-download.log"
+  mkdir -p "$mac_native_stub"
+  ln -s "$stub_bin/curl" "$mac_native_stub/curl"
+  ln -s "$stub_bin/uname" "$mac_native_stub/uname"
+  for command_name in bash chmod cp date mkdir mktemp mv python3 rm; do
+    ln -s "$(command -v "$command_name")" "$mac_native_stub/$command_name"
+  done
+  printf '%s\n' \
+    '#!/bin/bash' \
+    'printf '\''%s  %s\n'\'' "$HERDR_TEST_SHA256" "${3:-}"' >"$mac_native_stub/shasum"
+  chmod +x "$mac_native_stub/shasum"
+  if (
+    HOME="$mac_native_home"
+    PATH="$mac_native_dir:$mac_native_stub"
+    HERDR_TEST_OS="Darwin"
+    HERDR_TEST_ARCH="arm64"
+    HERDR_TEST_OS_KIND="Darwin"
+    HERDR_TEST_ASSET="$asset"
+    HERDR_TEST_DOWNLOAD_LOG="$mac_native_log"
+    HERDR_TEST_SHA256="$HERDR_MACOS_AARCH64_SHA256_EXPECTED"
+    export HOME PATH HERDR_TEST_OS HERDR_TEST_ARCH HERDR_TEST_OS_KIND
+    export HERDR_TEST_ASSET HERDR_TEST_DOWNLOAD_LOG HERDR_TEST_SHA256
+    source "$REPO_DIR/herdr/setup.bash"
+    check_herdr_prerequisites
+    install_herdr_binary
+  ) >/dev/null 2>&1; then
+    ok "Herdr macOS fixture works without GNU checksum or readlink tools"
+  else
+    not_ok "Herdr macOS fixture requires a GNU-only tool"
+  fi
+  require_contains "$mac_native_log" "$mac_url"
+
+  failure_home="$fixture_root/failure-home"
+  failure_dir="$failure_home/.local/bin"
+  failure_before="$fixture_root/failure-before"
+  failure_log="$fixture_root/failure-download.log"
+  mkdir -p "$failure_dir"
+  printf '%s\n' '#!/bin/bash' 'printf '\''herdr 0.8.0\n'\''' >"$failure_dir/herdr"
+  chmod +x "$failure_dir/herdr"
+  cp "$failure_dir/herdr" "$failure_before"
+  if (
+    HOME="$failure_home"
+    PATH="$failure_dir:$stub_bin"
+    HERDR_TEST_ASSET="$asset"
+    HERDR_TEST_DOWNLOAD_LOG="$failure_log"
+    HERDR_TEST_SHA256="0000000000000000000000000000000000000000000000000000000000000000"
+    export HOME PATH HERDR_TEST_ASSET HERDR_TEST_DOWNLOAD_LOG HERDR_TEST_SHA256
+    source "$REPO_DIR/herdr/setup.bash"
+    install_herdr_binary
+  ) >/dev/null 2>&1; then
+    not_ok "Herdr bad-digest fixture was accepted"
+  else
+    ok "Herdr bad-digest fixture fails"
+  fi
+  require_same_file "$failure_before" "$failure_dir/herdr"
+
+  if (
+    HOME="$failure_home"
+    PATH="$failure_dir:$stub_bin"
+    HERDR_TEST_ASSET="$asset"
+    HERDR_TEST_DOWNLOAD_LOG="$failure_log"
+    HERDR_TEST_DOWNLOAD_FAIL=true
+    HERDR_TEST_SHA256="$HERDR_X86_64_SHA256_EXPECTED"
+    export HOME PATH HERDR_TEST_ASSET HERDR_TEST_DOWNLOAD_LOG HERDR_TEST_DOWNLOAD_FAIL HERDR_TEST_SHA256
+    source "$REPO_DIR/herdr/setup.bash"
+    install_herdr_binary
+  ) >/dev/null 2>&1; then
+    not_ok "Herdr failed-download fixture was accepted"
+  else
+    ok "Herdr failed-download fixture fails"
+  fi
+  require_same_file "$failure_before" "$failure_dir/herdr"
+  shopt -s nullglob
+  temporary_files=("$failure_dir"/.herdr.*)
+  shopt -u nullglob
+  if [[ ${#temporary_files[@]} -eq 0 ]]; then
+    ok "failed Herdr installs leave no temporary executable"
+  else
+    not_ok "failed Herdr installs left a temporary executable"
+  fi
+
+  unsupported_home="$fixture_root/unsupported-home"
+  unsupported_dir="$unsupported_home/.local/bin"
+  unsupported_before="$fixture_root/unsupported-before"
+  unsupported_log="$fixture_root/unsupported-download.log"
+  mkdir -p "$unsupported_dir"
+  printf '%s\n' '#!/bin/bash' 'printf '\''herdr 0.8.0\n'\''' >"$unsupported_dir/herdr"
+  chmod +x "$unsupported_dir/herdr"
+  cp "$unsupported_dir/herdr" "$unsupported_before"
+  if (
+    HOME="$unsupported_home"
+    PATH="$unsupported_dir:$stub_bin"
+    HERDR_TEST_OS="FreeBSD"
+    HERDR_TEST_DOWNLOAD_LOG="$unsupported_log"
+    export HOME PATH HERDR_TEST_OS HERDR_TEST_DOWNLOAD_LOG
+    source "$REPO_DIR/herdr/setup.bash"
+    install_herdr_binary
+  ) >/dev/null 2>&1; then
+    not_ok "unsupported Herdr operating system was accepted"
+  else
+    ok "unsupported Herdr operating system fails before replacement"
+  fi
+  require_same_file "$unsupported_before" "$unsupported_dir/herdr"
+  if [[ ! -e "$unsupported_log" ]]; then
+    ok "unsupported Herdr operating system does not download"
+  else
+    not_ok "unsupported Herdr operating system attempted a download"
+  fi
+
+  if (
+    HOME="$unsupported_home"
+    PATH="$unsupported_dir:$stub_bin"
+    HERDR_TEST_OS_KIND="Android"
+    HERDR_TEST_DOWNLOAD_LOG="$unsupported_log"
+    export HOME PATH HERDR_TEST_OS_KIND HERDR_TEST_DOWNLOAD_LOG
+    source "$REPO_DIR/herdr/setup.bash"
+    install_herdr_binary
+  ) >/dev/null 2>&1; then
+    not_ok "Android Herdr fixture was accepted"
+  else
+    ok "Android Herdr fixture fails before replacement"
+  fi
+  require_same_file "$unsupported_before" "$unsupported_dir/herdr"
+
+  if (
+    HOME="$unsupported_home"
+    PATH="$unsupported_dir:$stub_bin"
+    HERDR_TEST_ARCH="riscv64"
+    HERDR_TEST_DOWNLOAD_LOG="$unsupported_log"
+    export HOME PATH HERDR_TEST_ARCH HERDR_TEST_DOWNLOAD_LOG
+    source "$REPO_DIR/herdr/setup.bash"
+    install_herdr_binary
+  ) >/dev/null 2>&1; then
+    not_ok "unsupported Herdr architecture was accepted"
+  else
+    ok "unsupported Herdr architecture fails before replacement"
+  fi
+  require_same_file "$unsupported_before" "$unsupported_dir/herdr"
+
+  conflict_home="$fixture_root/conflict-home"
+  conflict_bin="$fixture_root/conflict-bin"
+  conflict_log="$fixture_root/conflict-download.log"
+  mkdir -p "$conflict_bin"
+  printf '%s\n' '#!/bin/bash' 'printf '\''herdr 0.8.0\n'\''' >"$conflict_bin/herdr"
+  chmod +x "$conflict_bin/herdr"
+  if (
+    HOME="$conflict_home"
+    PATH="$conflict_home/.local/bin:$conflict_bin:$stub_bin"
+    HERDR_TEST_DOWNLOAD_LOG="$conflict_log"
+    export HOME PATH HERDR_TEST_DOWNLOAD_LOG
+    source "$REPO_DIR/herdr/setup.bash"
+    install_herdr_binary
+  ) >/dev/null 2>&1; then
+    not_ok "unmanaged Herdr command fixture was overwritten"
+  else
+    ok "unmanaged or package-managed Herdr command fixture is rejected"
+  fi
+  if [[ ! -e "$conflict_log" ]]; then
+    ok "unmanaged Herdr command conflict does not download"
+  else
+    not_ok "unmanaged Herdr command conflict attempted a download"
+  fi
+
+  newer_home="$fixture_root/newer-home"
+  newer_dir="$newer_home/.local/bin"
+  newer_log="$fixture_root/newer-download.log"
+  mkdir -p "$newer_dir"
+  printf '%s\n' '#!/bin/bash' 'printf '\''herdr 1.0.0\n'\''' >"$newer_dir/herdr"
+  chmod +x "$newer_dir/herdr"
+  if (
+    HOME="$newer_home"
+    PATH="$newer_dir:$stub_bin"
+    HERDR_TEST_DOWNLOAD_LOG="$newer_log"
+    export HOME PATH HERDR_TEST_DOWNLOAD_LOG
+    source "$REPO_DIR/herdr/setup.bash"
+    install_herdr_binary
+  ) >/dev/null 2>&1; then
+    not_ok "newer managed Herdr fixture was downgraded"
+  else
+    ok "newer managed Herdr fixture is not downgraded"
+  fi
+  if [[ ! -e "$newer_log" ]]; then
+    ok "newer Herdr conflict does not download"
+  else
+    not_ok "newer Herdr conflict attempted a download"
+  fi
+
+  rm -rf -- "$fixture_root"
+}
+
+test_herdr_config_merge() {
+  local fixture_root fixture_home config first_config bash_path
+  local mac_home mac_config mac_bin mac_bash
+  local malformed_home malformed_config malformed_before malformed_log
+  local incompatible_home incompatible_config incompatible_before incompatible_log
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  config="$fixture_home/.config/herdr/config.toml"
+  first_config="$fixture_root/first-config.toml"
+  bash_path="$(readlink -f "$(command -v bash)")"
+  mkdir -p "$(dirname "$config")"
+  printf '%s\n' \
+    '# preserve this comment' \
+    '[theme]' \
+    'name = "terminal"' \
+    '' \
+    '[terminal]' \
+    '# preserve terminal settings' \
+    'new_cwd = "follow"' \
+    'default_shell = "/bin/zsh" # keep shell explanation' \
+    'shell_mode = "login"' \
+    '' \
+    '[session]' \
+    'resume_agents_on_restore = true' \
+    'fixture_setting = "keep"' >"$config"
+  chmod 0640 "$config"
+
+  if (
+    HOME="$fixture_home"
+    export HOME
+    source "$REPO_DIR/herdr/setup.bash"
+    configure_herdr
+  ) >/dev/null 2>&1; then
+    ok "Herdr configuration fixture applies"
+  else
+    not_ok "Herdr configuration fixture failed"
+  fi
+  require_contains "$config" "# preserve this comment"
+  require_contains "$config" "# preserve terminal settings"
+  require_contains "$config" "# keep shell explanation"
+  require_contains "$config" 'name = "terminal"'
+  require_contains "$config" 'new_cwd = "follow"'
+  require_contains "$config" 'fixture_setting = "keep"'
+  require_contains "$config" "default_shell = \"$bash_path\""
+  require_contains "$config" 'shell_mode = "non_login"'
+  require_contains "$config" 'resume_agents_on_restore = false'
+  require_text_count "$config" '[terminal]' "1"
+  require_text_count "$config" '[session]' "1"
+  require_text_count "$config" 'default_shell =' "1"
+  require_text_count "$config" 'shell_mode =' "1"
+  require_text_count "$config" 'resume_agents_on_restore =' "1"
+  require_file_mode "$config" "640"
+
+  cp "$config" "$first_config"
+  if (
+    HOME="$fixture_home"
+    export HOME
+    source "$REPO_DIR/herdr/setup.bash"
+    configure_herdr
+  ) >/dev/null 2>&1; then
+    ok "Herdr configuration fixture applies a second time"
+  else
+    not_ok "Herdr configuration fixture second apply failed"
+  fi
+  require_same_file "$first_config" "$config"
+
+  mac_home="$fixture_root/mac-home"
+  mac_config="$mac_home/.config/herdr/config.toml"
+  mac_bin="$fixture_root/mac-bin"
+  mac_bash="$mac_bin/bash"
+  mkdir -p "$mac_bin"
+  cp /bin/true "$mac_bash"
+  printf '%s\n' '#!/bin/bash' 'printf '\''Darwin\n'\''' >"$mac_bin/uname"
+  chmod +x "$mac_bin/uname"
+  if (
+    HOME="$mac_home"
+    PATH="$mac_bin:/usr/bin:/bin"
+    export HOME PATH
+    source "$REPO_DIR/herdr/setup.bash"
+    configure_herdr
+  ) >/dev/null 2>&1; then
+    ok "Herdr macOS configuration fixture applies"
+  else
+    not_ok "Herdr macOS configuration fixture failed"
+  fi
+  require_contains "$mac_config" "default_shell = \"$mac_bash\""
+  require_contains "$mac_config" 'shell_mode = "login"'
+
+  malformed_home="$fixture_root/malformed-home"
+  malformed_config="$malformed_home/.config/herdr/config.toml"
+  malformed_before="$fixture_root/malformed-before.toml"
+  malformed_log="$fixture_root/malformed.log"
+  mkdir -p "$(dirname "$malformed_config")"
+  printf '%s\n' '[terminal' 'new_cwd = "keep"' >"$malformed_config"
+  cp "$malformed_config" "$malformed_before"
+  if (
+    HOME="$malformed_home"
+    export HOME
+    source "$REPO_DIR/herdr/setup.bash"
+    configure_herdr
+  ) >"$malformed_log" 2>&1; then
+    not_ok "malformed Herdr TOML was accepted"
+  else
+    ok "malformed Herdr TOML fails safely"
+  fi
+  require_same_file "$malformed_before" "$malformed_config"
+  require_contains "$malformed_log" "valid Herdr TOML"
+
+  incompatible_home="$fixture_root/incompatible-home"
+  incompatible_config="$incompatible_home/.config/herdr/config.toml"
+  incompatible_before="$fixture_root/incompatible-before.toml"
+  incompatible_log="$fixture_root/incompatible.log"
+  mkdir -p "$(dirname "$incompatible_config")"
+  printf '%s\n' 'terminal = "keep"' >"$incompatible_config"
+  cp "$incompatible_config" "$incompatible_before"
+  if (
+    HOME="$incompatible_home"
+    export HOME
+    source "$REPO_DIR/herdr/setup.bash"
+    configure_herdr
+  ) >"$incompatible_log" 2>&1; then
+    not_ok "incompatible Herdr terminal structure was accepted"
+  else
+    ok "incompatible Herdr terminal structure fails safely"
+  fi
+  require_same_file "$incompatible_before" "$incompatible_config"
+  require_contains "$incompatible_log" "terminal must be a table"
+
+  rm -rf -- "$fixture_root"
+}
+
+test_herdr_opencode_integration() {
+  local fixture_root fixture_home stub_bin herdr_stub command_log expected_log
+  local tui_json tui_json_before tui_jsonc status_log first_plugin first_tui_plugin first_tui_config
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  stub_bin="$fixture_root/bin"
+  herdr_stub="$stub_bin/herdr"
+  command_log="$fixture_root/herdr-commands.log"
+  expected_log="$fixture_root/expected-commands.log"
+  tui_json="$fixture_home/.config/opencode/tui.json"
+  tui_json_before="$fixture_root/tui-before.json"
+  tui_jsonc="$fixture_home/.config/opencode/tui.jsonc"
+  status_log="$fixture_root/status.log"
+  first_plugin="$fixture_root/first-herdr-agent-state.js"
+  first_tui_plugin="$fixture_root/first-herdr-tui-session.js"
+  first_tui_config="$fixture_root/first-tui.jsonc"
+  mkdir -p "$stub_bin" "$(dirname "$tui_json")"
+  printf '%s\n' \
+    '{' \
+    '  "theme": "fixture-theme",' \
+    '  "plugin": ["fixture/learn"]' \
+    '}' >"$tui_json"
+  cp "$tui_json" "$tui_json_before"
+  printf '%s\n' '{"plugin":["user/tui-plugin"]}' >"$tui_jsonc"
+  printf '%s\n' \
+    '#!/bin/bash' \
+    'printf '\''%s\n'\'' "$*" >>"$HERDR_TEST_COMMAND_LOG"' \
+    'case "$*" in' \
+    '  "integration install opencode")' \
+    '    mkdir -p "$HOME/.config/opencode/plugins"' \
+    '    printf '\''// HERDR_INTEGRATION_VERSION=11\n'\'' >"$HOME/.config/opencode/plugins/herdr-agent-state.js"' \
+    '    printf '\''// HERDR_INTEGRATION_VERSION=11\n'\'' >"$HOME/.config/opencode/herdr-tui-session.js"' \
+    '    printf '\''%s\n'\'' '\''{"plugin":["user/tui-plugin","./herdr-tui-session.js"]}'\'' >"$HOME/.config/opencode/tui.jsonc"' \
+    '    ;;' \
+    '  "integration status")' \
+    '    printf '\''opencode: %s (%s)\n'\'' "${HERDR_TEST_INTEGRATION_STATE:-current (v11)}" "$HOME/.config/opencode/plugins/herdr-agent-state.js"' \
+    '    ;;' \
+    '  *) exit 2 ;;' \
+    'esac' >"$herdr_stub"
+  chmod +x "$herdr_stub"
+
+  if (
+    HOME="$fixture_home"
+    HERDR_BINARY="$herdr_stub"
+    HERDR_TEST_COMMAND_LOG="$command_log"
+    export HOME HERDR_BINARY HERDR_TEST_COMMAND_LOG
+    source "$REPO_DIR/herdr/setup.bash"
+    install_herdr_opencode_integration
+  ) >"$status_log" 2>&1; then
+    ok "official Herdr OpenCode integration fixture applies"
+  else
+    not_ok "official Herdr OpenCode integration fixture failed"
+  fi
+  printf '%s\n' 'integration install opencode' 'integration status' >"$expected_log"
+  require_same_file "$expected_log" "$command_log"
+  require_same_file "$tui_json_before" "$tui_json"
+  require_contains "$tui_jsonc" 'user/tui-plugin'
+  require_text_count "$tui_jsonc" './herdr-tui-session.js' "1"
+  require_contains "$fixture_home/.config/opencode/plugins/herdr-agent-state.js" 'HERDR_INTEGRATION_VERSION=11'
+  require_contains "$fixture_home/.config/opencode/herdr-tui-session.js" 'HERDR_INTEGRATION_VERSION=11'
+
+  cp "$fixture_home/.config/opencode/plugins/herdr-agent-state.js" "$first_plugin"
+  cp "$fixture_home/.config/opencode/herdr-tui-session.js" "$first_tui_plugin"
+  cp "$tui_jsonc" "$first_tui_config"
+  if (
+    HOME="$fixture_home"
+    HERDR_BINARY="$herdr_stub"
+    HERDR_TEST_COMMAND_LOG="$command_log"
+    export HOME HERDR_BINARY HERDR_TEST_COMMAND_LOG
+    source "$REPO_DIR/herdr/setup.bash"
+    install_herdr_opencode_integration
+  ) >"$status_log" 2>&1; then
+    ok "official Herdr OpenCode integration fixture applies a second time"
+  else
+    not_ok "official Herdr OpenCode integration fixture second apply failed"
+  fi
+  printf '%s\n' \
+    'integration install opencode' \
+    'integration status' \
+    'integration install opencode' \
+    'integration status' >"$expected_log"
+  require_same_file "$expected_log" "$command_log"
+  require_same_file "$first_plugin" "$fixture_home/.config/opencode/plugins/herdr-agent-state.js"
+  require_same_file "$first_tui_plugin" "$fixture_home/.config/opencode/herdr-tui-session.js"
+  require_same_file "$first_tui_config" "$tui_jsonc"
+  require_same_file "$tui_json_before" "$tui_json"
+
+  if (
+    HOME="$fixture_home"
+    HERDR_BINARY="$herdr_stub"
+    HERDR_TEST_COMMAND_LOG="$command_log"
+    HERDR_TEST_INTEGRATION_STATE="outdated (v10 < v11)"
+    export HOME HERDR_BINARY HERDR_TEST_COMMAND_LOG HERDR_TEST_INTEGRATION_STATE
+    source "$REPO_DIR/herdr/setup.bash"
+    install_herdr_opencode_integration
+  ) >"$status_log" 2>&1; then
+    not_ok "outdated Herdr OpenCode integration status was accepted"
+  else
+    ok "outdated Herdr OpenCode integration status fails"
+  fi
+  require_contains "$status_log" "not current at integration version 11"
+
+  rm -rf -- "$fixture_root"
+}
+
+test_herdr_setup_scope() {
+  local fixture_root action_log expected_log
+  fixture_root="$(mktemp -d)"
+  action_log="$fixture_root/actions.log"
+  expected_log="$fixture_root/expected.log"
+
+  if (
+    source "$REPO_DIR/herdr/apply.sh"
+    check_herdr_prerequisites() { printf '%s\n' check >>"$action_log"; }
+    install_herdr_binary() { printf '%s\n' binary >>"$action_log"; }
+    configure_herdr() { printf '%s\n' config >>"$action_log"; }
+    install_herdr_opencode_integration() { printf '%s\n' integration >>"$action_log"; }
+    merge_opencode_shell_override() { printf '%s\n' shell >>"$action_log"; }
+    copy_agents_md() { printf '%s\n' instructions >>"$action_log"; }
+    install_manifest_skill() { printf 'skill:%s\n' "$1" >>"$action_log"; }
+    focused_herdr_main
+  ) >/dev/null 2>&1; then
+    ok "focused Herdr setup fixture applies"
+  else
+    not_ok "focused Herdr setup fixture failed"
+  fi
+  printf '%s\n' check binary config integration shell instructions skill:herdr >"$expected_log"
+  require_same_file "$expected_log" "$action_log"
+
+  : >"$action_log"
+  if (
+    source "$REPO_DIR/herdr/apply.sh"
+    check_herdr_prerequisites() { printf '%s\n' check >>"$action_log"; }
+    focused_herdr_main --unexpected
+  ) >/dev/null 2>&1; then
+    not_ok "focused Herdr setup accepted an unexpected argument"
+  else
+    ok "focused Herdr setup rejects unexpected arguments"
+  fi
+  require_empty_file "$action_log"
+
+  : >"$action_log"
+  if (
+    source "$REPO_DIR/herdr/setup.bash"
+    check_herdr_prerequisites() { printf '%s\n' check >>"$action_log"; }
+    install_herdr_binary() { printf '%s\n' binary >>"$action_log"; }
+    configure_herdr() { printf '%s\n' config >>"$action_log"; }
+    install_herdr_opencode_integration() { printf '%s\n' integration >>"$action_log"; }
+    setup_herdr
+  ) >/dev/null 2>&1; then
+    ok "normal Herdr local setup fixture applies"
+  else
+    not_ok "normal Herdr local setup fixture failed"
+  fi
+  printf '%s\n' check binary config integration >"$expected_log"
+  require_same_file "$expected_log" "$action_log"
+
+  : >"$action_log"
+  if (
+    source "$REPO_DIR/apply.sh"
+    opencode_ready=false
+    agent_stack_platform() { printf '%s\n' Darwin; }
+    prepare_platform_prerequisites() { printf 'platform:%s\n' "$(agent_stack_platform)" >>"$action_log"; }
+    prepare_full_stack_prerequisites() { printf 'full:%s\n' "$(agent_stack_platform)" >>"$action_log"; }
+    check_prerequisites() { printf '%s\n' prerequisites >>"$action_log"; }
+    require_minimum_version() { printf 'version:%s\n' "$1" >>"$action_log"; }
+    install_opencode() { printf '%s\n' opencode-binary >>"$action_log"; }
+    install_ai_memory() { printf '%s\n' ai-memory-binary >>"$action_log"; }
+    report_optional_ai_jail() { printf '%s\n' ai-jail >>"$action_log"; }
+    verify_ai_memory_unauthenticated_loopback() { printf '%s\n' loopback >>"$action_log"; }
+    setup_opencode() { opencode_ready=true; printf '%s\n' opencode-config >>"$action_log"; }
+    setup_herdr() {
+      [[ "$opencode_ready" == true ]] || return 1
+      printf '%s\n' herdr >>"$action_log"
+    }
+    setup_ai_memory() { printf '%s\n' ai-memory-config >>"$action_log"; }
+    merge_opencode_shell_override() { printf '%s\n' shell >>"$action_log"; }
+    install_plugins() { printf '%s\n' plugins >>"$action_log"; }
+    install_required_skills() { printf '%s\n' skills >>"$action_log"; }
+    main
+  ) >/dev/null 2>&1; then
+    ok "normal apply runs Herdr after OpenCode configuration"
+  else
+    not_ok "normal apply Herdr order fixture failed"
+  fi
+  printf '%s\n' \
+    platform:Darwin \
+    full:Darwin \
+    prerequisites \
+    version:bun \
+    opencode-binary \
+    version:opencode \
+    ai-memory-binary \
+    ai-jail \
+    loopback \
+    opencode-config \
+    herdr \
+    ai-memory-config \
+    shell \
+    plugins \
+    skills >"$expected_log"
+  require_same_file "$expected_log" "$action_log"
+
+  rm -rf -- "$fixture_root"
+}
+
 test_required_skill_installation() {
   local fixture_root fixture_home stub_bin install_log stdin_log expected_log
   fixture_root="$(mktemp -d)"
@@ -1313,6 +2088,7 @@ test_required_skill_installation() {
     '-y skills add mattpocock/skills@engineering/grill-with-docs -g -a opencode -s grill-with-docs -y --copy' \
     '-y skills add mattpocock/skills@productivity/grilling -g -a opencode -s grilling -y --copy' \
     '-y skills add mattpocock/skills@productivity/handoff -g -a opencode -s handoff -y --copy' \
+    '-y skills add herdrdev/herdr -g -a opencode -s herdr -y --copy' \
     '-y skills add mattpocock/skills@engineering/implement -g -a opencode -s implement -y --copy' \
     '-y skills add mattpocock/skills@engineering/setup-matt-pocock-skills -g -a opencode -s setup-matt-pocock-skills -y --copy' \
     '-y skills add mattpocock/skills@engineering/tdd -g -a opencode -s tdd -y --copy' \
@@ -1338,7 +2114,7 @@ test_daily_task_sync() {
 
 test_opencode_shell_override() {
   local fixture_root fixture_home aliases first_aliases stub_bin
-  local ai_memory_log raw_log expected yolo_log
+  local ai_memory_log raw_log expected yolo_log herdr_env_log herdr_expected managed_rc
   local malformed_home malformed_aliases malformed_before malformed_log
   local temp_source_home temp_source temp_source_aliases temp_source_first
   fixture_root="$(mktemp -d)"
@@ -1350,6 +2126,8 @@ test_opencode_shell_override() {
   raw_log="$fixture_root/raw-opencode.log"
   expected="$fixture_root/expected.log"
   yolo_log="$fixture_root/yolo.log"
+  herdr_env_log="$fixture_root/herdr-env.log"
+  herdr_expected="$fixture_root/herdr-expected.log"
 
   mkdir -p "$fixture_home" "$stub_bin"
   printf '%s\n' \
@@ -1389,7 +2167,9 @@ test_opencode_shell_override() {
 
   printf '%s\n' \
     '#!/usr/bin/env bash' \
-    'printf '\''%s\n'\'' "$@" >"$OPENCODE_TEST_AI_MEMORY_LOG"' >"$stub_bin/ai-memory"
+    'printf '\''%s\n'\'' "$@" >"$OPENCODE_TEST_AI_MEMORY_LOG"' \
+    'printf '\''%s|%s|%s|%s\n'\'' "${HERDR_AGENT-}" "${HERDR_ENV-}" "${HERDR_PANE_ID-}" "${HERDR_SOCKET_PATH-}" >"$OPENCODE_TEST_HERDR_ENV_LOG"' \
+    'exit "${OPENCODE_TEST_EXIT_STATUS:-0}"' >"$stub_bin/ai-memory"
   printf '%s\n' \
     '#!/usr/bin/env bash' \
     'printf '\''%s\n'\'' "$@" >"$OPENCODE_TEST_RAW_LOG"' >"$stub_bin/opencode"
@@ -1398,6 +2178,7 @@ test_opencode_shell_override() {
   if HOME="$fixture_home" \
     PATH="$stub_bin:/usr/bin:/bin" \
     OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
+    OPENCODE_TEST_HERDR_ENV_LOG="$herdr_env_log" \
     OPENCODE_TEST_RAW_LOG="$raw_log" \
     bash --noprofile --norc -c \
       'source "$HOME/.bash_aliases"; opencode -c "two words"'; then
@@ -1410,6 +2191,7 @@ test_opencode_shell_override() {
   if HOME="$fixture_home" \
     PATH="$stub_bin:/usr/bin:/bin" \
     OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
+    OPENCODE_TEST_HERDR_ENV_LOG="$herdr_env_log" \
     OPENCODE_TEST_RAW_LOG="$raw_log" \
     bash --noprofile --norc -c \
       'source "$HOME/.bash_aliases"; opencode session list'; then
@@ -1419,9 +2201,42 @@ test_opencode_shell_override() {
     not_ok "managed OpenCode session utility forwarding failed"
   fi
 
+  set +e
+  HOME="$fixture_home" \
+    PATH="$stub_bin:/usr/bin:/bin" \
+    HERDR_ENV=1 \
+    HERDR_PANE_ID=pane-fixture \
+    HERDR_SOCKET_PATH=/tmp/herdr-fixture.sock \
+    OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
+    OPENCODE_TEST_HERDR_ENV_LOG="$herdr_env_log" \
+    OPENCODE_TEST_RAW_LOG="$raw_log" \
+    OPENCODE_TEST_EXIT_STATUS=7 \
+    bash --noprofile --norc -c \
+      'unset HERDR_AGENT; source "$HOME/.bash_aliases"; opencode -c "herdr task"; rc=$?; [[ -z "${HERDR_AGENT+x}" ]] || exit 90; exit "$rc"'
+  managed_rc=$?
+  set -e
+  if [[ "$managed_rc" -eq 7 ]]; then
+    ok "managed OpenCode Herdr launch preserves child exit status"
+  else
+    not_ok "managed OpenCode Herdr launch returned $managed_rc instead of 7"
+  fi
+  printf '%s\n' run opencode -c 'herdr task' >"$expected"
+  require_same_file "$expected" "$ai_memory_log"
+  printf '%s\n' 'opencode|1|pane-fixture|/tmp/herdr-fixture.sock' >"$herdr_expected"
+  require_same_file "$herdr_expected" "$herdr_env_log"
+
+  if HOME="$fixture_home" PATH="$stub_bin:/usr/bin:/bin" \
+    bash --noprofile --norc -c \
+      'source "$HOME/.bash_aliases"; ! bash --noprofile --norc -c "declare -F opencode >/dev/null"'; then
+    ok "managed OpenCode function remains unexported"
+  else
+    not_ok "managed OpenCode function was exported"
+  fi
+
   if HOME="$fixture_home" \
     PATH="$stub_bin:/usr/bin:/bin" \
     OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
+    OPENCODE_TEST_HERDR_ENV_LOG="$herdr_env_log" \
     OPENCODE_TEST_RAW_LOG="$raw_log" \
     bash --noprofile --norc -c \
       'source "$HOME/.bash_aliases"; opencode-raw --version'; then
@@ -1435,6 +2250,7 @@ test_opencode_shell_override() {
   if HOME="$fixture_home" \
     PATH="$stub_bin:/usr/bin:/bin" \
     OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
+    OPENCODE_TEST_HERDR_ENV_LOG="$herdr_env_log" \
     OPENCODE_TEST_RAW_LOG="$raw_log" \
     bash --noprofile --norc -c \
       'source "$HOME/.bash_aliases"; opencode --yolo' >"$yolo_log" 2>&1; then
@@ -1448,6 +2264,7 @@ test_opencode_shell_override() {
   if HOME="$fixture_home" \
     PATH="$stub_bin:/usr/bin:/bin" \
     OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
+    OPENCODE_TEST_HERDR_ENV_LOG="$herdr_env_log" \
     OPENCODE_TEST_RAW_LOG="$raw_log" \
     bash --noprofile --norc -c \
       'source "$HOME/.bash_aliases"; opencode --auto' >"$yolo_log" 2>&1; then
@@ -1574,6 +2391,91 @@ test_native_ai_memory_requirement() {
     not_ok "native Linux executable was rejected"
   fi
 
+  printf '\317\372\355\376fixture' >"$stub_bin/ai-memory"
+  chmod +x "$stub_bin/ai-memory"
+  printf '%s\n' '#!/bin/bash' 'printf '\''Darwin\n'\''' >"$stub_bin/uname"
+  chmod +x "$stub_bin/uname"
+  if (
+    PATH="$stub_bin:/usr/bin:/bin"
+    source "$REPO_DIR/apply.sh"
+    verify_native_ai_memory
+  ) >/dev/null 2>&1; then
+    ok "native macOS executable satisfies the ai-memory binary check"
+  else
+    not_ok "native macOS executable was rejected"
+  fi
+
+  rm -rf -- "$fixture_root"
+}
+
+test_macos_ai_memory_installation() {
+  local fixture_root fixture_home fixture_source fixture_archive stub_bin install_log expected_url
+  local runtime binary
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  fixture_source="$fixture_root/release"
+  fixture_archive="$fixture_root/ai-memory-macos-aarch64.tar.gz"
+  stub_bin="$fixture_root/bin"
+  install_log="$fixture_root/download.log"
+  runtime="$fixture_home/.local/opt/ai-memory/$AI_MEMORY_RELEASE_VERSION_EXPECTED"
+  binary="$fixture_home/.local/bin/ai-memory"
+  expected_url="https://github.com/akitaonrails/ai-memory/releases/download/v$AI_MEMORY_RELEASE_VERSION_EXPECTED/ai-memory-macos-aarch64.tar.gz"
+  mkdir -p "$fixture_source/hooks/opencode" "$fixture_source/packaging/launchd" "$stub_bin"
+  printf '%s\n' '#!/bin/bash' "printf 'ai-memory $AI_MEMORY_RELEASE_VERSION_EXPECTED\\n'" >"$fixture_source/ai-memory"
+  chmod +x "$fixture_source/ai-memory"
+  printf '%s\n' fixture >"$fixture_source/hooks/opencode/session-start.sh"
+  printf '%s\n' fixture >"$fixture_source/packaging/launchd/com.github.akitaonrails.ai-memory.plist"
+  tar -czf "$fixture_archive" -C "$fixture_source" .
+
+  printf '%s\n' \
+    '#!/bin/bash' \
+    'case "${1:-}" in' \
+    '  -s) printf '\''Darwin\n'\'' ;;' \
+    '  -m) printf '\''arm64\n'\'' ;;' \
+    '  *) exit 2 ;;' \
+    'esac' >"$stub_bin/uname"
+  printf '%s\n' \
+    '#!/bin/bash' \
+    'output=' \
+    'printf '\''%s\n'\'' "$*" >>"$AI_MEMORY_TEST_DOWNLOAD_LOG"' \
+    'while [[ $# -gt 0 ]]; do' \
+    '  if [[ "$1" == --output ]]; then shift; output="$1"; fi' \
+    '  shift' \
+    'done' \
+    'cp "$AI_MEMORY_TEST_ARCHIVE" "$output"' >"$stub_bin/curl"
+  printf '%s\n' \
+    '#!/bin/bash' \
+    'printf '\''%s  %s\n'\'' "$AI_MEMORY_TEST_SHA256" "${3:-}"' >"$stub_bin/shasum"
+  chmod +x "$stub_bin/uname" "$stub_bin/curl" "$stub_bin/shasum"
+  for command_name in bash chmod cp dirname gzip ln mkdir mktemp mv python3 readlink rm tar; do
+    ln -s "$(command -v "$command_name")" "$stub_bin/$command_name"
+  done
+
+  if (
+    HOME="$fixture_home"
+    PATH="$fixture_home/.local/bin:$stub_bin"
+    AI_MEMORY_TEST_ARCHIVE="$fixture_archive"
+    AI_MEMORY_TEST_DOWNLOAD_LOG="$install_log"
+    AI_MEMORY_TEST_SHA256="$AI_MEMORY_MACOS_AARCH64_SHA256_EXPECTED"
+    export HOME PATH AI_MEMORY_TEST_ARCHIVE AI_MEMORY_TEST_DOWNLOAD_LOG AI_MEMORY_TEST_SHA256
+    source "$REPO_DIR/apply.sh"
+    verify_native_ai_memory() { :; }
+    install_ai_memory
+    install_ai_memory
+  ) >/dev/null 2>&1; then
+    ok "pinned macOS ai-memory release fixture installs"
+  else
+    not_ok "pinned macOS ai-memory release fixture failed"
+  fi
+  require_executable "$runtime/ai-memory"
+  require_dir "$runtime/hooks/opencode"
+  if [[ -L "$binary" && "$(readlink "$binary")" == "$runtime/ai-memory" ]]; then
+    ok "macOS ai-memory command links to the stable release bundle"
+  else
+    not_ok "macOS ai-memory command does not link to the stable release bundle"
+  fi
+  require_text_count "$install_log" "$expected_url" "1"
+
   rm -rf -- "$fixture_root"
 }
 
@@ -1636,6 +2538,146 @@ test_ai_memory_user_service_installation() {
   rm -rf -- "$fixture_root"
 }
 
+test_macos_ai_memory_launch_agent() {
+  local fixture_root fixture_home stub_bin executable launch_agent launch_log expected_log uid
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  stub_bin="$fixture_root/bin"
+  executable="$stub_bin/ai-memory"
+  launch_agent="$fixture_home/Library/LaunchAgents/com.github.akitaonrails.ai-memory.plist"
+  launch_log="$fixture_root/launchctl.log"
+  expected_log="$fixture_root/expected-launchctl.log"
+  uid="$(id -u)"
+  mkdir -p "$stub_bin"
+  printf '%s\n' '#!/bin/bash' 'exit 0' >"$executable"
+  chmod +x "$executable"
+  printf '%s\n' '#!/bin/bash' 'printf '\''%s\n'\'' "$*" >>"$AI_MEMORY_TEST_LAUNCHCTL_LOG"' >"$stub_bin/launchctl"
+  printf '%s\n' '#!/bin/bash' 'printf '\''Darwin\n'\''' >"$stub_bin/uname"
+  chmod +x "$stub_bin/launchctl" "$stub_bin/uname"
+  printf '%s\n' \
+    "bootout gui/$uid/com.github.akitaonrails.ai-memory" \
+    "bootstrap gui/$uid $launch_agent" \
+    "kickstart -k gui/$uid/com.github.akitaonrails.ai-memory" >"$expected_log"
+
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    AI_MEMORY_TEST_LAUNCHCTL_LOG="$launch_log"
+    export HOME PATH AI_MEMORY_TEST_LAUNCHCTL_LOG
+    source "$REPO_DIR/apply.sh"
+    start_ai_memory_service
+  ) >/dev/null 2>&1; then
+    ok "macOS ai-memory LaunchAgent installs and starts"
+  else
+    not_ok "macOS ai-memory LaunchAgent installation failed"
+  fi
+  require_file "$launch_agent"
+  require_file_mode "$launch_agent" "600"
+  require_same_file "$expected_log" "$launch_log"
+  if python3 - "$launch_agent" "$executable" "$fixture_home" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+executable = sys.argv[2]
+home = sys.argv[3]
+with path.open("rb") as stream:
+    config = plistlib.load(stream)
+
+expected_arguments = [
+    "/bin/bash",
+    "-c",
+    'set -a; [[ ! -f "$1" ]] || source "$1"; shift; exec "$@"',
+    "ai-memory-service",
+    f"{home}/.config/ai-memory/env",
+    executable,
+    "--data-dir",
+    f"{home}/.local/share/ai-memory",
+    "--config",
+    f"{home}/.config/ai-memory/config.toml",
+    "serve",
+    "--transport",
+    "http",
+    "--enable-web",
+]
+assert config["Label"] == "com.github.akitaonrails.ai-memory"
+assert config["ProgramArguments"] == expected_arguments
+assert config["RunAtLoad"] is True
+assert config["KeepAlive"] is True
+assert config["ProcessType"] == "Interactive"
+assert config["StandardOutPath"] == f"{home}/Library/Logs/ai-memory/stdout.log"
+assert config["StandardErrorPath"] == f"{home}/Library/Logs/ai-memory/stderr.log"
+PY
+  then
+    ok "macOS ai-memory LaunchAgent has the required runtime contract"
+  else
+    not_ok "macOS ai-memory LaunchAgent has incorrect content"
+  fi
+
+  chmod 644 "$launch_agent"
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    export HOME PATH
+    source "$REPO_DIR/apply.sh"
+    install_ai_memory_user_service
+  ) >/dev/null 2>&1; then
+    ok "macOS ai-memory LaunchAgent installation applies a second time"
+  else
+    not_ok "second macOS ai-memory LaunchAgent installation failed"
+  fi
+  require_file_mode "$launch_agent" "600"
+
+  rm -rf -- "$fixture_root"
+}
+
+test_macos_bash_profile() {
+  local fixture_root fixture_home stub_bin profile first_profile
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  stub_bin="$fixture_root/bin"
+  profile="$fixture_home/.bash_profile"
+  first_profile="$fixture_root/first-profile"
+  mkdir -p "$fixture_home" "$stub_bin"
+  printf '%s\n' 'export PRESERVE_ME=yes' >"$profile"
+  printf '%s\n' '#!/bin/bash' 'printf '\''Darwin\n'\''' >"$stub_bin/uname"
+  chmod +x "$stub_bin/uname"
+
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    export HOME PATH
+    source "$REPO_DIR/apply.sh"
+    configure_macos_bash_profile
+    configure_macos_bash_profile
+  ) >/dev/null 2>&1; then
+    ok "macOS Bash profile setup applies twice"
+  else
+    not_ok "macOS Bash profile setup failed"
+  fi
+  require_contains "$profile" "export PRESERVE_ME=yes"
+  require_text_count "$profile" "# >>> guisaliba/agents Bash aliases >>>" "1"
+  require_text_count "$profile" "# <<< guisaliba/agents Bash aliases <<<" "1"
+  require_contains "$profile" 'source "$HOME/.bash_aliases"'
+  cp "$profile" "$first_profile"
+
+  if (
+    HOME="$fixture_home"
+    PATH="/usr/bin:/bin"
+    export HOME PATH
+    source "$REPO_DIR/apply.sh"
+    configure_macos_bash_profile
+  ) >/dev/null 2>&1; then
+    ok "Linux leaves the Bash profile unchanged"
+  else
+    not_ok "Linux Bash profile check failed"
+  fi
+  require_same_file "$first_profile" "$profile"
+
+  rm -rf -- "$fixture_root"
+}
+
 # Repo structure checks
 printf '\n--- Repo Structure ---\n'
 
@@ -1645,8 +2687,17 @@ require_file "$REPO_DIR/LICENSE"
 require_file "$REPO_DIR/apply.sh"
 require_file "$REPO_DIR/test.sh"
 require_file "$REPO_DIR/opencode/README.md"
-require_file "$REPO_DIR/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
-require_json "$REPO_DIR/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
+shopt -s nullglob
+tracked_theme_files=("$REPO_DIR"/opencode/themes/*.json)
+shopt -u nullglob
+if [[ ${#tracked_theme_files[@]} -gt 0 ]]; then
+  ok "tracked OpenCode themes are present"
+else
+  not_ok "no tracked OpenCode themes are present"
+fi
+for theme_file in "${tracked_theme_files[@]}"; do
+  require_json "$theme_file"
+done
 require_contains "$REPO_DIR/apply.sh" "sync_learn_plugin"
 require_contains "$REPO_DIR/apply.sh" "PUPPETEER_SKIP_DOWNLOAD=true"
 require_contains "$REPO_DIR/apply.sh" "$LEARN_REPOSITORY_URL_EXPECTED"
@@ -1656,6 +2707,11 @@ require_executable "$REPO_DIR/skills/daily-tasks/scripts/journal-task-sync"
 require_file "$REPO_DIR/lib/agent_stack.py"
 require_file "$REPO_DIR/skills.tsv"
 require_file "$REPO_DIR/shell/opencode.bash"
+require_file "$REPO_DIR/herdr/setup.bash"
+require_file "$REPO_DIR/herdr/apply.sh"
+require_file "$REPO_DIR/herdr/README.md"
+require_file "$REPO_DIR/plugins/herdr/README.md"
+require_executable "$REPO_DIR/herdr/apply.sh"
 require_executable "$REPO_DIR/apply.sh"
 require_executable "$REPO_DIR/test.sh"
 if manifest_rows="$(python3 "$AGENT_STACK_HELPER" manifest "$SKILLS_MANIFEST" 2>/dev/null)"; then
@@ -1669,6 +2725,7 @@ require_skill_manifest_entry "upstream" "architecture-map" "https://github.com/a
 require_skill_manifest_entry "upstream" "code-review" "mattpocock/skills@engineering/code-review" "yes"
 require_skill_manifest_entry "upstream" "implement" "mattpocock/skills@engineering/implement" "yes"
 require_skill_manifest_entry "upstream" "teach" "mattpocock/skills@productivity/teach" "yes"
+require_skill_manifest_entry "upstream" "herdr" "herdrdev/herdr" "yes"
 require_skill_manifest_entry "local" "daily-tasks" "skills/daily-tasks" "yes"
 if [[ "$manifest_valid" == true ]]; then
   while IFS=$'\t' read -r provider name source_ref require_skill_file; do
@@ -1687,6 +2744,9 @@ if [[ "$manifest_valid" == true ]]; then
   done <<<"$manifest_rows"
 fi
 require_contains "$REPO_DIR/AGENTS.md" "When you are the primary agent, you are the final owner of delegated work."
+require_contains "$REPO_DIR/AGENTS.md" "UI focus is not CLI targeting"
+require_contains "$REPO_DIR/AGENTS.md" "Use a separate Git worktree for each concurrent OpenCode task."
+require_contains "$REPO_DIR/herdr/README.md" '`--fresh` does not remove this same-checkout discovery risk'
 require_text_count "$REPO_DIR/shell/opencode.bash" "$OPENCODE_SHELL_BLOCK_START" "1"
 require_text_count "$REPO_DIR/shell/opencode.bash" "$OPENCODE_SHELL_BLOCK_END" "1"
 
@@ -1706,6 +2766,15 @@ test_ai_memory_env_file
 printf '\n--- Shared Helper Fixtures ---\n'
 
 test_agent_stack_helpers
+test_macos_platform_prerequisites
+
+# Herdr binary fixture checks
+printf '\n--- Herdr Binary Fixtures ---\n'
+
+test_herdr_binary_installation
+test_herdr_config_merge
+test_herdr_opencode_integration
+test_herdr_setup_scope
 
 # Manifest installation fixture checks
 printf '\n--- Skill Installation Fixtures ---\n'
@@ -1731,7 +2800,10 @@ test_optional_ai_jail
 printf '\n--- Native ai-memory Fixtures ---\n'
 
 test_native_ai_memory_requirement
+test_macos_ai_memory_installation
 test_ai_memory_user_service_installation
+test_macos_ai_memory_launch_agent
+test_macos_bash_profile
 
 if [[ "$repo_only" == "true" ]]; then
   printf '\n'
@@ -1751,6 +2823,7 @@ require_command bash
 require_command bun
 require_command opencode
 require_command ai-memory
+require_command herdr
 require_command rtk
 require_command plannotator
 require_file "$HOME/.config/opencode/plugins/rtk.ts"
@@ -1758,6 +2831,7 @@ require_file "$HOME/.config/opencode/plugins/rtk.ts"
 opencode --help >/dev/null 2>&1 && ok "opencode help runs" || not_ok "opencode help failed"
 ai-memory --help >/dev/null 2>&1 && ok "ai-memory help runs" || not_ok "ai-memory help failed"
 plannotator --help >/dev/null 2>&1 && ok "plannotator help runs" || not_ok "plannotator help failed"
+herdr --help >/dev/null 2>&1 && ok "herdr help runs" || not_ok "herdr help failed"
 
 if (
   source "$REPO_DIR/apply.sh"
@@ -1859,13 +2933,74 @@ require_contains "$HOME/.config/opencode/opencode.json" "@plannotator/opencode@l
 require_file "$HOME/.config/opencode/tui.json"
 require_json "$HOME/.config/opencode/tui.json"
 require_json_value "$HOME/.config/opencode/tui.json" "theme" "$OPENCODE_TUI_THEME_EXPECTED"
-require_file "$HOME/.config/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
-require_json "$HOME/.config/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
-require_same_file \
-  "$REPO_DIR/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json" \
-  "$HOME/.config/opencode/themes/$OPENCODE_TUI_THEME_EXPECTED.json"
+for theme_file in "${tracked_theme_files[@]}"; do
+  require_same_file "$theme_file" "$HOME/.config/opencode/themes/${theme_file##*/}"
+done
 require_json_array_count "$HOME/.config/opencode/tui.json" "plugin" "$LEARN_PLUGIN_SPEC" "1"
 require_json_array_count "$HOME/.config/opencode/tui.json" "plugin" "$LEARN_LEGACY_PLUGIN_BASE" "0"
+
+# Herdr runtime
+printf '\n--- Herdr ---\n'
+
+if [[ "$(type -P herdr 2>/dev/null || true)" == "$HERDR_BINARY_EXPECTED" ]]; then
+  ok "Herdr resolves to the managed user executable"
+else
+  not_ok "Herdr does not resolve to $HERDR_BINARY_EXPECTED"
+fi
+require_executable "$HERDR_BINARY_EXPECTED"
+require_file_mode "$HERDR_BINARY_EXPECTED" "755"
+if [[ "$($HERDR_BINARY_EXPECTED --version 2>/dev/null || true)" == "herdr $HERDR_VERSION_EXPECTED" ]]; then
+  ok "Herdr reports version $HERDR_VERSION_EXPECTED"
+else
+  not_ok "Herdr does not report version $HERDR_VERSION_EXPECTED"
+fi
+herdr_sha_output="$(sha256sum "$HERDR_BINARY_EXPECTED" 2>/dev/null || true)"
+case "$(uname -m)" in
+  x86_64) herdr_machine_sha="$HERDR_X86_64_SHA256_EXPECTED" ;;
+  aarch64) herdr_machine_sha="$HERDR_AARCH64_SHA256_EXPECTED" ;;
+  *) herdr_machine_sha="unsupported" ;;
+esac
+if [[ "${herdr_sha_output%%[[:space:]]*}" == "$herdr_machine_sha" ]]; then
+  ok "Herdr executable has the pinned host digest"
+else
+  not_ok "Herdr executable does not have the pinned host digest"
+fi
+require_file "$HERDR_CONFIG_EXPECTED"
+if python3 - "$HERDR_CONFIG_EXPECTED" "$(readlink -f "$(type -P bash)")" <<'PY'
+import sys
+import tomllib
+from pathlib import Path
+
+with Path(sys.argv[1]).open("rb") as config_file:
+    config = tomllib.load(config_file)
+
+terminal = config.get("terminal", {})
+session = config.get("session", {})
+valid = (
+    terminal.get("default_shell") == sys.argv[2]
+    and terminal.get("shell_mode") == "non_login"
+    and session.get("resume_agents_on_restore") is False
+)
+raise SystemExit(0 if valid else 1)
+PY
+then
+  ok "Herdr managed configuration values are current"
+else
+  not_ok "Herdr managed configuration values are not current"
+fi
+require_file "$HOME/.config/opencode/plugins/herdr-agent-state.js"
+require_file "$HOME/.config/opencode/herdr-tui-session.js"
+require_contains "$HOME/.config/opencode/plugins/herdr-agent-state.js" "HERDR_INTEGRATION_VERSION=11"
+require_contains "$HOME/.config/opencode/herdr-tui-session.js" "HERDR_INTEGRATION_VERSION=11"
+require_file "$HOME/.config/opencode/tui.jsonc"
+require_text_count "$HOME/.config/opencode/tui.jsonc" './herdr-tui-session.js' "1"
+herdr_integration_status="$(herdr integration status 2>/dev/null || true)"
+if [[ "$herdr_integration_status" == *"opencode: current (v11) ("* ]]; then
+  ok "Herdr OpenCode integration status is current"
+else
+  not_ok "Herdr OpenCode integration status is not current"
+fi
+
 require_dir "$LEARN_INSTALL_DIR"
 require_file "$LEARN_INSTALL_DIR/package.json"
 require_file "$LEARN_INSTALL_DIR/bun.lock"

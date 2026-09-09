@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # apply.sh
 #
 # Deterministic OpenCode setup script.
-# Installs OpenCode, ai-memory, RTK, Plannotator, and required skills.
+# Installs OpenCode, ai-memory, Herdr, RTK, Plannotator, and required skills.
 # Installs/updates skills live on every run.
 #
 # Usage:
@@ -17,11 +17,18 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$SCRIPT_DIR"
 AGENT_STACK_HELPER="$REPO_DIR/lib/agent_stack.py"
 SKILLS_MANIFEST="$REPO_DIR/skills.tsv"
+source "$REPO_DIR/herdr/setup.bash"
 RTK_VERSION="${RTK_VERSION:-v0.38.0}"
 GITHUB_MCP_TOKEN_FILE="$HOME/.config/opencode/secrets/github-mcp-pat"
 GITHUB_MCP_TOKEN_REFERENCE="~/.config/opencode/secrets/github-mcp-pat"
 AI_MEMORY_AUR_PACKAGE="${AI_MEMORY_AUR_PACKAGE:-ai-memory-bin}"
 AI_MEMORY_MIN_VERSION="${AI_MEMORY_MIN_VERSION:-1.28.0}"
+AI_MEMORY_RELEASE_VERSION="${AI_MEMORY_RELEASE_VERSION:-2.1.1}"
+AI_MEMORY_RELEASE_BASE_URL="https://github.com/akitaonrails/ai-memory/releases/download/v$AI_MEMORY_RELEASE_VERSION"
+AI_MEMORY_MACOS_AARCH64_SHA256="1cc2acdbbd62cc7ecf6e1fe91515ea77786910b2c102f1fe8781aa6c0357eb64"
+AI_MEMORY_MACOS_X86_64_SHA256="3c2ca543abdf964c7fe4471e54824876d7327a04d0f222327ad6a8f010f78910"
+AI_MEMORY_INSTALL_ROOT="${AI_MEMORY_INSTALL_ROOT:-$HOME/.local/opt/ai-memory/$AI_MEMORY_RELEASE_VERSION}"
+AI_MEMORY_BINARY="${AI_MEMORY_BINARY:-$HOME/.local/bin/ai-memory}"
 AI_MEMORY_DATA_DIR="$HOME/.local/share/ai-memory"
 AI_MEMORY_CONFIG_FILE="$HOME/.config/ai-memory/config.toml"
 AI_MEMORY_ENV_FILE="$HOME/.config/ai-memory/env"
@@ -29,6 +36,9 @@ AI_MEMORY_LOOPBACK_SERVER_URL="http://127.0.0.1:49374"
 AI_MEMORY_INSTRUCTIONS_FILE="$HOME/.config/opencode/ai-memory.md"
 AI_MEMORY_INSTRUCTIONS_REFERENCE="~/.config/opencode/ai-memory.md"
 AI_MEMORY_USER_SERVICE_FILE="$HOME/.config/systemd/user/ai-memory.service"
+AI_MEMORY_LAUNCH_AGENT_LABEL="com.github.akitaonrails.ai-memory"
+AI_MEMORY_LAUNCH_AGENT_FILE="$HOME/Library/LaunchAgents/$AI_MEMORY_LAUNCH_AGENT_LABEL.plist"
+AI_MEMORY_LAUNCH_AGENT_LOG_DIR="$HOME/Library/Logs/ai-memory"
 AI_MEMORY_DEFAULT_LLM_PROFILE="opencode-go-muse"
 BUN_MIN_VERSION="${BUN_MIN_VERSION:-1.3.0}"
 LEARN_REPOSITORY_URL="${LEARN_REPOSITORY_URL:-https://github.com/guisaliba/learn.git}"
@@ -44,6 +54,10 @@ BASH_ALIASES_SOURCE="${BASH_ALIASES_SOURCE:-$REPO_DIR/shell/opencode.bash}"
 BASH_ALIASES_FILE="$HOME/.bash_aliases"
 OPENCODE_SHELL_BLOCK_START="# >>> dotfiles OpenCode ai-memory wrapper >>>"
 OPENCODE_SHELL_BLOCK_END="# <<< dotfiles OpenCode ai-memory wrapper <<<"
+MACOS_BASH_PROFILE="$HOME/.bash_profile"
+MACOS_BASH_PROFILE_BLOCK_START="# >>> guisaliba/agents Bash aliases >>>"
+MACOS_BASH_PROFILE_BLOCK_END="# <<< guisaliba/agents Bash aliases <<<"
+GOOGLE_CHROME_APP_PATH="${GOOGLE_CHROME_APP_PATH:-/Applications/Google Chrome.app}"
 
 log() {
   printf '\n==> %s\n' "$*"
@@ -58,10 +72,74 @@ have() {
   command -v "$1" >/dev/null 2>&1
 }
 
+agent_stack_platform() {
+  uname -s
+}
+
+prepend_path() {
+  local directory="$1"
+  case ":$PATH:" in
+    *":$directory:"*) ;;
+    *) PATH="$directory:$PATH" ;;
+  esac
+  export PATH
+}
+
+prepare_platform_prerequisites() {
+  local brew_prefix
+  case "$(agent_stack_platform)" in
+    Linux) ;;
+    Darwin)
+      have brew || die "Homebrew is required on macOS. Install it from https://brew.sh before running this script."
+      brew_prefix="$(brew --prefix)" || die "Could not resolve the Homebrew prefix"
+      if [[ ! -x "$brew_prefix/bin/bash" ]]; then
+        log "Installing Homebrew Bash"
+        brew install bash || die "Homebrew Bash installation failed"
+      fi
+      if [[ ! -x "$brew_prefix/bin/python3" ]] || \
+        ! "$brew_prefix/bin/python3" -c 'import tomllib' >/dev/null 2>&1; then
+        log "Installing Homebrew Python"
+        brew install python || die "Homebrew Python installation failed"
+      fi
+      [[ -x "$brew_prefix/bin/bash" ]] || die "Homebrew did not install Bash at $brew_prefix/bin/bash"
+      "$brew_prefix/bin/python3" -c 'import tomllib' >/dev/null 2>&1 || \
+        die "Homebrew did not install Python 3.11 or newer at $brew_prefix/bin/python3"
+      prepend_path "$brew_prefix/bin"
+      prepend_path "$HOME/bin"
+      prepend_path "$HOME/.local/bin"
+      prepend_path "$HOME/.opencode/bin"
+      ;;
+    *) die "Unsupported operating system: $(agent_stack_platform)" ;;
+  esac
+}
+
+prepare_full_stack_prerequisites() {
+  case "$(agent_stack_platform)" in
+    Linux) ;;
+    Darwin)
+      if [[ ! -d "$GOOGLE_CHROME_APP_PATH" ]]; then
+        have brew || die "Homebrew is required to install Google Chrome on macOS"
+        log "Installing Google Chrome"
+        brew install --cask google-chrome || die "Google Chrome installation failed"
+      fi
+      [[ -d "$GOOGLE_CHROME_APP_PATH" ]] || \
+        die "Google Chrome is missing at $GOOGLE_CHROME_APP_PATH"
+      ;;
+    *) die "Unsupported operating system: $(agent_stack_platform)" ;;
+  esac
+}
+
 check_prerequisites() {
   log "Checking prerequisites"
-  local missing=()
-  for cmd in bash bun curl git npm npx python3 systemctl; do
+  local cmd platform missing=()
+  local commands=(bash bun curl git npm npx python3)
+  platform="$(agent_stack_platform)"
+  case "$platform" in
+    Linux) commands+=(systemctl) ;;
+    Darwin) commands+=(brew launchctl) ;;
+    *) die "Unsupported operating system: $platform" ;;
+  esac
+  for cmd in "${commands[@]}"; do
     if ! have "$cmd"; then
       missing+=("$cmd")
     fi
@@ -120,13 +198,104 @@ PY
   fi
 }
 
+file_sha256() {
+  local output
+  if have sha256sum; then
+    output="$(sha256sum "$1")" || return 1
+  elif have shasum; then
+    output="$(shasum -a 256 "$1")" || return 1
+  else
+    return 1
+  fi
+  printf '%s\n' "${output%%[[:space:]]*}"
+}
+
+ai_memory_macos_release_spec() {
+  case "$(uname -m)" in
+    arm64|aarch64)
+      printf '%s\t%s\n' "ai-memory-macos-aarch64.tar.gz" "$AI_MEMORY_MACOS_AARCH64_SHA256"
+      ;;
+    x86_64)
+      printf '%s\t%s\n' "ai-memory-macos-x86_64.tar.gz" "$AI_MEMORY_MACOS_X86_64_SHA256"
+      ;;
+    *)
+      die "ai-memory $AI_MEMORY_RELEASE_VERSION does not support macOS architecture $(uname -m)"
+      ;;
+  esac
+}
+
+install_ai_memory_macos() {
+  local release_spec asset expected_sha download_url archive temporary_dir actual_sha
+  local existing_command installed_version
+
+  release_spec="$(ai_memory_macos_release_spec)"
+  IFS=$'\t' read -r asset expected_sha <<<"$release_spec"
+  download_url="$AI_MEMORY_RELEASE_BASE_URL/$asset"
+
+  existing_command="$(type -P ai-memory 2>/dev/null || true)"
+  if [[ -n "$existing_command" && "$existing_command" != "$AI_MEMORY_BINARY" ]]; then
+    die "ai-memory already resolves to an unmanaged executable at $existing_command; $AI_MEMORY_BINARY was not installed."
+  fi
+  if [[ -e "$AI_MEMORY_BINARY" && ! -L "$AI_MEMORY_BINARY" ]]; then
+    die "Managed macOS ai-memory path must be a symlink: $AI_MEMORY_BINARY"
+  fi
+  if [[ -L "$AI_MEMORY_BINARY" && "$(readlink "$AI_MEMORY_BINARY")" != "$AI_MEMORY_INSTALL_ROOT/ai-memory" ]]; then
+    die "Managed macOS ai-memory symlink points outside the pinned release: $AI_MEMORY_BINARY"
+  fi
+
+  if [[ -d "$AI_MEMORY_INSTALL_ROOT" ]]; then
+    [[ -x "$AI_MEMORY_INSTALL_ROOT/ai-memory" ]] || \
+      die "Existing ai-memory release bundle is incomplete: $AI_MEMORY_INSTALL_ROOT"
+    [[ -d "$AI_MEMORY_INSTALL_ROOT/hooks/opencode" ]] || \
+      die "Existing ai-memory release bundle has no OpenCode hooks: $AI_MEMORY_INSTALL_ROOT"
+    installed_version="$("$AI_MEMORY_INSTALL_ROOT/ai-memory" --version 2>/dev/null || true)"
+    [[ "$installed_version" == *"$AI_MEMORY_RELEASE_VERSION"* ]] || \
+      die "Existing ai-memory release bundle does not report version $AI_MEMORY_RELEASE_VERSION"
+  elif [[ -e "$AI_MEMORY_INSTALL_ROOT" ]]; then
+    die "ai-memory release path must be a directory: $AI_MEMORY_INSTALL_ROOT"
+  else
+    mkdir -p "$(dirname "$AI_MEMORY_INSTALL_ROOT")"
+    (
+      archive="$(mktemp "$(dirname "$AI_MEMORY_INSTALL_ROOT")/.ai-memory.$AI_MEMORY_RELEASE_VERSION.XXXXXX.tar.gz")"
+      temporary_dir="$(mktemp -d "$(dirname "$AI_MEMORY_INSTALL_ROOT")/.ai-memory.$AI_MEMORY_RELEASE_VERSION.XXXXXX")"
+      trap 'rm -rf -- "$archive" "$temporary_dir"' EXIT
+      curl --fail --location --silent --show-error --output "$archive" "$download_url" || \
+        die "Could not download ai-memory $AI_MEMORY_RELEASE_VERSION from $download_url"
+      actual_sha="$(file_sha256 "$archive")" || die "Could not calculate the ai-memory archive digest"
+      [[ "$actual_sha" == "$expected_sha" ]] || die "ai-memory archive digest did not match $asset"
+      tar -xzf "$archive" -C "$temporary_dir" || die "Could not extract the ai-memory release archive"
+      [[ -x "$temporary_dir/ai-memory" ]] || die "ai-memory release archive has no executable"
+      [[ -d "$temporary_dir/hooks/opencode" ]] || die "ai-memory release archive has no OpenCode hooks"
+      installed_version="$("$temporary_dir/ai-memory" --version 2>/dev/null || true)"
+      [[ "$installed_version" == *"$AI_MEMORY_RELEASE_VERSION"* ]] || \
+        die "Downloaded ai-memory does not report version $AI_MEMORY_RELEASE_VERSION"
+      mv "$temporary_dir" "$AI_MEMORY_INSTALL_ROOT" || die "Could not install ai-memory at $AI_MEMORY_INSTALL_ROOT"
+      temporary_dir=""
+      rm -f -- "$archive"
+      archive=""
+      trap - EXIT
+    ) || return 1
+  fi
+
+  [[ -x "$AI_MEMORY_INSTALL_ROOT/ai-memory" ]] || \
+    die "Installed ai-memory release bundle is incomplete: $AI_MEMORY_INSTALL_ROOT"
+  [[ -d "$AI_MEMORY_INSTALL_ROOT/hooks/opencode" ]] || \
+    die "Installed ai-memory release bundle has no OpenCode hooks: $AI_MEMORY_INSTALL_ROOT"
+  mkdir -p "$(dirname "$AI_MEMORY_BINARY")"
+  if [[ ! -L "$AI_MEMORY_BINARY" ]]; then
+    ln -s "$AI_MEMORY_INSTALL_ROOT/ai-memory" "$AI_MEMORY_BINARY" || \
+      die "Could not link ai-memory at $AI_MEMORY_BINARY"
+  fi
+}
+
 verify_native_ai_memory() {
-  local executable
+  local executable platform
   executable="$(type -P ai-memory)" || \
     die "ai-memory must resolve to an executable file on PATH"
+  platform="$(agent_stack_platform)"
 
-  python3 - "$executable" <<'PY' || \
-    die "ai-memory must be a native Linux executable. Use the upstream Docker wrapper as a separate deployment, not with this native user-service setup."
+  python3 - "$executable" "$platform" <<'PY' || \
+    die "ai-memory must be a native $platform executable. Use the upstream Docker wrapper as a separate deployment, not with this native user-service setup."
 import sys
 from pathlib import Path
 
@@ -135,12 +304,28 @@ try:
 except OSError:
     raise SystemExit(1)
 
-raise SystemExit(0 if magic == b"\x7fELF" else 1)
+platform = sys.argv[2]
+valid_magic = {
+    "Linux": {b"\x7fELF"},
+    "Darwin": {
+        b"\xfe\xed\xfa\xce",
+        b"\xce\xfa\xed\xfe",
+        b"\xfe\xed\xfa\xcf",
+        b"\xcf\xfa\xed\xfe",
+        b"\xca\xfe\xba\xbe",
+        b"\xbe\xba\xfe\xca",
+    },
+}
+raise SystemExit(0 if magic in valid_magic.get(platform, set()) else 1)
 PY
 }
 
 install_ai_memory() {
-  install_aur_command ai-memory "$AI_MEMORY_AUR_PACKAGE"
+  case "$(agent_stack_platform)" in
+    Linux) install_aur_command ai-memory "$AI_MEMORY_AUR_PACKAGE" ;;
+    Darwin) install_ai_memory_macos ;;
+    *) die "Unsupported operating system: $(agent_stack_platform)" ;;
+  esac
   verify_native_ai_memory
   require_minimum_version ai-memory "$AI_MEMORY_MIN_VERSION"
 }
@@ -256,7 +441,9 @@ install_opencode() {
   log "Installing OpenCode"
   curl -fsSL https://opencode.ai/install | bash || die "OpenCode install failed"
 
-  export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
+  prepend_path "$HOME/bin"
+  prepend_path "$HOME/.local/bin"
+  prepend_path "$HOME/.opencode/bin"
   have opencode || die "OpenCode install did not put opencode on PATH"
 }
 
@@ -431,6 +618,75 @@ if target_path.exists() and content == target_text:
 
 target_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
 atomic_write_text(target_path, content, target_mode, ".bash_aliases.")
+PY
+}
+
+configure_macos_bash_profile() {
+  [[ "$(agent_stack_platform)" == "Darwin" ]] || return 0
+
+  log "Making macOS login Bash load ~/.bash_aliases"
+  python3 - \
+    "$MACOS_BASH_PROFILE" \
+    "$MACOS_BASH_PROFILE_BLOCK_START" \
+    "$MACOS_BASH_PROFILE_BLOCK_END" \
+    "$AGENT_STACK_HELPER" <<'PY'
+import stat
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+start_marker = sys.argv[2]
+end_marker = sys.argv[3]
+helper_path = Path(sys.argv[4])
+sys.path.insert(0, str(helper_path.parent))
+sys.dont_write_bytecode = True
+
+from agent_stack import atomic_write_text
+
+
+if path.is_symlink():
+    raise SystemExit(f"ERROR: Bash profile must be a regular file: {path}")
+if path.exists() and not path.is_file():
+    raise SystemExit(f"ERROR: Bash profile must be a regular file: {path}")
+
+if path.exists():
+    text = path.read_text(encoding="utf-8")
+    mode = stat.S_IMODE(path.stat().st_mode)
+else:
+    text = ""
+    mode = 0o644
+
+lines = text.splitlines()
+starts = [index for index, line in enumerate(lines) if line == start_marker]
+ends = [index for index, line in enumerate(lines) if line == end_marker]
+if starts or ends:
+    if len(starts) != 1 or len(ends) != 1 or ends[0] <= starts[0]:
+        raise SystemExit(
+            f"ERROR: Expected one balanced Bash profile block in {path}; "
+            "file was not changed"
+        )
+    kept = lines[: starts[0]] + lines[ends[0] + 1 :]
+else:
+    kept = lines
+
+while kept and not kept[-1].strip():
+    kept.pop()
+if kept:
+    kept.append("")
+kept.extend(
+    [
+        start_marker,
+        'if [[ -f "$HOME/.bash_aliases" ]]; then',
+        '  source "$HOME/.bash_aliases"',
+        "fi",
+        end_marker,
+    ]
+)
+content = "\n".join(kept) + "\n"
+if content == text:
+    raise SystemExit(0)
+
+atomic_write_text(path, content, mode, ".bash_profile.")
 PY
 }
 
@@ -950,7 +1206,7 @@ initialize_ai_memory() {
   configure_ai_memory_env_file
 }
 
-install_ai_memory_user_service() {
+install_ai_memory_systemd_user_service() {
   local executable
   executable="$(type -P ai-memory)" || \
     die "ai-memory must resolve to an executable file on PATH"
@@ -1022,13 +1278,113 @@ atomic_write_text(path, content, 0o644, ".ai-memory.service.")
 PY
 }
 
-start_ai_memory_service() {
+install_ai_memory_launch_agent() {
+  local executable
+  executable="$(type -P ai-memory)" || \
+    die "ai-memory must resolve to an executable file on PATH"
+
+  log "Installing the managed ai-memory LaunchAgent"
+  python3 "$AGENT_STACK_HELPER" \
+    guard-regular-file \
+    "$AI_MEMORY_LAUNCH_AGENT_FILE" \
+    "ai-memory LaunchAgent path"
+  mkdir -p "$(dirname "$AI_MEMORY_LAUNCH_AGENT_FILE")" "$AI_MEMORY_LAUNCH_AGENT_LOG_DIR"
+  chmod 700 "$AI_MEMORY_LAUNCH_AGENT_LOG_DIR"
+
+  python3 - \
+    "$AI_MEMORY_LAUNCH_AGENT_FILE" \
+    "$executable" \
+    "$AGENT_STACK_HELPER" \
+    "$HOME" \
+    "$AI_MEMORY_LAUNCH_AGENT_LABEL" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+executable = str(Path(sys.argv[2]).absolute())
+helper_path = Path(sys.argv[3])
+home = sys.argv[4]
+label = sys.argv[5]
+sys.path.insert(0, str(helper_path.parent))
+sys.dont_write_bytecode = True
+
+from agent_stack import atomic_write_text
+
+
+config = {
+    "Label": label,
+    "ProgramArguments": [
+        "/bin/bash",
+        "-c",
+        'set -a; [[ ! -f "$1" ]] || source "$1"; shift; exec "$@"',
+        "ai-memory-service",
+        f"{home}/.config/ai-memory/env",
+        executable,
+        "--data-dir",
+        f"{home}/.local/share/ai-memory",
+        "--config",
+        f"{home}/.config/ai-memory/config.toml",
+        "serve",
+        "--transport",
+        "http",
+        "--enable-web",
+    ],
+    "RunAtLoad": True,
+    "KeepAlive": True,
+    "ProcessType": "Interactive",
+    "StandardOutPath": f"{home}/Library/Logs/ai-memory/stdout.log",
+    "StandardErrorPath": f"{home}/Library/Logs/ai-memory/stderr.log",
+}
+content = plistlib.dumps(config, fmt=plistlib.FMT_XML, sort_keys=False).decode("utf-8")
+
+try:
+    if path.read_text(encoding="utf-8") == content:
+        raise SystemExit(0)
+except FileNotFoundError:
+    pass
+except OSError as exc:
+    raise SystemExit(f"ERROR: Cannot read ai-memory LaunchAgent at {path}: {exc}")
+
+atomic_write_text(path, content, 0o600, ".ai-memory.plist.")
+PY
+  chmod 600 "$AI_MEMORY_LAUNCH_AGENT_FILE"
+}
+
+install_ai_memory_user_service() {
+  case "$(agent_stack_platform)" in
+    Linux) install_ai_memory_systemd_user_service ;;
+    Darwin) install_ai_memory_launch_agent ;;
+  esac
+}
+
+start_ai_memory_systemd_user_service() {
   log "Enabling and restarting the ai-memory user service"
 
-  install_ai_memory_user_service
+  install_ai_memory_systemd_user_service
   systemctl --user daemon-reload || die "systemd user daemon reload failed"
   systemctl --user enable ai-memory.service || die "ai-memory user service enablement failed"
   systemctl --user restart ai-memory.service || die "ai-memory user service restart failed"
+}
+
+start_ai_memory_launch_agent() {
+  local domain target
+  domain="gui/$(id -u)"
+  target="$domain/$AI_MEMORY_LAUNCH_AGENT_LABEL"
+
+  log "Loading and restarting the ai-memory LaunchAgent"
+  install_ai_memory_launch_agent
+  launchctl bootout "$target" >/dev/null 2>&1 || true
+  launchctl bootstrap "$domain" "$AI_MEMORY_LAUNCH_AGENT_FILE" || \
+    die "ai-memory LaunchAgent bootstrap failed"
+  launchctl kickstart -k "$target" || die "ai-memory LaunchAgent restart failed"
+}
+
+start_ai_memory_service() {
+  case "$(agent_stack_platform)" in
+    Linux) start_ai_memory_systemd_user_service ;;
+    Darwin) start_ai_memory_launch_agent ;;
+  esac
 }
 
 wire_ai_memory_to_opencode() {
@@ -1064,7 +1420,8 @@ install_rtk() {
     log "RTK already installed, skipping"
   else
     log "Installing RTK"
-    curl -fsSL "https://raw.githubusercontent.com/rtk-ai/rtk/$RTK_VERSION/install.sh" | sh || die "RTK install failed"
+    curl -fsSL "https://raw.githubusercontent.com/rtk-ai/rtk/$RTK_VERSION/install.sh" | \
+      RTK_VERSION="$RTK_VERSION" sh || die "RTK install failed"
     export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
     have rtk || die "RTK install did not put rtk on PATH"
   fi
@@ -1162,6 +1519,33 @@ install_skill() {
     die "Failed to install skill: $name"
 }
 
+install_manifest_skill() {
+  local requested_name="$1"
+  local manifest_rows provider name source_ref require_skill_file found=false
+
+  manifest_rows="$(python3 "$AGENT_STACK_HELPER" manifest "$SKILLS_MANIFEST")" || \
+    die "Could not read the required skill manifest"
+  while IFS=$'\t' read -r provider name source_ref require_skill_file; do
+    if [[ "$name" != "$requested_name" ]]; then
+      continue
+    fi
+    case "$provider" in
+      local)
+        install_local_skill "$REPO_DIR/$source_ref" "$name"
+        ;;
+      upstream)
+        install_skill "$source_ref" "$name"
+        ;;
+      *)
+        die "Skill $name is owned by its dedicated $provider installer"
+        ;;
+    esac
+    found=true
+  done <<<"$manifest_rows"
+
+  [[ "$found" == true ]] || die "Required skill is not in $SKILLS_MANIFEST: $requested_name"
+}
+
 install_local_skill() {
   local src_dir="$1"
   local name="$2"
@@ -1218,6 +1602,8 @@ install_required_skills() {
 main() {
   log "Starting OpenCode agent stack setup"
 
+  prepare_platform_prerequisites
+  prepare_full_stack_prerequisites
   check_prerequisites
   require_minimum_version bun "$BUN_MIN_VERSION"
   install_opencode
@@ -1226,8 +1612,10 @@ main() {
   report_optional_ai_jail
   verify_ai_memory_unauthenticated_loopback
   setup_opencode
+  setup_herdr
   setup_ai_memory
   merge_opencode_shell_override
+  configure_macos_bash_profile
   install_plugins
   install_required_skills
 
