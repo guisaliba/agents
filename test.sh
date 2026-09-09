@@ -2584,6 +2584,7 @@ test_macos_ai_memory_launch_agent() {
   fi
   require_file "$launch_agent"
   require_file_mode "$launch_agent" "600"
+  require_file_mode "$fixture_home/Library/Logs/ai-memory" "711"
   require_same_file "$expected_log" "$launch_log"
   if python3 - "$launch_agent" "$executable" "$fixture_home" <<'PY'
 import plistlib

@@ -1296,7 +1296,7 @@ install_ai_memory_launch_agent() {
     "$AI_MEMORY_LAUNCH_AGENT_FILE" \
     "ai-memory LaunchAgent path"
   mkdir -p "$(dirname "$AI_MEMORY_LAUNCH_AGENT_FILE")" "$AI_MEMORY_LAUNCH_AGENT_LOG_DIR"
-  chmod 700 "$AI_MEMORY_LAUNCH_AGENT_LOG_DIR"
+  chmod 711 "$AI_MEMORY_LAUNCH_AGENT_LOG_DIR"
 
   python3 - \
     "$AI_MEMORY_LAUNCH_AGENT_FILE" \
