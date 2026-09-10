@@ -1,7 +1,7 @@
 # ai-memory
 
-`apply.sh` manages ai-memory as a native per-user service and connects it to
-OpenCode through the loopback MCP endpoint:
+`apply.sh` manages ai-memory as a native service and connects it to OpenCode
+through the loopback MCP endpoint:
 
 ```text
 http://127.0.0.1:49374/mcp
@@ -19,15 +19,33 @@ The service uses:
 ```
 
 On macOS, apply installs the pinned native release under
-`~/.local/opt/ai-memory/`, links it from `~/.local/bin/ai-memory`, and uses:
+`~/.local/opt/ai-memory/`, links it from `~/.local/bin/ai-memory`, and generates:
 
 ```text
-~/Library/LaunchAgents/com.github.akitaonrails.ai-memory.plist
+~/.config/ai-memory/com.github.akitaonrails.ai-memory.plist
 ~/Library/Logs/ai-memory/
 ```
 
-The LaunchAgent loads `~/.config/ai-memory/env` before it starts the service.
-Its plist has mode `0600`. Linux continues to use the systemd user service.
+The generated plist has mode `0600` and contains no credentials. Install it as
+the root-owned system service with:
+
+```sh
+launchctl bootout "gui/$(id -u)/com.github.akitaonrails.ai-memory" 2>/dev/null || true
+sudo launchctl bootout system/com.github.akitaonrails.ai-memory 2>/dev/null || true
+sudo install -o root -g wheel -m 0644 \
+  "$HOME/.config/ai-memory/com.github.akitaonrails.ai-memory.plist" \
+  /Library/LaunchDaemons/com.github.akitaonrails.ai-memory.plist
+sudo launchctl bootstrap system \
+  /Library/LaunchDaemons/com.github.akitaonrails.ai-memory.plist
+sudo launchctl kickstart -k system/com.github.akitaonrails.ai-memory
+```
+
+The LaunchDaemon starts at boot without a GUI login, runs as the user that
+generated the plist, and loads `~/.config/ai-memory/env` before it starts the
+service. Rerun the privileged sequence after an ai-memory binary, plist, or
+environment change. After the daemon is active, apply removes the retired
+LaunchAgent from `~/Library/LaunchAgents/`. Linux continues to use the systemd
+user service.
 
 The ai-memory binary owns the generated OpenCode plugin, instructions, and
 five ai-memory skills. Do not edit generated files by hand. The service LLM
@@ -60,6 +78,23 @@ ai-memory status --json
 opencode mcp list
 opencode mcp debug ai-memory
 ```
+
+On macOS, also verify the system service:
+
+```sh
+sudo launchctl print system/com.github.akitaonrails.ai-memory
+```
+
+## macOS Rollback
+
+Remove the system service with:
+
+```sh
+sudo launchctl bootout system/com.github.akitaonrails.ai-memory 2>/dev/null || true
+sudo rm -f /Library/LaunchDaemons/com.github.akitaonrails.ai-memory.plist
+```
+
+The command does not remove user data, configuration, credentials, or logs.
 
 The managed workstream entry point is documented in
 [`../shell/README.md`](../shell/README.md).

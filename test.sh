@@ -36,6 +36,8 @@ AI_MEMORY_INSTRUCTIONS_REFERENCE="~/.config/opencode/ai-memory.md"
 AI_MEMORY_USER_SERVICE_FILE="$HOME/.config/systemd/user/ai-memory.service"
 AI_MEMORY_LAUNCH_AGENT_FILE="$HOME/Library/LaunchAgents/com.github.akitaonrails.ai-memory.plist"
 AI_MEMORY_LAUNCH_AGENT_LABEL="com.github.akitaonrails.ai-memory"
+AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE="$HOME/.config/ai-memory/com.github.akitaonrails.ai-memory.plist"
+AI_MEMORY_LAUNCH_DAEMON_FILE="/Library/LaunchDaemons/com.github.akitaonrails.ai-memory.plist"
 AI_MEMORY_MCP_EXPECTED_JSON='{"type":"remote","url":"http://127.0.0.1:49374/mcp","enabled":true}'
 AI_MEMORY_MIN_VERSION="1.28.0"
 AI_MEMORY_RELEASE_VERSION_EXPECTED="2.1.1"
@@ -2560,49 +2562,46 @@ test_ai_memory_user_service_installation() {
   rm -rf -- "$fixture_root"
 }
 
-test_macos_ai_memory_launch_agent() {
-  local fixture_root fixture_home stub_bin executable launch_agent launch_log expected_log uid
+test_macos_ai_memory_launch_daemon() {
+  local fixture_root fixture_home stub_bin executable daemon_source daemon_file install_log
+  local old_agent launch_log expected_log username group uid
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
   stub_bin="$fixture_root/bin"
   executable="$stub_bin/ai-memory"
-  launch_agent="$fixture_home/Library/LaunchAgents/com.github.akitaonrails.ai-memory.plist"
+  daemon_source="$fixture_home/.config/ai-memory/com.github.akitaonrails.ai-memory.plist"
+  daemon_file="$fixture_root/Library/LaunchDaemons/com.github.akitaonrails.ai-memory.plist"
+  install_log="$fixture_root/install-required.log"
+  old_agent="$fixture_home/Library/LaunchAgents/com.github.akitaonrails.ai-memory.plist"
   launch_log="$fixture_root/launchctl.log"
   expected_log="$fixture_root/expected-launchctl.log"
+  username="$(id -un)"
+  group="$(id -gn)"
   uid="$(id -u)"
   mkdir -p "$stub_bin"
   printf '%s\n' '#!/bin/bash' 'exit 0' >"$executable"
-  chmod +x "$executable"
-  printf '%s\n' \
-    '#!/bin/bash' \
-    'printf '\''%s\n'\'' "$*" >>"$AI_MEMORY_TEST_LAUNCHCTL_LOG"' \
-    'if [[ "$1" == print && "${AI_MEMORY_TEST_GUI_AVAILABLE:-1}" == 0 ]]; then exit 1; fi' \
-    >"$stub_bin/launchctl"
   printf '%s\n' '#!/bin/bash' 'printf '\''Darwin\n'\''' >"$stub_bin/uname"
-  chmod +x "$stub_bin/launchctl" "$stub_bin/uname"
-  printf '%s\n' \
-    "print gui/$uid" \
-    "bootout gui/$uid/com.github.akitaonrails.ai-memory" \
-    "bootstrap gui/$uid $launch_agent" \
-    "kickstart -k gui/$uid/com.github.akitaonrails.ai-memory" >"$expected_log"
+  chmod +x "$executable"
+  chmod +x "$stub_bin/uname"
 
   if (
     HOME="$fixture_home"
     PATH="$stub_bin:/usr/bin:/bin"
-    AI_MEMORY_TEST_LAUNCHCTL_LOG="$launch_log"
-    export HOME PATH AI_MEMORY_TEST_LAUNCHCTL_LOG
+    AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE="$daemon_source"
+    export HOME PATH AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE
     source "$REPO_DIR/apply.sh"
-    start_ai_memory_service
+    install_ai_memory_launch_daemon
   ) >/dev/null 2>&1; then
-    ok "macOS ai-memory LaunchAgent installs and starts"
+    ok "macOS ai-memory LaunchDaemon source is generated"
   else
-    not_ok "macOS ai-memory LaunchAgent installation failed"
+    not_ok "macOS ai-memory LaunchDaemon source generation failed"
   fi
-  require_file "$launch_agent"
-  require_file_mode "$launch_agent" "600"
+  require_file "$daemon_source"
+  require_file_mode "$daemon_source" "600"
   require_file_mode "$fixture_home/Library/Logs/ai-memory" "700"
-  require_same_file "$expected_log" "$launch_log"
-  if python3 - "$launch_agent" "$executable" "$fixture_home" <<'PY'
+  require_file_mode "$fixture_home/Library/Logs/ai-memory/stdout.log" "600"
+  require_file_mode "$fixture_home/Library/Logs/ai-memory/stderr.log" "600"
+  if python3 - "$daemon_source" "$executable" "$fixture_home" "$username" "$group" <<'PY'
 import plistlib
 import sys
 from pathlib import Path
@@ -2610,69 +2609,96 @@ from pathlib import Path
 path = Path(sys.argv[1])
 executable = sys.argv[2]
 home = sys.argv[3]
+username = sys.argv[4]
+group = sys.argv[5]
 with path.open("rb") as stream:
     config = plistlib.load(stream)
 
-expected_arguments = [
-    "/bin/bash",
-    "-c",
-    'set -a; [[ ! -f "$1" ]] || source "$1"; shift; exec "$@"',
-    "ai-memory-service",
-    f"{home}/.config/ai-memory/env",
-    executable,
-    "--data-dir",
-    f"{home}/.local/share/ai-memory",
-    "--config",
-    f"{home}/.config/ai-memory/config.toml",
-    "serve",
-    "--transport",
-    "http",
-    "--enable-web",
-]
-assert config["Label"] == "com.github.akitaonrails.ai-memory"
-assert config["ProgramArguments"] == expected_arguments
-assert config["RunAtLoad"] is True
-assert config["KeepAlive"] is True
-assert config["ProcessType"] == "Interactive"
-assert config["StandardOutPath"] == f"{home}/Library/Logs/ai-memory/stdout.log"
-assert config["StandardErrorPath"] == f"{home}/Library/Logs/ai-memory/stderr.log"
+assert config == {
+    "Label": "com.github.akitaonrails.ai-memory",
+    "UserName": username,
+    "GroupName": group,
+    "ProgramArguments": [
+        "/bin/bash",
+        "-c",
+        'set -a; [[ ! -f "$1" ]] || source "$1"; shift; exec "$@"',
+        "ai-memory-service",
+        f"{home}/.config/ai-memory/env",
+        executable,
+        "--data-dir",
+        f"{home}/.local/share/ai-memory",
+        "--config",
+        f"{home}/.config/ai-memory/config.toml",
+        "serve",
+        "--transport",
+        "http",
+        "--enable-web",
+    ],
+    "RunAtLoad": True,
+    "KeepAlive": True,
+    "WorkingDirectory": home,
+    "EnvironmentVariables": {
+        "HOME": home,
+        "USER": username,
+        "LOGNAME": username,
+    },
+    "StandardOutPath": f"{home}/Library/Logs/ai-memory/stdout.log",
+    "StandardErrorPath": f"{home}/Library/Logs/ai-memory/stderr.log",
+}
 PY
   then
-    ok "macOS ai-memory LaunchAgent has the required runtime contract"
+    ok "macOS ai-memory LaunchDaemon has the required runtime contract"
   else
-    not_ok "macOS ai-memory LaunchAgent has incorrect content"
+    not_ok "macOS ai-memory LaunchDaemon has incorrect content"
   fi
 
-  chmod 644 "$launch_agent"
   if (
     HOME="$fixture_home"
     PATH="$stub_bin:/usr/bin:/bin"
-    export HOME PATH
+    AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE="$daemon_source"
+    AI_MEMORY_LAUNCH_DAEMON_FILE="$daemon_file"
+    export HOME PATH AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE AI_MEMORY_LAUNCH_DAEMON_FILE
     source "$REPO_DIR/apply.sh"
-    install_ai_memory_user_service
-  ) >/dev/null 2>&1; then
-    ok "macOS ai-memory LaunchAgent installation applies a second time"
+    start_ai_memory_service
+  ) >"$install_log" 2>&1; then
+    not_ok "missing macOS ai-memory LaunchDaemon did not require privileged installation"
   else
-    not_ok "second macOS ai-memory LaunchAgent installation failed"
+    ok "missing macOS ai-memory LaunchDaemon requires privileged installation"
   fi
-  require_file_mode "$launch_agent" "600"
+  require_contains "$install_log" "sudo install -o root -g wheel -m 0644"
+  require_contains "$install_log" "sudo launchctl bootstrap system"
+  require_contains "$install_log" "sudo launchctl kickstart -k"
 
-  : >"$launch_log"
-  printf '%s\n' "print gui/$uid" >"$expected_log"
+  mkdir -p "$(dirname "$daemon_file")" "$(dirname "$old_agent")"
+  cp "$daemon_source" "$daemon_file"
+  printf '%s\n' obsolete >"$old_agent"
+  printf '%s\n' '#!/bin/bash' 'printf '\''%s\n'\'' "$*" >>"$AI_MEMORY_TEST_LAUNCHCTL_LOG"' >"$stub_bin/launchctl"
+  printf '%s\n' '#!/bin/bash' 'printf '\''root:wheel:644\n'\''' >"$stub_bin/stat"
+  chmod +x "$stub_bin/launchctl" "$stub_bin/stat"
+  printf '%s\n' \
+    "print system/com.github.akitaonrails.ai-memory" \
+    "bootout gui/$uid/com.github.akitaonrails.ai-memory" >"$expected_log"
   if (
     HOME="$fixture_home"
     PATH="$stub_bin:/usr/bin:/bin"
     AI_MEMORY_TEST_LAUNCHCTL_LOG="$launch_log"
-    AI_MEMORY_TEST_GUI_AVAILABLE=0
-    export HOME PATH AI_MEMORY_TEST_LAUNCHCTL_LOG AI_MEMORY_TEST_GUI_AVAILABLE
+    AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE="$daemon_source"
+    AI_MEMORY_LAUNCH_DAEMON_FILE="$daemon_file"
+    AI_MEMORY_LAUNCH_AGENT_FILE="$old_agent"
+    export HOME PATH AI_MEMORY_TEST_LAUNCHCTL_LOG AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE AI_MEMORY_LAUNCH_DAEMON_FILE AI_MEMORY_LAUNCH_AGENT_FILE
     source "$REPO_DIR/apply.sh"
     start_ai_memory_service
   ) >/dev/null 2>&1; then
-    ok "headless macOS ai-memory LaunchAgent loading is deferred"
+    ok "active macOS ai-memory LaunchDaemon satisfies setup"
   else
-    not_ok "headless macOS ai-memory LaunchAgent loading was not deferred"
+    not_ok "active macOS ai-memory LaunchDaemon was rejected"
   fi
   require_same_file "$expected_log" "$launch_log"
+  if [[ ! -e "$old_agent" ]]; then
+    ok "obsolete macOS ai-memory LaunchAgent is removed after daemon activation"
+  else
+    not_ok "obsolete macOS ai-memory LaunchAgent remains after daemon activation"
+  fi
 
   rm -rf -- "$fixture_root"
 }
@@ -2847,7 +2873,7 @@ printf '\n--- Native ai-memory Fixtures ---\n'
 test_native_ai_memory_requirement
 test_macos_ai_memory_installation
 test_ai_memory_user_service_installation
-test_macos_ai_memory_launch_agent
+test_macos_ai_memory_launch_daemon
 test_macos_bash_profile
 
 if [[ "$repo_only" == "true" ]]; then
@@ -3137,18 +3163,29 @@ case "$(uname -s)" in
     require_ai_memory_status
     ;;
   Darwin)
-    require_file "$AI_MEMORY_LAUNCH_AGENT_FILE"
-    require_file_mode "$AI_MEMORY_LAUNCH_AGENT_FILE" "600"
+    require_file "$AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE"
+    require_file_mode "$AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE" "600"
+    require_file "$AI_MEMORY_LAUNCH_DAEMON_FILE"
+    require_file_mode "$AI_MEMORY_LAUNCH_DAEMON_FILE" "644"
+    require_same_file "$AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE" "$AI_MEMORY_LAUNCH_DAEMON_FILE"
     require_file_mode "$HOME/Library/Logs/ai-memory" "700"
-    if launchctl print "gui/$(id -u)" >/dev/null 2>&1; then
-      if launchctl print "gui/$(id -u)/$AI_MEMORY_LAUNCH_AGENT_LABEL" >/dev/null 2>&1; then
-        ok "ai-memory LaunchAgent is active"
-      else
-        not_ok "ai-memory LaunchAgent is not active"
-      fi
+    require_file_mode "$HOME/Library/Logs/ai-memory/stdout.log" "600"
+    require_file_mode "$HOME/Library/Logs/ai-memory/stderr.log" "600"
+    if [[ "$(stat -f '%Su:%Sg' "$AI_MEMORY_LAUNCH_DAEMON_FILE" 2>/dev/null || true)" == "root:wheel" ]]; then
+      ok "ai-memory LaunchDaemon is owned by root:wheel"
+    else
+      not_ok "ai-memory LaunchDaemon is not owned by root:wheel"
+    fi
+    if launchctl print "system/$AI_MEMORY_LAUNCH_AGENT_LABEL" >/dev/null 2>&1; then
+      ok "ai-memory LaunchDaemon is active"
       require_ai_memory_status
     else
-      ok "ai-memory LaunchAgent is installed and deferred until GUI login"
+      not_ok "ai-memory LaunchDaemon is not active"
+    fi
+    if [[ ! -e "$AI_MEMORY_LAUNCH_AGENT_FILE" && ! -L "$AI_MEMORY_LAUNCH_AGENT_FILE" ]]; then
+      ok "obsolete ai-memory LaunchAgent is absent"
+    else
+      not_ok "obsolete ai-memory LaunchAgent remains installed"
     fi
     ;;
 esac

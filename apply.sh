@@ -38,7 +38,10 @@ AI_MEMORY_INSTRUCTIONS_REFERENCE="~/.config/opencode/ai-memory.md"
 AI_MEMORY_USER_SERVICE_FILE="$HOME/.config/systemd/user/ai-memory.service"
 AI_MEMORY_LAUNCH_AGENT_LABEL="com.github.akitaonrails.ai-memory"
 AI_MEMORY_LAUNCH_AGENT_FILE="$HOME/Library/LaunchAgents/$AI_MEMORY_LAUNCH_AGENT_LABEL.plist"
-AI_MEMORY_LAUNCH_AGENT_LOG_DIR="$HOME/Library/Logs/ai-memory"
+AI_MEMORY_LAUNCH_DAEMON_LABEL="com.github.akitaonrails.ai-memory"
+AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE="${AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE:-$HOME/.config/ai-memory/$AI_MEMORY_LAUNCH_DAEMON_LABEL.plist}"
+AI_MEMORY_LAUNCH_DAEMON_FILE="${AI_MEMORY_LAUNCH_DAEMON_FILE:-/Library/LaunchDaemons/$AI_MEMORY_LAUNCH_DAEMON_LABEL.plist}"
+AI_MEMORY_LAUNCH_DAEMON_LOG_DIR="$HOME/Library/Logs/ai-memory"
 AI_MEMORY_DEFAULT_LLM_PROFILE="opencode-go-muse"
 BUN_MIN_VERSION="${BUN_MIN_VERSION:-1.3.0}"
 LEARN_REPOSITORY_URL="${LEARN_REPOSITORY_URL:-https://github.com/guisaliba/learn.git}"
@@ -1285,25 +1288,35 @@ atomic_write_text(path, content, 0o644, ".ai-memory.service.")
 PY
 }
 
-install_ai_memory_launch_agent() {
-  local executable
+install_ai_memory_launch_daemon() {
+  local executable username group
   executable="$(type -P ai-memory)" || \
     die "ai-memory must resolve to an executable file on PATH"
+  username="$(id -un)" || die "Could not resolve the current user name"
+  group="$(id -gn)" || die "Could not resolve the current user group"
 
-  log "Installing the managed ai-memory LaunchAgent"
+  log "Generating the managed ai-memory LaunchDaemon source"
   python3 "$AGENT_STACK_HELPER" \
     guard-regular-file \
-    "$AI_MEMORY_LAUNCH_AGENT_FILE" \
-    "ai-memory LaunchAgent path"
-  mkdir -p "$(dirname "$AI_MEMORY_LAUNCH_AGENT_FILE")" "$AI_MEMORY_LAUNCH_AGENT_LOG_DIR"
-  chmod 700 "$AI_MEMORY_LAUNCH_AGENT_LOG_DIR"
+    "$AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE" \
+    "ai-memory LaunchDaemon source path"
+  mkdir -p "$(dirname "$AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE")" "$AI_MEMORY_LAUNCH_DAEMON_LOG_DIR"
+  chmod 700 "$AI_MEMORY_LAUNCH_DAEMON_LOG_DIR"
+  touch \
+    "$AI_MEMORY_LAUNCH_DAEMON_LOG_DIR/stdout.log" \
+    "$AI_MEMORY_LAUNCH_DAEMON_LOG_DIR/stderr.log"
+  chmod 600 \
+    "$AI_MEMORY_LAUNCH_DAEMON_LOG_DIR/stdout.log" \
+    "$AI_MEMORY_LAUNCH_DAEMON_LOG_DIR/stderr.log"
 
   python3 - \
-    "$AI_MEMORY_LAUNCH_AGENT_FILE" \
+    "$AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE" \
     "$executable" \
     "$AGENT_STACK_HELPER" \
     "$HOME" \
-    "$AI_MEMORY_LAUNCH_AGENT_LABEL" <<'PY'
+    "$AI_MEMORY_LAUNCH_DAEMON_LABEL" \
+    "$username" \
+    "$group" <<'PY'
 import plistlib
 import sys
 from pathlib import Path
@@ -1313,6 +1326,8 @@ executable = str(Path(sys.argv[2]).absolute())
 helper_path = Path(sys.argv[3])
 home = sys.argv[4]
 label = sys.argv[5]
+username = sys.argv[6]
+group = sys.argv[7]
 sys.path.insert(0, str(helper_path.parent))
 sys.dont_write_bytecode = True
 
@@ -1321,6 +1336,8 @@ from agent_stack import atomic_write_text
 
 config = {
     "Label": label,
+    "UserName": username,
+    "GroupName": group,
     "ProgramArguments": [
         "/bin/bash",
         "-c",
@@ -1339,7 +1356,12 @@ config = {
     ],
     "RunAtLoad": True,
     "KeepAlive": True,
-    "ProcessType": "Interactive",
+    "WorkingDirectory": home,
+    "EnvironmentVariables": {
+        "HOME": home,
+        "USER": username,
+        "LOGNAME": username,
+    },
     "StandardOutPath": f"{home}/Library/Logs/ai-memory/stdout.log",
     "StandardErrorPath": f"{home}/Library/Logs/ai-memory/stderr.log",
 }
@@ -1351,17 +1373,17 @@ try:
 except FileNotFoundError:
     pass
 except OSError as exc:
-    raise SystemExit(f"ERROR: Cannot read ai-memory LaunchAgent at {path}: {exc}")
+    raise SystemExit(f"ERROR: Cannot read ai-memory LaunchDaemon source at {path}: {exc}")
 
-atomic_write_text(path, content, 0o600, ".ai-memory.plist.")
+atomic_write_text(path, content, 0o600, ".ai-memory-launch-daemon.")
 PY
-  chmod 600 "$AI_MEMORY_LAUNCH_AGENT_FILE"
+  chmod 600 "$AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE"
 }
 
 install_ai_memory_user_service() {
   case "$(agent_stack_platform)" in
     Linux) install_ai_memory_systemd_user_service ;;
-    Darwin) install_ai_memory_launch_agent ;;
+    Darwin) install_ai_memory_launch_daemon ;;
   esac
 }
 
@@ -1374,28 +1396,39 @@ start_ai_memory_systemd_user_service() {
   systemctl --user restart ai-memory.service || die "ai-memory user service restart failed"
 }
 
-start_ai_memory_launch_agent() {
-  local domain target
-  domain="gui/$(id -u)"
-  target="$domain/$AI_MEMORY_LAUNCH_AGENT_LABEL"
+start_ai_memory_launch_daemon() {
+  local target installed_contract
+  target="system/$AI_MEMORY_LAUNCH_DAEMON_LABEL"
 
-  log "Loading and restarting the ai-memory LaunchAgent"
-  install_ai_memory_launch_agent
-  if ! launchctl print "$domain" >/dev/null 2>&1; then
-    log "No GUI login domain is active; the LaunchAgent will load at the next GUI login"
-    return 0
+  log "Verifying the ai-memory LaunchDaemon"
+  install_ai_memory_launch_daemon
+  installed_contract="$(stat -f '%Su:%Sg:%Lp' "$AI_MEMORY_LAUNCH_DAEMON_FILE" 2>/dev/null || true)"
+  if [[ ! -f "$AI_MEMORY_LAUNCH_DAEMON_FILE" ]] || \
+    [[ "$installed_contract" != "root:wheel:644" ]] || \
+    ! cmp -s "$AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE" "$AI_MEMORY_LAUNCH_DAEMON_FILE"; then
+    die "ai-memory LaunchDaemon requires privileged installation. Run these commands:
+launchctl bootout 'gui/$(id -u)/$AI_MEMORY_LAUNCH_AGENT_LABEL' >/dev/null 2>&1 || true
+sudo launchctl bootout '$target' >/dev/null 2>&1 || true
+sudo install -o root -g wheel -m 0644 '$AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE' '$AI_MEMORY_LAUNCH_DAEMON_FILE'
+sudo launchctl bootstrap system '$AI_MEMORY_LAUNCH_DAEMON_FILE'
+sudo launchctl kickstart -k '$target'"
   fi
-
-  launchctl bootout "$target" >/dev/null 2>&1 || true
-  launchctl bootstrap "$domain" "$AI_MEMORY_LAUNCH_AGENT_FILE" || \
-    die "ai-memory LaunchAgent bootstrap failed"
-  launchctl kickstart -k "$target" || die "ai-memory LaunchAgent restart failed"
+  if ! launchctl print "$target" >/dev/null 2>&1; then
+    die "ai-memory LaunchDaemon is installed but inactive. Run these commands:
+launchctl bootout 'gui/$(id -u)/$AI_MEMORY_LAUNCH_AGENT_LABEL' >/dev/null 2>&1 || true
+sudo launchctl bootstrap system '$AI_MEMORY_LAUNCH_DAEMON_FILE'
+sudo launchctl kickstart -k '$target'"
+  fi
+  if [[ -e "$AI_MEMORY_LAUNCH_AGENT_FILE" || -L "$AI_MEMORY_LAUNCH_AGENT_FILE" ]]; then
+    launchctl bootout "gui/$(id -u)/$AI_MEMORY_LAUNCH_AGENT_LABEL" >/dev/null 2>&1 || true
+    rm -f "$AI_MEMORY_LAUNCH_AGENT_FILE"
+  fi
 }
 
 start_ai_memory_service() {
   case "$(agent_stack_platform)" in
     Linux) start_ai_memory_systemd_user_service ;;
-    Darwin) start_ai_memory_launch_agent ;;
+    Darwin) start_ai_memory_launch_daemon ;;
   esac
 }
 
