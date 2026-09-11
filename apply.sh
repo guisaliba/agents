@@ -1072,7 +1072,7 @@ ai_memory_env_has_nonempty_value() {
 
 ai_memory_profile_spec() {
   case "$1" in
-    opencode-go-muse)
+    opencode-go-muse-spark-1.3-contributor)
       printf '%s\n' 'opencode|muse-spark-1.3-contributor|opencode-api-key|opencode-go/muse-spark-1.3-contributor'
       ;;
     opencode-go-deepseek-v4.1-flash)
@@ -1090,7 +1090,7 @@ ai_memory_selected_profile() {
   profile="$(ai_memory_env_value DOTFILES_AI_MEMORY_LLM_PROFILE 2>/dev/null || true)"
   profile="${profile:-$AI_MEMORY_DEFAULT_LLM_PROFILE}"
   ai_memory_profile_spec "$profile" >/dev/null || \
-    die "Unsupported DOTFILES_AI_MEMORY_LLM_PROFILE '$profile'. Use opencode-go-deepseek-v4.1-flash or opencode-go-muse."
+    die "Unsupported DOTFILES_AI_MEMORY_LLM_PROFILE '$profile'. Use opencode-go-deepseek-v4.1-flash or opencode-go-muse-spark-1.3-contributor."
   printf '%s\n' "$profile"
 }
 
