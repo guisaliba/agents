@@ -42,9 +42,9 @@ AI_MEMORY_MCP_EXPECTED_JSON='{"type":"remote","url":"http://127.0.0.1:49374/mcp"
 AI_MEMORY_MIN_VERSION="1.28.0"
 AI_MEMORY_RELEASE_VERSION_EXPECTED="2.1.1"
 AI_MEMORY_MACOS_AARCH64_SHA256_EXPECTED="1cc2acdbbd62cc7ecf6e1fe91515ea77786910b2c102f1fe8781aa6c0357eb64"
-AI_MEMORY_LLM_PROFILE_EXPECTED="opencode-go-muse"
+AI_MEMORY_LLM_PROFILE_EXPECTED="opencode-go-deepseek-v4.1-flash"
 AI_MEMORY_LLM_PROVIDER_EXPECTED="opencode"
-AI_MEMORY_LLM_MODEL_EXPECTED="muse-spark-1.3-contributor"
+AI_MEMORY_LLM_MODEL_EXPECTED="deepseek-v4.1-flash"
 HERDR_BINARY_EXPECTED="$HOME/.local/bin/herdr"
 HERDR_CONFIG_EXPECTED="$HOME/.config/herdr/config.toml"
 BUN_MIN_VERSION="1.3.0"
@@ -527,7 +527,7 @@ require_ai_memory_llm_policy() {
 
 test_opencode_json_merge() {
   local fixture_root fixture_home fixture_config fixture_token fixture_learn_plugin token_before first_config
-  local deepseek_home deepseek_config deepseek_env
+  local muse_home muse_config muse_env
   local malformed_home malformed_config malformed_before malformed_log
   local invalid_home invalid_config invalid_before invalid_log
   local instructions_home instructions_config instructions_before instructions_log
@@ -617,8 +617,8 @@ PY
     "plugin" \
     '["github:guisaliba/learn#v0.0.1",{"textModel":"stale/model"}]' \
     "0"
-  require_json_value "$fixture_config" "agent.general.model" "opencode-go/muse-spark-1.3-contributor"
-  require_json_value "$fixture_config" "agent.explore.model" "opencode-go/muse-spark-1.3-contributor"
+  require_json_value "$fixture_config" "agent.general.model" "opencode-go/deepseek-v4.1-flash"
+  require_json_value "$fixture_config" "agent.explore.model" "opencode-go/deepseek-v4.1-flash"
   require_json_literal "$fixture_config" "agent.general.temperature" "0.25"
   require_json_value "$fixture_config" "agent.custom.model" "user/custom-model"
   require_json_value "$fixture_config" "mcp.custom.url" "https://example.invalid/mcp"
@@ -655,23 +655,23 @@ PY
   require_same_file "$token_before" "$fixture_token"
   require_file_mode "$fixture_token" "600"
 
-  deepseek_home="$fixture_root/deepseek-home"
-  deepseek_config="$deepseek_home/.config/opencode/opencode.json"
-  deepseek_env="$deepseek_home/.config/ai-memory/env"
-  mkdir -p "$(dirname "$deepseek_config")" "$(dirname "$deepseek_env")"
-  printf '%s\n' 'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-deepseek' >"$deepseek_env"
+  muse_home="$fixture_root/muse-home"
+  muse_config="$muse_home/.config/opencode/opencode.json"
+  muse_env="$muse_home/.config/ai-memory/env"
+  mkdir -p "$(dirname "$muse_config")" "$(dirname "$muse_env")"
+  printf '%s\n' 'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-muse' >"$muse_env"
   if (
-    HOME="$deepseek_home"
+    HOME="$muse_home"
     LEARN_INSTALL_DIR="$fixture_learn_plugin"
     source "$REPO_DIR/apply.sh"
     merge_opencode_json
   ) >/dev/null 2>&1; then
-    ok "DeepSeek profile OpenCode merge fixture applies"
+    ok "Muse profile OpenCode merge fixture applies"
   else
-    not_ok "DeepSeek profile OpenCode merge fixture failed"
+    not_ok "Muse profile OpenCode merge fixture failed"
   fi
-  require_json_value "$deepseek_config" "agent.general.model" "opencode-go/deepseek-v4-flash"
-  require_json_value "$deepseek_config" "agent.explore.model" "opencode-go/deepseek-v4-flash"
+  require_json_value "$muse_config" "agent.general.model" "opencode-go/muse-spark-1.3-contributor"
+  require_json_value "$muse_config" "agent.explore.model" "opencode-go/muse-spark-1.3-contributor"
 
   malformed_home="$fixture_root/malformed-home"
   malformed_config="$malformed_home/.config/opencode/opencode.json"
@@ -1044,9 +1044,9 @@ test_ai_memory_env_file() {
     source "$REPO_DIR/apply.sh"
     configure_ai_memory_env_file
   ) >/dev/null 2>&1; then
-    ok "default Muse profile stays disabled without its API key"
+    ok "default DeepSeek v4.1 Flash profile stays disabled without its API key"
   else
-    not_ok "default Muse zero-LLM fixture failed"
+    not_ok "default DeepSeek v4.1 Flash zero-LLM fixture failed"
   fi
   require_env_assignment "$no_key_env" "DOTFILES_AI_MEMORY_LLM_PROFILE" "$AI_MEMORY_LLM_PROFILE_EXPECTED"
   require_env_assignment "$no_key_env" "AI_MEMORY_LLM_PROVIDER" ""
@@ -1076,24 +1076,24 @@ test_ai_memory_env_file() {
   deepseek_env="$deepseek_home/.config/ai-memory/env"
   mkdir -p "$(dirname "$deepseek_env")"
   printf '%s\n' \
-    'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-deepseek' \
+    'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-deepseek-v4.1-flash' \
     'OPENCODE_API_KEY=fixture-secret' >"$deepseek_env"
   if (
     HOME="$deepseek_home"
     source "$REPO_DIR/apply.sh"
     configure_ai_memory_env_file
   ) >/dev/null 2>&1; then
-    ok "OpenCode Go DeepSeek profile enables with its separate key"
+    ok "OpenCode Go DeepSeek v4.1 Flash profile enables with its separate key"
   else
-    not_ok "OpenCode Go DeepSeek profile fixture failed"
+    not_ok "OpenCode Go DeepSeek v4.1 Flash profile fixture failed"
   fi
-  require_env_assignment "$deepseek_env" "DOTFILES_AI_MEMORY_LLM_PROFILE" "opencode-go-deepseek"
+  require_env_assignment "$deepseek_env" "DOTFILES_AI_MEMORY_LLM_PROFILE" "opencode-go-deepseek-v4.1-flash"
   require_env_assignment "$deepseek_env" "OPENCODE_API_KEY" "fixture-secret"
   require_env_assignment "$deepseek_env" "AI_MEMORY_LLM_PROVIDER" "opencode"
-  require_env_assignment "$deepseek_env" "AI_MEMORY_LLM_MODEL" "deepseek-v4-flash"
+  require_env_assignment "$deepseek_env" "AI_MEMORY_LLM_MODEL" "deepseek-v4.1-flash"
 
   invalid_index=0
-  for invalid_profile in openai-subscription-luna openai-api-luna disabled not-a-profile; do
+  for invalid_profile in openai-subscription-luna openai-api-luna disabled not-a-profile opencode-go-deepseek; do
     invalid_index=$((invalid_index + 1))
     invalid_home="$fixture_root/invalid-profile-home-$invalid_index"
     invalid_env="$invalid_home/.config/ai-memory/env"

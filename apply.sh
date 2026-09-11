@@ -42,7 +42,7 @@ AI_MEMORY_LAUNCH_DAEMON_LABEL="com.github.akitaonrails.ai-memory"
 AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE="${AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE:-$HOME/.config/ai-memory/$AI_MEMORY_LAUNCH_DAEMON_LABEL.plist}"
 AI_MEMORY_LAUNCH_DAEMON_FILE="${AI_MEMORY_LAUNCH_DAEMON_FILE:-/Library/LaunchDaemons/$AI_MEMORY_LAUNCH_DAEMON_LABEL.plist}"
 AI_MEMORY_LAUNCH_DAEMON_LOG_DIR="$HOME/Library/Logs/ai-memory"
-AI_MEMORY_DEFAULT_LLM_PROFILE="opencode-go-muse"
+AI_MEMORY_DEFAULT_LLM_PROFILE="opencode-go-deepseek-v4.1-flash"
 BUN_MIN_VERSION="${BUN_MIN_VERSION:-1.3.0}"
 LEARN_REPOSITORY_URL="${LEARN_REPOSITORY_URL:-https://github.com/guisaliba/learn.git}"
 LEARN_BRANCH="${LEARN_BRANCH:-main}"
@@ -1075,8 +1075,8 @@ ai_memory_profile_spec() {
     opencode-go-muse)
       printf '%s\n' 'opencode|muse-spark-1.3-contributor|opencode-api-key|opencode-go/muse-spark-1.3-contributor'
       ;;
-    opencode-go-deepseek)
-      printf '%s\n' 'opencode|deepseek-v4-flash|opencode-api-key|opencode-go/deepseek-v4-flash'
+    opencode-go-deepseek-v4.1-flash)
+      printf '%s\n' 'opencode|deepseek-v4.1-flash|opencode-api-key|opencode-go/deepseek-v4.1-flash'
       ;;
     *)
       return 1
@@ -1090,7 +1090,7 @@ ai_memory_selected_profile() {
   profile="$(ai_memory_env_value DOTFILES_AI_MEMORY_LLM_PROFILE 2>/dev/null || true)"
   profile="${profile:-$AI_MEMORY_DEFAULT_LLM_PROFILE}"
   ai_memory_profile_spec "$profile" >/dev/null || \
-    die "Unsupported DOTFILES_AI_MEMORY_LLM_PROFILE '$profile'. Use opencode-go-muse or opencode-go-deepseek."
+    die "Unsupported DOTFILES_AI_MEMORY_LLM_PROFILE '$profile'. Use opencode-go-deepseek-v4.1-flash or opencode-go-muse."
   printf '%s\n' "$profile"
 }
 
