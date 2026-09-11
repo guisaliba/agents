@@ -585,6 +585,8 @@ PY
   require_file_mode "$fixture_token" "600"
 
   require_json_value "$fixture_config" "theme" "user-theme"
+  require_json_value "$fixture_config" "model" "openai/gpt-6-astra"
+  require_json_value "$fixture_config" "agent.plan.model" "openai/gpt-6-astra"
   require_json_array_count "$fixture_config" "instructions" "user-rules.md" "1"
   require_json_array_count "$fixture_config" "instructions" "$AI_MEMORY_INSTRUCTIONS_REFERENCE" "1"
   require_json_array_count "$fixture_config" "plugin" "user/plugin" "1"
@@ -1820,9 +1822,9 @@ fi
 require_file "$GITHUB_MCP_TOKEN_FILE"
 require_file_mode "$GITHUB_MCP_TOKEN_FILE" "600"
 require_json "$HOME/.config/opencode/opencode.json"
-require_json_value "$HOME/.config/opencode/opencode.json" "model" "openai/gpt-5.6-sol"
+require_json_value "$HOME/.config/opencode/opencode.json" "model" "openai/gpt-6-astra"
 require_json_value "$HOME/.config/opencode/opencode.json" "default_agent" "build"
-require_json_value "$HOME/.config/opencode/opencode.json" "agent.plan.model" "openai/gpt-5.6-sol"
+require_json_value "$HOME/.config/opencode/opencode.json" "agent.plan.model" "openai/gpt-6-astra"
 selected_profile="$(
   source "$REPO_DIR/apply.sh"
   ai_memory_selected_profile

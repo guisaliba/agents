@@ -551,7 +551,7 @@ if not isinstance(data, dict):
 
 data.setdefault("$schema", "https://opencode.ai/config.json")
 
-primary_model = "openai/gpt-5.6-sol"
+primary_model = "openai/gpt-6-astra"
 data["model"] = primary_model
 data["default_agent"] = "build"
 
