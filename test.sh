@@ -3027,15 +3027,6 @@ require_json_value "$HOME/.config/opencode/opencode.json" "mcp.github.headers.Au
 require_json_value "$HOME/.config/opencode/opencode.json" "mcp.github.headers.X-MCP-Toolsets" "context,repos,issues,pull_requests,actions"
 require_json_literal "$HOME/.config/opencode/opencode.json" "mcp.github" "$GITHUB_MCP_EXPECTED_JSON"
 
-available_agents="$(opencode agent list 2>/dev/null || true)"
-if [[ "$available_agents" == *$'\nscout (subagent)\n'* ]]; then
-  require_json_value "$HOME/.config/opencode/opencode.json" "agent.scout.model" "$expected_subagent_model"
-elif [[ "$available_agents" == *$'\nscout ('* ]]; then
-  not_ok "scout exists but is not a built-in subagent"
-else
-  ok "native scout subagent is unavailable; no custom fallback configured"
-fi
-
 require_contains "$HOME/.config/opencode/opencode.json" "@plannotator/opencode@latest"
 require_file "$HOME/.config/opencode/tui.json"
 require_json "$HOME/.config/opencode/tui.json"

@@ -740,28 +740,10 @@ ensure_github_mcp_token_file() {
     "GitHub MCP token path"
 }
 
-native_scout_available() {
-  local clean_home output
-  clean_home="$(mktemp -d)"
-
-  if output="$(
-    HOME="$clean_home" \
-      OPENCODE_DISABLE_EXTERNAL_SKILLS=1 \
-      opencode agent list --pure 2>/dev/null
-  )" && [[ "$output" == *$'\nscout (subagent)\n'* ]]; then
-    rm -rf "$clean_home"
-    return 0
-  fi
-
-  rm -rf "$clean_home"
-  return 1
-}
-
 merge_opencode_json() {
   log "Merging OpenCode opencode.json"
 
   local config="$HOME/.config/opencode/opencode.json"
-  local manage_scout=false
   local profile profile_spec provider model credential subagent_model
   mkdir -p "$(dirname "$config")"
 
@@ -769,16 +751,8 @@ merge_opencode_json() {
   profile_spec="$(ai_memory_profile_spec "$profile")"
   IFS='|' read -r provider model credential subagent_model <<<"$profile_spec"
 
-  if native_scout_available; then
-    manage_scout=true
-    log "Native Scout subagent available; applying its model override"
-  else
-    log "Native Scout subagent unavailable; leaving Scout unmanaged"
-  fi
-
   python3 - \
     "$config" \
-    "$manage_scout" \
     "$subagent_model" \
     "$GITHUB_MCP_TOKEN_REFERENCE" \
     "$AI_MEMORY_INSTRUCTIONS_REFERENCE" \
@@ -790,13 +764,12 @@ import os
 import sys
 
 path = sys.argv[1]
-manage_scout = sys.argv[2] == "true"
-subagent_model = sys.argv[3]
-github_mcp_token_reference = sys.argv[4]
-ai_memory_instructions_reference = sys.argv[5]
-learn_plugin_spec = sys.argv[6]
-learn_legacy_plugin_base = sys.argv[7]
-learn_older_plugin_base = sys.argv[8]
+subagent_model = sys.argv[2]
+github_mcp_token_reference = sys.argv[3]
+ai_memory_instructions_reference = sys.argv[4]
+learn_plugin_spec = sys.argv[5]
+learn_legacy_plugin_base = sys.argv[6]
+learn_older_plugin_base = sys.argv[7]
 data = {}
 
 if os.path.exists(path):
@@ -832,8 +805,6 @@ managed_models = {
     "general": subagent_model,
     "explore": subagent_model,
 }
-if manage_scout:
-    managed_models["scout"] = subagent_model
 
 for name, model in managed_models.items():
     config = agents.get(name, {})
