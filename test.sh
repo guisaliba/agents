@@ -434,6 +434,30 @@ PY
   fi
 }
 
+profile_names() {
+  (
+    source "$REPO_DIR/apply.sh"
+    ai_memory_profile_list
+  )
+}
+
+profile_field() {
+  local name="$1"
+  local field="$2"
+  (
+    source "$REPO_DIR/apply.sh"
+    spec="$(ai_memory_profile_spec "$name")" || exit 1
+    IFS='|' read -r provider model credential subagent_model <<<"$spec"
+    case "$field" in
+      provider) printf '%s\n' "$provider" ;;
+      model) printf '%s\n' "$model" ;;
+      credential) printf '%s\n' "$credential" ;;
+      subagent) printf '%s\n' "$subagent_model" ;;
+      *) exit 2 ;;
+    esac
+  )
+}
+
 require_ai_memory_instructions_current() {
   local fixture_root expected
   fixture_root="$(mktemp -d)"
@@ -527,7 +551,7 @@ require_ai_memory_llm_policy() {
 
 test_opencode_json_merge() {
   local fixture_root fixture_home fixture_config fixture_token fixture_learn_plugin token_before first_config
-  local muse_home muse_config muse_env
+  local selected_profile profile_home profile_config profile_env
   local malformed_home malformed_config malformed_before malformed_log
   local invalid_home invalid_config invalid_before invalid_log
   local instructions_home instructions_config instructions_before instructions_log
@@ -657,23 +681,25 @@ PY
   require_same_file "$token_before" "$fixture_token"
   require_file_mode "$fixture_token" "600"
 
-  muse_home="$fixture_root/muse-home"
-  muse_config="$muse_home/.config/opencode/opencode.json"
-  muse_env="$muse_home/.config/ai-memory/env"
-  mkdir -p "$(dirname "$muse_config")" "$(dirname "$muse_env")"
-  printf '%s\n' 'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-muse-spark-1.3-contributor' >"$muse_env"
-  if (
-    HOME="$muse_home"
-    LEARN_INSTALL_DIR="$fixture_learn_plugin"
-    source "$REPO_DIR/apply.sh"
-    merge_opencode_json
-  ) >/dev/null 2>&1; then
-    ok "Muse profile OpenCode merge fixture applies"
-  else
-    not_ok "Muse profile OpenCode merge fixture failed"
-  fi
-  require_json_value "$muse_config" "agent.general.model" "opencode-go/muse-spark-1.3-contributor"
-  require_json_value "$muse_config" "agent.explore.model" "opencode-go/muse-spark-1.3-contributor"
+  for selected_profile in $(profile_names); do
+    profile_home="$fixture_root/profile-home-$selected_profile"
+    profile_config="$profile_home/.config/opencode/opencode.json"
+    profile_env="$profile_home/.config/ai-memory/env"
+    mkdir -p "$(dirname "$profile_config")" "$(dirname "$profile_env")"
+    printf '%s\n' "DOTFILES_AI_MEMORY_LLM_PROFILE=$selected_profile" >"$profile_env"
+    if (
+      HOME="$profile_home"
+      LEARN_INSTALL_DIR="$fixture_learn_plugin"
+      source "$REPO_DIR/apply.sh"
+      merge_opencode_json
+    ) >/dev/null 2>&1; then
+      ok "OpenCode merge applies for profile: $selected_profile"
+    else
+      not_ok "OpenCode merge failed for profile: $selected_profile"
+    fi
+    require_json_value "$profile_config" "agent.general.model" "$(profile_field "$selected_profile" subagent)"
+    require_json_value "$profile_config" "agent.explore.model" "$(profile_field "$selected_profile" subagent)"
+  done
 
   malformed_home="$fixture_root/malformed-home"
   malformed_config="$malformed_home/.config/opencode/opencode.json"
@@ -968,7 +994,7 @@ test_learn_plugin_sync() {
 test_ai_memory_env_file() {
   local fixture_root fixture_home fixture_env fixture_config env_before first_env
   local no_key_home no_key_env
-  local muse_home muse_env deepseek_home deepseek_env
+  local selected_profile profile_home profile_env
   local invalid_profile invalid_index invalid_home invalid_env invalid_before invalid_log
   local auth_name auth_index env_auth_home config_auth_home
   fixture_root="$(mktemp -d)"
@@ -1054,45 +1080,27 @@ test_ai_memory_env_file() {
   require_env_assignment "$no_key_env" "AI_MEMORY_LLM_PROVIDER" ""
   require_env_assignment "$no_key_env" "AI_MEMORY_LLM_MODEL" "$AI_MEMORY_LLM_MODEL_EXPECTED"
 
-  muse_home="$fixture_root/muse-profile-home"
-  muse_env="$muse_home/.config/ai-memory/env"
-  mkdir -p "$(dirname "$muse_env")"
-  printf '%s\n' \
-    'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-muse-spark-1.3-contributor' \
-    'OPENCODE_API_KEY=fixture-secret' >"$muse_env"
-  if (
-    HOME="$muse_home"
-    source "$REPO_DIR/apply.sh"
-    configure_ai_memory_env_file
-  ) >/dev/null 2>&1; then
-    ok "OpenCode Go Muse profile enables with its separate key"
-  else
-    not_ok "OpenCode Go Muse profile fixture failed"
-  fi
-  require_env_assignment "$muse_env" "DOTFILES_AI_MEMORY_LLM_PROFILE" "opencode-go-muse-spark-1.3-contributor"
-  require_env_assignment "$muse_env" "OPENCODE_API_KEY" "fixture-secret"
-  require_env_assignment "$muse_env" "AI_MEMORY_LLM_PROVIDER" "opencode"
-  require_env_assignment "$muse_env" "AI_MEMORY_LLM_MODEL" "muse-spark-1.3-contributor"
-
-  deepseek_home="$fixture_root/deepseek-profile-home"
-  deepseek_env="$deepseek_home/.config/ai-memory/env"
-  mkdir -p "$(dirname "$deepseek_env")"
-  printf '%s\n' \
-    'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-deepseek-v4.1-flash' \
-    'OPENCODE_API_KEY=fixture-secret' >"$deepseek_env"
-  if (
-    HOME="$deepseek_home"
-    source "$REPO_DIR/apply.sh"
-    configure_ai_memory_env_file
-  ) >/dev/null 2>&1; then
-    ok "OpenCode Go DeepSeek v4.1 Flash profile enables with its separate key"
-  else
-    not_ok "OpenCode Go DeepSeek v4.1 Flash profile fixture failed"
-  fi
-  require_env_assignment "$deepseek_env" "DOTFILES_AI_MEMORY_LLM_PROFILE" "opencode-go-deepseek-v4.1-flash"
-  require_env_assignment "$deepseek_env" "OPENCODE_API_KEY" "fixture-secret"
-  require_env_assignment "$deepseek_env" "AI_MEMORY_LLM_PROVIDER" "opencode"
-  require_env_assignment "$deepseek_env" "AI_MEMORY_LLM_MODEL" "deepseek-v4.1-flash"
+  for selected_profile in $(profile_names); do
+    profile_home="$fixture_root/profile-home-$selected_profile"
+    profile_env="$profile_home/.config/ai-memory/env"
+    mkdir -p "$(dirname "$profile_env")"
+    printf '%s\n' \
+      "DOTFILES_AI_MEMORY_LLM_PROFILE=$selected_profile" \
+      'OPENCODE_API_KEY=fixture-secret' >"$profile_env"
+    if (
+      HOME="$profile_home"
+      source "$REPO_DIR/apply.sh"
+      configure_ai_memory_env_file
+    ) >/dev/null 2>&1; then
+      ok "OpenCode Go profile enables with its separate key: $selected_profile"
+    else
+      not_ok "OpenCode Go profile fixture failed: $selected_profile"
+    fi
+    require_env_assignment "$profile_env" "DOTFILES_AI_MEMORY_LLM_PROFILE" "$selected_profile"
+    require_env_assignment "$profile_env" "OPENCODE_API_KEY" "fixture-secret"
+    require_env_assignment "$profile_env" "AI_MEMORY_LLM_PROVIDER" "$(profile_field "$selected_profile" provider)"
+    require_env_assignment "$profile_env" "AI_MEMORY_LLM_MODEL" "$(profile_field "$selected_profile" model)"
+  done
 
   invalid_index=0
   for invalid_profile in openai-subscription-luna openai-api-luna disabled not-a-profile opencode-go-deepseek opencode-go-muse; do
@@ -2974,17 +2982,39 @@ require_json "$HOME/.config/opencode/opencode.json"
 require_json_value "$HOME/.config/opencode/opencode.json" "model" "openai/gpt-6-astra"
 require_json_value "$HOME/.config/opencode/opencode.json" "default_agent" "build"
 require_json_value "$HOME/.config/opencode/opencode.json" "agent.plan.model" "openai/gpt-6-astra"
-selected_profile="$(
+selected_profile_log="$(mktemp)"
+if selected_profile="$(
   source "$REPO_DIR/apply.sh"
-  ai_memory_selected_profile
-)"
-profile_spec="$(
-  source "$REPO_DIR/apply.sh"
-  ai_memory_profile_spec "$selected_profile"
-)"
-IFS='|' read -r expected_provider expected_model credential expected_subagent_model <<<"$profile_spec"
-require_json_value "$HOME/.config/opencode/opencode.json" "agent.general.model" "$expected_subagent_model"
-require_json_value "$HOME/.config/opencode/opencode.json" "agent.explore.model" "$expected_subagent_model"
+  ai_memory_selected_profile 2>"$selected_profile_log"
+)"; then
+  ok "ai-memory profile selection is supported: $selected_profile"
+  profile_spec="$(
+    source "$REPO_DIR/apply.sh"
+    ai_memory_profile_spec "$selected_profile"
+  )"
+  IFS='|' read -r expected_provider expected_model credential expected_subagent_model <<<"$profile_spec"
+  require_json_value "$HOME/.config/opencode/opencode.json" "agent.general.model" "$expected_subagent_model"
+  require_json_value "$HOME/.config/opencode/opencode.json" "agent.explore.model" "$expected_subagent_model"
+else
+  not_ok "ai-memory profile selection is unsupported or unreadable"
+  sed 's/^/  /' "$selected_profile_log" >&2
+fi
+rm -f "$selected_profile_log"
+
+model_catalog="$(opencode models 2>/dev/null || true)"
+if [[ -n "$model_catalog" ]]; then
+  model_catalog_lines=$'\n'"$model_catalog"$'\n'
+  for profile_name in $(profile_names); do
+    catalog_model="$(profile_field "$profile_name" subagent)"
+    if [[ "$model_catalog_lines" == *$'\n'"$catalog_model"$'\n'* ]]; then
+      ok "opencode model catalog contains $catalog_model"
+    else
+      not_ok "opencode model catalog does not contain $catalog_model for profile $profile_name"
+    fi
+  done
+else
+  not_ok "opencode models returned no catalog"
+fi
 require_json_array_count "$HOME/.config/opencode/opencode.json" "instructions" "$AI_MEMORY_INSTRUCTIONS_REFERENCE" "1"
 require_json_array_count "$HOME/.config/opencode/opencode.json" "plugin" "$LEARN_PLUGIN_SPEC" "1"
 require_json_array_count "$HOME/.config/opencode/opencode.json" "plugin" "$LEARN_LEGACY_PLUGIN_BASE" "0"

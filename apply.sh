@@ -1070,6 +1070,12 @@ ai_memory_env_has_nonempty_value() {
   [[ -n "$value" ]]
 }
 
+ai_memory_profile_list() {
+  printf '%s\n' \
+    opencode-go-deepseek-v4.1-flash \
+    opencode-go-muse-spark-1.3-contributor
+}
+
 ai_memory_profile_spec() {
   case "$1" in
     opencode-go-muse-spark-1.3-contributor)
@@ -1085,12 +1091,14 @@ ai_memory_profile_spec() {
 }
 
 ai_memory_selected_profile() {
-  local profile
+  local profile supported
 
   profile="$(ai_memory_env_value DOTFILES_AI_MEMORY_LLM_PROFILE 2>/dev/null || true)"
   profile="${profile:-$AI_MEMORY_DEFAULT_LLM_PROFILE}"
-  ai_memory_profile_spec "$profile" >/dev/null || \
-    die "Unsupported DOTFILES_AI_MEMORY_LLM_PROFILE '$profile'. Use opencode-go-deepseek-v4.1-flash or opencode-go-muse-spark-1.3-contributor."
+  if ! ai_memory_profile_spec "$profile" >/dev/null; then
+    supported="$(ai_memory_profile_list | paste -sd, - | sed 's/,/, /g')"
+    die "Unsupported DOTFILES_AI_MEMORY_LLM_PROFILE '$profile'. Supported profiles: $supported. Remove the assignment to use the default."
+  fi
   printf '%s\n' "$profile"
 }
 
