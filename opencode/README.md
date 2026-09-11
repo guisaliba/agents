@@ -12,8 +12,8 @@ Primary:
   plan  -> openai/gpt-5.6-sol
 
 Subagents by `DOTFILES_AI_MEMORY_LLM_PROFILE`:
-  opencode-go-muse (default) -> opencode-go/muse-spark-1.3-contributor
-  opencode-go-deepseek       -> opencode-go/deepseek-v4-flash
+  opencode-go-deepseek-v4.1-flash (default) -> opencode-go/deepseek-v4.1-flash
+  opencode-go-muse                          -> opencode-go/muse-spark-1.3-contributor
 ```
 
 ## Managed Paths
