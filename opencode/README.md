@@ -8,8 +8,8 @@ invalid JSON file or an invalid managed structure.
 
 ```text
 Primary:
-  build -> openai/gpt-5.6-sol
-  plan  -> openai/gpt-5.6-sol
+  build -> openai/gpt-6-astra
+  plan  -> openai/gpt-6-astra
 
 Subagents by `DOTFILES_AI_MEMORY_LLM_PROFILE`:
   opencode-go-deepseek-v4.1-flash (default) -> opencode-go/deepseek-v4.1-flash
