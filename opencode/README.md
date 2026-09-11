@@ -13,7 +13,7 @@ Primary:
 
 Subagents by `DOTFILES_AI_MEMORY_LLM_PROFILE`:
   opencode-go-deepseek-v4.1-flash (default) -> opencode-go/deepseek-v4.1-flash
-  opencode-go-muse                          -> opencode-go/muse-spark-1.3-contributor
+  opencode-go-muse-spark-1.3-contributor    -> opencode-go/muse-spark-1.3-contributor
 ```
 
 ## Managed Paths

@@ -642,7 +642,7 @@ PY
   muse_config="$muse_home/.config/opencode/opencode.json"
   muse_env="$muse_home/.config/ai-memory/env"
   mkdir -p "$(dirname "$muse_config")" "$(dirname "$muse_env")"
-  printf '%s\n' 'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-muse' >"$muse_env"
+  printf '%s\n' 'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-muse-spark-1.3-contributor' >"$muse_env"
   if (
     HOME="$muse_home"
     LEARN_INSTALL_DIR="$fixture_learn_plugin"
@@ -1039,7 +1039,7 @@ test_ai_memory_env_file() {
   muse_env="$muse_home/.config/ai-memory/env"
   mkdir -p "$(dirname "$muse_env")"
   printf '%s\n' \
-    'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-muse' \
+    'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-muse-spark-1.3-contributor' \
     'OPENCODE_API_KEY=fixture-secret' >"$muse_env"
   if (
     HOME="$muse_home"
@@ -1050,7 +1050,7 @@ test_ai_memory_env_file() {
   else
     not_ok "OpenCode Go Muse profile fixture failed"
   fi
-  require_env_assignment "$muse_env" "DOTFILES_AI_MEMORY_LLM_PROFILE" "opencode-go-muse"
+  require_env_assignment "$muse_env" "DOTFILES_AI_MEMORY_LLM_PROFILE" "opencode-go-muse-spark-1.3-contributor"
   require_env_assignment "$muse_env" "OPENCODE_API_KEY" "fixture-secret"
   require_env_assignment "$muse_env" "AI_MEMORY_LLM_PROVIDER" "opencode"
   require_env_assignment "$muse_env" "AI_MEMORY_LLM_MODEL" "muse-spark-1.3-contributor"
@@ -1076,7 +1076,7 @@ test_ai_memory_env_file() {
   require_env_assignment "$deepseek_env" "AI_MEMORY_LLM_MODEL" "deepseek-v4.1-flash"
 
   invalid_index=0
-  for invalid_profile in openai-subscription-luna openai-api-luna disabled not-a-profile opencode-go-deepseek; do
+  for invalid_profile in openai-subscription-luna openai-api-luna disabled not-a-profile opencode-go-deepseek opencode-go-muse; do
     invalid_index=$((invalid_index + 1))
     invalid_home="$fixture_root/invalid-profile-home-$invalid_index"
     invalid_env="$invalid_home/.config/ai-memory/env"
