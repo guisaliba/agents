@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # apply.sh
 #
 # Deterministic OpenCode setup script.
-# Installs OpenCode, ai-memory, Herdr, RTK, Plannotator, and required skills.
+# Installs OpenCode, ai-memory, RTK, Plannotator, and required skills.
 # Installs/updates skills live on every run.
 #
 # Usage:
@@ -17,7 +17,6 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$SCRIPT_DIR"
 AGENT_STACK_HELPER="$REPO_DIR/lib/agent_stack.py"
 SKILLS_MANIFEST="$REPO_DIR/skills.tsv"
-source "$REPO_DIR/herdr/setup.bash"
 RTK_VERSION="${RTK_VERSION:-v0.38.0}"
 GITHUB_MCP_TOKEN_FILE="$HOME/.config/opencode/secrets/github-mcp-pat"
 GITHUB_MCP_TOKEN_REFERENCE="~/.config/opencode/secrets/github-mcp-pat"
@@ -1636,7 +1635,6 @@ main() {
   report_optional_ai_jail
   verify_ai_memory_unauthenticated_loopback
   setup_opencode
-  setup_herdr
   setup_ai_memory
   merge_opencode_shell_override
   configure_macos_bash_profile

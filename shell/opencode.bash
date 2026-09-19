@@ -13,11 +13,7 @@ opencode() {
       return 2
     fi
   done
-  if [[ "${HERDR_ENV:-}" == 1 ]]; then
-    HERDR_AGENT=opencode command ai-memory run opencode "$@"
-  else
-    command ai-memory run opencode "$@"
-  fi
+  command ai-memory run opencode "$@"
 }
 opencode-raw() {
   command opencode "$@"
