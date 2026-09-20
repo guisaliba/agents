@@ -45,6 +45,17 @@ AI_MEMORY_MACOS_AARCH64_SHA256_EXPECTED="1cc2acdbbd62cc7ecf6e1fe91515ea77786910b
 AI_MEMORY_LLM_PROFILE_EXPECTED="opencode-go-deepseek-v4.1-flash"
 AI_MEMORY_LLM_PROVIDER_EXPECTED="opencode"
 AI_MEMORY_LLM_MODEL_EXPECTED="deepseek-v4.1-flash"
+ORCA_LAUNCH_DAEMON_SOURCE_FILE="$HOME/.config/orca-server/com.stablyai.orca-server.plist"
+ORCA_LAUNCH_DAEMON_FILE="/Library/LaunchDaemons/com.stablyai.orca-server.plist"
+ORCA_LAUNCH_DAEMON_LABEL="com.stablyai.orca-server"
+ORCA_FIREWALL_LABEL="com.stablyai.orca-firewall"
+ORCA_PF_CONFIG_FILE="/etc/pf.conf"
+ORCA_PF_CONFIG_SOURCE_FILE="$HOME/.config/orca-server/pf.conf"
+ORCA_PF_CONFIG_ROLLBACK_FILE="$HOME/.config/orca-server/pf.conf.without-orca"
+ORCA_PF_ANCHOR_SOURCE_FILE="$HOME/.config/orca-server/com.stablyai.orca-server.pf"
+ORCA_PF_ANCHOR_FILE="/etc/pf.anchors/com.stablyai.orca-server"
+ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE="$HOME/.config/orca-server/com.stablyai.orca-firewall.plist"
+ORCA_FIREWALL_LAUNCH_DAEMON_FILE="/Library/LaunchDaemons/com.stablyai.orca-firewall.plist"
 BUN_MIN_VERSION="1.3.0"
 LEARN_REPOSITORY_URL_EXPECTED="https://github.com/guisaliba/learn.git"
 LEARN_BRANCH="main"
@@ -1435,10 +1446,12 @@ test_apply_scope() {
     require_minimum_version() { printf 'version:%s\n' "$1" >>"$action_log"; }
     install_opencode() { printf '%s\n' opencode-binary >>"$action_log"; }
     install_ai_memory() { printf '%s\n' ai-memory-binary >>"$action_log"; }
+    install_orca() { printf '%s\n' orca-binary >>"$action_log"; }
     report_optional_ai_jail() { printf '%s\n' ai-jail >>"$action_log"; }
     verify_ai_memory_unauthenticated_loopback() { printf '%s\n' loopback >>"$action_log"; }
     setup_opencode() { printf '%s\n' opencode-config >>"$action_log"; }
     setup_ai_memory() { printf '%s\n' ai-memory-config >>"$action_log"; }
+    setup_orca() { printf '%s\n' orca-service >>"$action_log"; }
     merge_opencode_shell_override() { printf '%s\n' shell >>"$action_log"; }
     configure_macos_bash_profile() { printf '%s\n' bash-profile >>"$action_log"; }
     install_plugins() { printf '%s\n' plugins >>"$action_log"; }
@@ -1457,10 +1470,12 @@ test_apply_scope() {
     opencode-binary \
     version:opencode \
     ai-memory-binary \
+    orca-binary \
     ai-jail \
     loopback \
     opencode-config \
     ai-memory-config \
+    orca-service \
     shell \
     bash-profile \
     plugins \
@@ -1909,6 +1924,340 @@ test_macos_ai_memory_installation() {
   rm -rf -- "$fixture_root"
 }
 
+test_macos_orca_installation() {
+  local fixture_root stub_bin install_log expected_log
+  fixture_root="$(mktemp -d)"
+  stub_bin="$fixture_root/bin"
+  install_log="$fixture_root/brew.log"
+  expected_log="$fixture_root/expected.log"
+  mkdir -p "$stub_bin"
+  : >"$install_log"
+
+  printf '%s\n' \
+    '#!/bin/bash' \
+    'printf '\''%s\n'\'' "$*" >>"$ORCA_TEST_INSTALL_LOG"' \
+    '[[ "$*" == "install --cask stablyai/orca/orca" ]] || exit 2' \
+    'printf '\''#!/bin/bash\nexit 0\n'\'' >"$ORCA_TEST_BIN/orca"' \
+    'chmod +x "$ORCA_TEST_BIN/orca"' >"$stub_bin/brew"
+  chmod +x "$stub_bin/brew"
+
+  if (
+    PATH="$stub_bin:/usr/bin:/bin"
+    ORCA_TEST_BIN="$stub_bin"
+    ORCA_TEST_INSTALL_LOG="$install_log"
+    export PATH ORCA_TEST_BIN ORCA_TEST_INSTALL_LOG
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Darwin; }
+    install_orca
+    install_orca
+  ) >/dev/null 2>&1; then
+    ok "macOS Orca cask installation applies twice"
+  else
+    not_ok "macOS Orca cask installation fixture failed"
+  fi
+  printf '%s\n' 'install --cask stablyai/orca/orca' >"$expected_log"
+  require_same_file "$expected_log" "$install_log"
+
+  : >"$install_log"
+  if (
+    PATH="$stub_bin:/usr/bin:/bin"
+    ORCA_TEST_BIN="$stub_bin"
+    ORCA_TEST_INSTALL_LOG="$install_log"
+    export PATH ORCA_TEST_BIN ORCA_TEST_INSTALL_LOG
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Linux; }
+    install_orca
+  ) >/dev/null 2>&1; then
+    ok "Linux skips Orca installation"
+  else
+    not_ok "Linux Orca installation no-op failed"
+  fi
+  require_empty_file "$install_log"
+
+  rm -rf -- "$fixture_root"
+}
+
+test_macos_orca_launch_daemon() {
+  local fixture_root fixture_home stub_bin executable daemon_source daemon_file install_log
+  local launch_log username group
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  stub_bin="$fixture_root/bin"
+  executable="$stub_bin/orca"
+  daemon_source="$fixture_home/.config/orca-server/com.stablyai.orca-server.plist"
+  daemon_file="$fixture_root/Library/LaunchDaemons/com.stablyai.orca-server.plist"
+  install_log="$fixture_root/install-required.log"
+  launch_log="$fixture_root/launchctl.log"
+  username="$(id -un)"
+  group="$(id -gn)"
+  mkdir -p "$stub_bin"
+  printf '%s\n' '#!/bin/bash' 'exit 0' >"$executable"
+  chmod +x "$executable"
+
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    ORCA_LAUNCH_DAEMON_SOURCE_FILE="$daemon_source"
+    export HOME PATH ORCA_LAUNCH_DAEMON_SOURCE_FILE
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Darwin; }
+    install_orca_launch_daemon
+  ) >/dev/null 2>&1; then
+    ok "macOS Orca LaunchDaemon source is generated"
+  else
+    not_ok "macOS Orca LaunchDaemon source generation failed"
+  fi
+  require_file "$daemon_source"
+  require_file_mode "$daemon_source" "600"
+  require_file_mode "$fixture_home/Library/Logs/orca-server" "700"
+  require_file_mode "$fixture_home/Library/Logs/orca-server/stdout.log" "600"
+  require_file_mode "$fixture_home/Library/Logs/orca-server/stderr.log" "600"
+  if python3 - "$daemon_source" "$executable" "$fixture_home" "$username" "$group" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+executable = sys.argv[2]
+home = sys.argv[3]
+username = sys.argv[4]
+group = sys.argv[5]
+with path.open("rb") as stream:
+    config = plistlib.load(stream)
+
+assert config == {
+    "Label": "com.stablyai.orca-server",
+    "UserName": username,
+    "GroupName": group,
+    "ProgramArguments": [
+        executable,
+        "serve",
+        "--port",
+        "6768",
+        "--pairing-address",
+        "aurealabs-mac-mini-m4.taildc6550.ts.net",
+        "--no-pairing",
+    ],
+    "RunAtLoad": True,
+    "KeepAlive": True,
+    "ThrottleInterval": 10,
+    "WorkingDirectory": home,
+    "EnvironmentVariables": {
+        "HOME": home,
+        "PATH": f"{home}/.opencode/bin:{home}/.local/bin:{home}/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "USER": username,
+        "LOGNAME": username,
+    },
+    "StandardOutPath": f"{home}/Library/Logs/orca-server/stdout.log",
+    "StandardErrorPath": f"{home}/Library/Logs/orca-server/stderr.log",
+}
+PY
+  then
+    ok "macOS Orca LaunchDaemon has the required runtime contract"
+  else
+    not_ok "macOS Orca LaunchDaemon has incorrect content"
+  fi
+
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    ORCA_LAUNCH_DAEMON_SOURCE_FILE="$daemon_source"
+    ORCA_LAUNCH_DAEMON_FILE="$daemon_file"
+    export HOME PATH ORCA_LAUNCH_DAEMON_SOURCE_FILE ORCA_LAUNCH_DAEMON_FILE
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Darwin; }
+    start_orca_launch_daemon
+  ) >"$install_log" 2>&1; then
+    not_ok "missing macOS Orca LaunchDaemon was accepted"
+  else
+    ok "missing macOS Orca LaunchDaemon requires privileged installation"
+  fi
+  require_contains "$install_log" "sudo install -o root -g wheel -m 0644"
+  require_contains "$install_log" "sudo launchctl bootstrap system"
+  require_contains "$install_log" "sudo launchctl kickstart -k"
+
+  mkdir -p "$(dirname "$daemon_file")"
+  python3 - "$daemon_source" "$daemon_file" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+
+source = Path(sys.argv[1])
+installed = Path(sys.argv[2])
+installed.write_bytes(
+    plistlib.dumps(plistlib.loads(source.read_bytes()), fmt=plistlib.FMT_XML, sort_keys=True)
+)
+PY
+  printf '%s\n' \
+    '#!/bin/bash' \
+    '[[ "$1" == -f ]] && { printf '\''root:wheel:644\n'\''; exit 0; }' \
+    'exec /usr/bin/stat "$@"' >"$stub_bin/stat"
+  printf '%s\n' \
+    '#!/bin/bash' \
+    'printf '\''%s\n'\'' "$*" >>"$ORCA_TEST_LAUNCH_LOG"' \
+    '[[ "$1" == print ]]' >"$stub_bin/launchctl"
+  chmod +x "$stub_bin/stat" "$stub_bin/launchctl"
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    ORCA_LAUNCH_DAEMON_SOURCE_FILE="$daemon_source"
+    ORCA_LAUNCH_DAEMON_FILE="$daemon_file"
+    ORCA_TEST_LAUNCH_LOG="$launch_log"
+    export HOME PATH ORCA_LAUNCH_DAEMON_SOURCE_FILE ORCA_LAUNCH_DAEMON_FILE ORCA_TEST_LAUNCH_LOG
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Darwin; }
+    start_orca_launch_daemon
+    start_orca_launch_daemon
+  ) >/dev/null 2>&1; then
+    ok "active macOS Orca LaunchDaemon satisfies repeated setup"
+  else
+    not_ok "active macOS Orca LaunchDaemon setup failed"
+  fi
+  require_text_count "$launch_log" "print system/com.stablyai.orca-server" "2"
+
+  rm -rf -- "$fixture_root"
+}
+
+test_macos_orca_firewall() {
+  local fixture_root fixture_home stub_bin pf_config pf_config_source pf_config_rollback anchor_source anchor_file
+  local daemon_source daemon_file install_log launch_log
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  stub_bin="$fixture_root/bin"
+  pf_config="$fixture_root/etc/pf.conf"
+  pf_config_source="$fixture_home/.config/orca-server/pf.conf"
+  pf_config_rollback="$fixture_home/.config/orca-server/pf.conf.without-orca"
+  anchor_source="$fixture_home/.config/orca-server/com.stablyai.orca-server.pf"
+  anchor_file="$fixture_root/etc/pf.anchors/com.stablyai.orca-server"
+  daemon_source="$fixture_home/.config/orca-server/com.stablyai.orca-firewall.plist"
+  daemon_file="$fixture_root/Library/LaunchDaemons/com.stablyai.orca-firewall.plist"
+  install_log="$fixture_root/install-required.log"
+  launch_log="$fixture_root/launchctl.log"
+  mkdir -p "$stub_bin" "$(dirname "$pf_config")"
+  printf '%s\n' '# preserve system PF rules' 'anchor "com.apple/*"' >"$pf_config"
+
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    ORCA_PF_CONFIG_FILE="$pf_config"
+    ORCA_PF_CONFIG_SOURCE_FILE="$pf_config_source"
+    ORCA_PF_CONFIG_ROLLBACK_FILE="$pf_config_rollback"
+    ORCA_PF_ANCHOR_SOURCE_FILE="$anchor_source"
+    ORCA_PF_ANCHOR_FILE="$anchor_file"
+    ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE="$daemon_source"
+    ORCA_FIREWALL_LAUNCH_DAEMON_FILE="$daemon_file"
+    export HOME PATH ORCA_PF_CONFIG_FILE ORCA_PF_CONFIG_SOURCE_FILE ORCA_PF_CONFIG_ROLLBACK_FILE
+    export ORCA_PF_ANCHOR_SOURCE_FILE ORCA_PF_ANCHOR_FILE
+    export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
+    source "$REPO_DIR/apply.sh"
+    install_orca_firewall_sources
+    install_orca_firewall_sources
+  ) >/dev/null 2>&1; then
+    ok "macOS Orca PF sources apply twice"
+  else
+    not_ok "macOS Orca PF source generation failed"
+  fi
+  require_file_mode "$pf_config_source" "600"
+  require_file_mode "$pf_config_rollback" "600"
+  require_contains "$pf_config_rollback" "# preserve system PF rules"
+  require_file_mode "$anchor_source" "600"
+  require_file_mode "$daemon_source" "600"
+  require_contains "$pf_config_source" "# preserve system PF rules"
+  require_text_count "$pf_config_source" "# >>> guisaliba/agents Orca firewall >>>" "1"
+  require_contains "$anchor_source" "pass in quick inet proto tcp from 100.64.0.0/10 to any port 6768"
+  require_contains "$anchor_source" "pass in quick inet6 proto tcp from fd7a:115c:a1e0::/48 to any port 6768"
+  require_contains "$anchor_source" "block drop in quick proto tcp from any to any port 6768"
+  if python3 - "$daemon_source" "$fixture_home" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+
+with Path(sys.argv[1]).open("rb") as stream:
+    config = plistlib.load(stream)
+home = Path(sys.argv[2])
+
+assert config == {
+    "Label": "com.stablyai.orca-firewall",
+    "ProgramArguments": [
+        "/bin/sh",
+        "-c",
+        "/sbin/pfctl -f /etc/pf.conf && (/sbin/pfctl -s info | /usr/bin/grep -q '^Status: Enabled' || /sbin/pfctl -E) && /sbin/pfctl -a com.stablyai.orca-server -sr",
+    ],
+    "RunAtLoad": True,
+    "StandardOutPath": str(home / "Library/Logs/orca-server/firewall-stdout.log"),
+    "StandardErrorPath": str(home / "Library/Logs/orca-server/firewall-stderr.log"),
+}
+PY
+  then
+    ok "macOS Orca firewall LaunchDaemon has the required runtime contract"
+  else
+    not_ok "macOS Orca firewall LaunchDaemon has incorrect content"
+  fi
+
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    ORCA_PF_CONFIG_FILE="$pf_config"
+    ORCA_PF_CONFIG_SOURCE_FILE="$pf_config_source"
+    ORCA_PF_CONFIG_ROLLBACK_FILE="$pf_config_rollback"
+    ORCA_PF_ANCHOR_SOURCE_FILE="$anchor_source"
+    ORCA_PF_ANCHOR_FILE="$anchor_file"
+    ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE="$daemon_source"
+    ORCA_FIREWALL_LAUNCH_DAEMON_FILE="$daemon_file"
+    export HOME PATH ORCA_PF_CONFIG_FILE ORCA_PF_CONFIG_SOURCE_FILE ORCA_PF_CONFIG_ROLLBACK_FILE
+    export ORCA_PF_ANCHOR_SOURCE_FILE ORCA_PF_ANCHOR_FILE
+    export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
+    source "$REPO_DIR/apply.sh"
+    start_orca_firewall
+  ) >"$install_log" 2>&1; then
+    not_ok "missing macOS Orca firewall was accepted"
+  else
+    ok "missing macOS Orca firewall requires privileged installation"
+  fi
+  require_contains "$install_log" "sudo install -o root -g wheel -m 0644"
+  require_contains "$install_log" "sudo launchctl bootstrap system"
+  require_contains "$install_log" "sudo launchctl kickstart -k"
+
+  mkdir -p "$(dirname "$anchor_file")" "$(dirname "$daemon_file")"
+  cp "$pf_config_source" "$pf_config"
+  cp "$anchor_source" "$anchor_file"
+  cp "$daemon_source" "$daemon_file"
+  printf '%s\n' \
+    '#!/bin/bash' \
+    '[[ "$1" == -f ]] && { printf '\''root:wheel:644\n'\''; exit 0; }' \
+    'exec /usr/bin/stat "$@"' >"$stub_bin/stat"
+  printf '%s\n' \
+    '#!/bin/bash' \
+    'printf '\''%s\n'\'' "$*" >>"$ORCA_TEST_LAUNCH_LOG"' \
+    '[[ "$1" == print ]]' >"$stub_bin/launchctl"
+  chmod +x "$stub_bin/stat" "$stub_bin/launchctl"
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    ORCA_PF_CONFIG_FILE="$pf_config"
+    ORCA_PF_CONFIG_SOURCE_FILE="$pf_config_source"
+    ORCA_PF_CONFIG_ROLLBACK_FILE="$pf_config_rollback"
+    ORCA_PF_ANCHOR_SOURCE_FILE="$anchor_source"
+    ORCA_PF_ANCHOR_FILE="$anchor_file"
+    ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE="$daemon_source"
+    ORCA_FIREWALL_LAUNCH_DAEMON_FILE="$daemon_file"
+    ORCA_TEST_LAUNCH_LOG="$launch_log"
+    export HOME PATH ORCA_PF_CONFIG_FILE ORCA_PF_CONFIG_SOURCE_FILE ORCA_PF_CONFIG_ROLLBACK_FILE
+    export ORCA_PF_ANCHOR_SOURCE_FILE ORCA_PF_ANCHOR_FILE ORCA_TEST_LAUNCH_LOG
+    export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
+    source "$REPO_DIR/apply.sh"
+    start_orca_firewall
+    start_orca_firewall
+  ) >/dev/null 2>&1; then
+    ok "active macOS Orca firewall satisfies repeated setup"
+  else
+    not_ok "active macOS Orca firewall setup failed"
+  fi
+  require_text_count "$launch_log" "print system/com.stablyai.orca-firewall" "2"
+
+  rm -rf -- "$fixture_root"
+}
+
 test_ai_memory_user_service_installation() {
   local fixture_root fixture_home stub_bin service_file first_service expected_service
   fixture_root="$(mktemp -d)"
@@ -2166,6 +2515,10 @@ require_file "$REPO_DIR/LICENSE"
 require_file "$REPO_DIR/apply.sh"
 require_file "$REPO_DIR/test.sh"
 require_file "$REPO_DIR/opencode/README.md"
+require_file "$REPO_DIR/orca/README.md"
+require_contains "$REPO_DIR/README.md" "[orca/README.md](orca/README.md)"
+require_contains "$REPO_DIR/orca/README.md" 'Port `6768` is for private Tailscale access only.'
+require_contains "$REPO_DIR/orca/README.md" "sudo launchctl bootout system/com.stablyai.orca-server"
 shopt -s nullglob
 tracked_theme_files=("$REPO_DIR"/opencode/themes/*.json)
 shopt -u nullglob
@@ -2264,6 +2617,9 @@ printf '\n--- Native ai-memory Fixtures ---\n'
 
 test_native_ai_memory_requirement
 test_macos_ai_memory_installation
+test_macos_orca_installation
+test_macos_orca_launch_daemon
+test_macos_orca_firewall
 test_ai_memory_user_service_installation
 test_macos_ai_memory_launch_daemon
 test_macos_bash_profile
@@ -2520,6 +2876,86 @@ case "$(uname -s)" in
     fi
     ;;
 esac
+
+if [[ "$(uname -s)" == Darwin ]]; then
+  printf '\n--- Orca Remote Server ---\n'
+
+  require_command orca
+  orca --version >/dev/null 2>&1 && ok "Orca version runs" || not_ok "Orca version failed"
+  require_file "$ORCA_LAUNCH_DAEMON_SOURCE_FILE"
+  require_file_mode "$ORCA_LAUNCH_DAEMON_SOURCE_FILE" "600"
+  require_file "$ORCA_LAUNCH_DAEMON_FILE"
+  require_file_mode "$ORCA_LAUNCH_DAEMON_FILE" "644"
+  require_file_mode "$HOME/Library/Logs/orca-server" "700"
+  require_file_mode "$HOME/Library/Logs/orca-server/stdout.log" "600"
+  require_file_mode "$HOME/Library/Logs/orca-server/stderr.log" "600"
+  if [[ "$(stat -f '%Su:%Sg' "$ORCA_LAUNCH_DAEMON_FILE" 2>/dev/null || true)" == "root:wheel" ]]; then
+    ok "Orca LaunchDaemon is owned by root:wheel"
+  else
+    not_ok "Orca LaunchDaemon is not owned by root:wheel"
+  fi
+  if (
+    source "$REPO_DIR/apply.sh"
+    orca_launch_daemon_matches
+  ) >/dev/null 2>&1; then
+    ok "installed Orca LaunchDaemon matches the managed contract"
+  else
+    not_ok "installed Orca LaunchDaemon does not match the managed contract"
+  fi
+  if launchctl print "system/$ORCA_LAUNCH_DAEMON_LABEL" >/dev/null 2>&1; then
+    ok "Orca LaunchDaemon is active"
+  else
+    not_ok "Orca LaunchDaemon is not active"
+  fi
+  if lsof -nP -iTCP:6768 -sTCP:LISTEN >/dev/null 2>&1; then
+    ok "Orca listens on TCP port 6768"
+  else
+    not_ok "Orca does not listen on TCP port 6768"
+  fi
+
+  require_file "$ORCA_PF_CONFIG_SOURCE_FILE"
+  require_file_mode "$ORCA_PF_CONFIG_SOURCE_FILE" "600"
+  require_file "$ORCA_PF_CONFIG_ROLLBACK_FILE"
+  require_file_mode "$ORCA_PF_CONFIG_ROLLBACK_FILE" "600"
+  require_file "$ORCA_PF_ANCHOR_SOURCE_FILE"
+  require_file_mode "$ORCA_PF_ANCHOR_SOURCE_FILE" "600"
+  require_file "$ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE"
+  require_file_mode "$ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE" "600"
+  require_same_file "$ORCA_PF_CONFIG_SOURCE_FILE" "$ORCA_PF_CONFIG_FILE"
+  require_same_file "$ORCA_PF_ANCHOR_SOURCE_FILE" "$ORCA_PF_ANCHOR_FILE"
+  require_file_mode "$ORCA_PF_CONFIG_FILE" "644"
+  require_file_mode "$ORCA_PF_ANCHOR_FILE" "644"
+  require_file_mode "$ORCA_FIREWALL_LAUNCH_DAEMON_FILE" "644"
+  for system_file in \
+    "$ORCA_PF_CONFIG_FILE" \
+    "$ORCA_PF_ANCHOR_FILE" \
+    "$ORCA_FIREWALL_LAUNCH_DAEMON_FILE"
+  do
+    if [[ "$(stat -f '%Su:%Sg' "$system_file" 2>/dev/null || true)" == "root:wheel" ]]; then
+      ok "Orca firewall file is owned by root:wheel: $system_file"
+    else
+      not_ok "Orca firewall file is not owned by root:wheel: $system_file"
+    fi
+  done
+  if (
+    source "$REPO_DIR/apply.sh"
+    orca_firewall_daemon_matches
+  ) >/dev/null 2>&1; then
+    ok "installed Orca firewall LaunchDaemon matches the managed contract"
+  else
+    not_ok "installed Orca firewall LaunchDaemon does not match the managed contract"
+  fi
+  if launchctl print "system/$ORCA_FIREWALL_LABEL" >/dev/null 2>&1; then
+    ok "Orca firewall LaunchDaemon is loaded"
+  else
+    not_ok "Orca firewall LaunchDaemon is not loaded"
+  fi
+  require_file_mode "$HOME/Library/Logs/orca-server/firewall-stdout.log" "600"
+  require_file_mode "$HOME/Library/Logs/orca-server/firewall-stderr.log" "600"
+  require_contains "$HOME/Library/Logs/orca-server/firewall-stdout.log" "100.64.0.0/10"
+  require_contains "$HOME/Library/Logs/orca-server/firewall-stdout.log" "fd7a:115c:a1e0::/48"
+  require_contains "$HOME/Library/Logs/orca-server/firewall-stdout.log" "port = 6768"
+fi
 
 # Required skills
 printf '\n--- Skills ---\n'

@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # apply.sh
 #
 # Deterministic OpenCode setup script.
-# Installs OpenCode, ai-memory, RTK, Plannotator, and required skills.
+# Installs OpenCode, ai-memory, Orca, RTK, Plannotator, and required skills.
 # Installs/updates skills live on every run.
 #
 # Usage:
@@ -60,6 +60,21 @@ MACOS_BASH_PROFILE="$HOME/.bash_profile"
 MACOS_BASH_PROFILE_BLOCK_START="# >>> guisaliba/agents Bash aliases >>>"
 MACOS_BASH_PROFILE_BLOCK_END="# <<< guisaliba/agents Bash aliases <<<"
 GOOGLE_CHROME_APP_PATH="${GOOGLE_CHROME_APP_PATH:-/Applications/Google Chrome.app}"
+ORCA_CASK="stablyai/orca/orca"
+ORCA_LAUNCH_DAEMON_LABEL="com.stablyai.orca-server"
+ORCA_LAUNCH_DAEMON_SOURCE_FILE="${ORCA_LAUNCH_DAEMON_SOURCE_FILE:-$HOME/.config/orca-server/$ORCA_LAUNCH_DAEMON_LABEL.plist}"
+ORCA_LAUNCH_DAEMON_FILE="${ORCA_LAUNCH_DAEMON_FILE:-/Library/LaunchDaemons/$ORCA_LAUNCH_DAEMON_LABEL.plist}"
+ORCA_LAUNCH_DAEMON_LOG_DIR="$HOME/Library/Logs/orca-server"
+ORCA_PAIRING_ADDRESS="${ORCA_PAIRING_ADDRESS:-aurealabs-mac-mini-m4.taildc6550.ts.net}"
+ORCA_PORT="${ORCA_PORT:-6768}"
+ORCA_PF_CONFIG_FILE="${ORCA_PF_CONFIG_FILE:-/etc/pf.conf}"
+ORCA_PF_CONFIG_SOURCE_FILE="${ORCA_PF_CONFIG_SOURCE_FILE:-$HOME/.config/orca-server/pf.conf}"
+ORCA_PF_CONFIG_ROLLBACK_FILE="${ORCA_PF_CONFIG_ROLLBACK_FILE:-$HOME/.config/orca-server/pf.conf.without-orca}"
+ORCA_PF_ANCHOR_SOURCE_FILE="${ORCA_PF_ANCHOR_SOURCE_FILE:-$HOME/.config/orca-server/com.stablyai.orca-server.pf}"
+ORCA_PF_ANCHOR_FILE="${ORCA_PF_ANCHOR_FILE:-/etc/pf.anchors/com.stablyai.orca-server}"
+ORCA_FIREWALL_LABEL="com.stablyai.orca-firewall"
+ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE="${ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE:-$HOME/.config/orca-server/$ORCA_FIREWALL_LABEL.plist}"
+ORCA_FIREWALL_LAUNCH_DAEMON_FILE="${ORCA_FIREWALL_LAUNCH_DAEMON_FILE:-/Library/LaunchDaemons/$ORCA_FIREWALL_LABEL.plist}"
 
 log() {
   printf '\n==> %s\n' "$*"
@@ -333,6 +348,317 @@ install_ai_memory() {
   esac
   verify_native_ai_memory
   require_minimum_version ai-memory "$AI_MEMORY_MIN_VERSION"
+}
+
+install_orca() {
+  [[ "$(agent_stack_platform)" == "Darwin" ]] || return 0
+
+  if have orca; then
+    log "Orca already installed, skipping"
+    return 0
+  fi
+
+  log "Installing Orca"
+  brew install --cask "$ORCA_CASK" || die "Orca install failed"
+  have orca || die "Orca install did not put orca on PATH"
+}
+
+install_orca_launch_daemon() {
+  local executable username group
+  executable="$(type -P orca)" || die "orca must resolve to an executable file on PATH"
+  username="$(id -un)" || die "Could not resolve the current user name"
+  group="$(id -gn)" || die "Could not resolve the current user group"
+
+  log "Generating the managed Orca LaunchDaemon source"
+  python3 "$AGENT_STACK_HELPER" \
+    guard-regular-file \
+    "$ORCA_LAUNCH_DAEMON_SOURCE_FILE" \
+    "Orca LaunchDaemon source path"
+  mkdir -p "$(dirname "$ORCA_LAUNCH_DAEMON_SOURCE_FILE")" "$ORCA_LAUNCH_DAEMON_LOG_DIR"
+  chmod 700 "$ORCA_LAUNCH_DAEMON_LOG_DIR"
+  touch \
+    "$ORCA_LAUNCH_DAEMON_LOG_DIR/stdout.log" \
+    "$ORCA_LAUNCH_DAEMON_LOG_DIR/stderr.log"
+  chmod 600 \
+    "$ORCA_LAUNCH_DAEMON_LOG_DIR/stdout.log" \
+    "$ORCA_LAUNCH_DAEMON_LOG_DIR/stderr.log"
+
+  python3 - \
+    "$ORCA_LAUNCH_DAEMON_SOURCE_FILE" \
+    "$executable" \
+    "$AGENT_STACK_HELPER" \
+    "$HOME" \
+    "$ORCA_LAUNCH_DAEMON_LABEL" \
+    "$username" \
+    "$group" \
+    "$ORCA_PORT" \
+    "$ORCA_PAIRING_ADDRESS" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+executable = str(Path(sys.argv[2]).absolute())
+helper_path = Path(sys.argv[3])
+home = sys.argv[4]
+label = sys.argv[5]
+username = sys.argv[6]
+group = sys.argv[7]
+port = sys.argv[8]
+pairing_address = sys.argv[9]
+sys.path.insert(0, str(helper_path.parent))
+sys.dont_write_bytecode = True
+
+from agent_stack import atomic_write_text
+
+
+config = {
+    "Label": label,
+    "UserName": username,
+    "GroupName": group,
+    "ProgramArguments": [
+        executable,
+        "serve",
+        "--port",
+        port,
+        "--pairing-address",
+        pairing_address,
+        "--no-pairing",
+    ],
+    "RunAtLoad": True,
+    "KeepAlive": True,
+    "ThrottleInterval": 10,
+    "WorkingDirectory": home,
+    "EnvironmentVariables": {
+        "HOME": home,
+        "PATH": f"{home}/.opencode/bin:{home}/.local/bin:{home}/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+        "USER": username,
+        "LOGNAME": username,
+    },
+    "StandardOutPath": f"{home}/Library/Logs/orca-server/stdout.log",
+    "StandardErrorPath": f"{home}/Library/Logs/orca-server/stderr.log",
+}
+content = plistlib.dumps(config, fmt=plistlib.FMT_XML, sort_keys=False).decode("utf-8")
+
+try:
+    if path.read_text(encoding="utf-8") == content:
+        raise SystemExit(0)
+except FileNotFoundError:
+    pass
+except OSError as exc:
+    raise SystemExit(f"ERROR: Cannot read Orca LaunchDaemon source at {path}: {exc}")
+
+atomic_write_text(path, content, 0o600, ".orca-launch-daemon.")
+PY
+  chmod 600 "$ORCA_LAUNCH_DAEMON_SOURCE_FILE"
+}
+
+orca_launch_daemon_matches() {
+  python3 - "$ORCA_LAUNCH_DAEMON_SOURCE_FILE" "$ORCA_LAUNCH_DAEMON_FILE" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+
+try:
+    source = plistlib.loads(Path(sys.argv[1]).read_bytes())
+    installed = plistlib.loads(Path(sys.argv[2]).read_bytes())
+except (OSError, plistlib.InvalidFileException):
+    raise SystemExit(1)
+
+raise SystemExit(0 if source == installed else 1)
+PY
+}
+
+install_orca_firewall_sources() {
+  local path
+  log "Generating the managed Orca PF sources"
+
+  for path in \
+    "$ORCA_PF_CONFIG_SOURCE_FILE" \
+    "$ORCA_PF_CONFIG_ROLLBACK_FILE" \
+    "$ORCA_PF_ANCHOR_SOURCE_FILE" \
+    "$ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE"
+  do
+    python3 "$AGENT_STACK_HELPER" guard-regular-file "$path" "Orca PF source path"
+  done
+  python3 "$AGENT_STACK_HELPER" guard-regular-file "$ORCA_PF_CONFIG_FILE" "system PF configuration"
+  mkdir -p "$(dirname "$ORCA_PF_CONFIG_SOURCE_FILE")" "$ORCA_LAUNCH_DAEMON_LOG_DIR"
+  chmod 700 "$ORCA_LAUNCH_DAEMON_LOG_DIR"
+  touch \
+    "$ORCA_LAUNCH_DAEMON_LOG_DIR/firewall-stdout.log" \
+    "$ORCA_LAUNCH_DAEMON_LOG_DIR/firewall-stderr.log"
+  chmod 600 \
+    "$ORCA_LAUNCH_DAEMON_LOG_DIR/firewall-stdout.log" \
+    "$ORCA_LAUNCH_DAEMON_LOG_DIR/firewall-stderr.log"
+
+  python3 - \
+    "$ORCA_PF_CONFIG_FILE" \
+    "$ORCA_PF_CONFIG_SOURCE_FILE" \
+    "$ORCA_PF_CONFIG_ROLLBACK_FILE" \
+    "$ORCA_PF_ANCHOR_SOURCE_FILE" \
+    "$ORCA_PF_ANCHOR_FILE" \
+    "$ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE" \
+    "$AGENT_STACK_HELPER" \
+    "$HOME" \
+    "$ORCA_PORT" \
+    "$ORCA_FIREWALL_LABEL" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+
+pf_config = Path(sys.argv[1])
+pf_source = Path(sys.argv[2])
+pf_rollback = Path(sys.argv[3])
+anchor_source = Path(sys.argv[4])
+anchor_file = Path(sys.argv[5])
+daemon_source = Path(sys.argv[6])
+helper_path = Path(sys.argv[7])
+home = sys.argv[8]
+port = sys.argv[9]
+firewall_label = sys.argv[10]
+sys.path.insert(0, str(helper_path.parent))
+sys.dont_write_bytecode = True
+
+from agent_stack import atomic_write_text
+
+
+start = "# >>> guisaliba/agents Orca firewall >>>"
+end = "# <<< guisaliba/agents Orca firewall <<<"
+try:
+    current = pf_config.read_text(encoding="utf-8")
+except OSError as exc:
+    raise SystemExit(f"ERROR: Cannot read system PF configuration at {pf_config}: {exc}")
+
+if current.count(start) != current.count(end) or current.count(start) > 1:
+    raise SystemExit(f"ERROR: Expected at most one balanced Orca firewall block in {pf_config}")
+if start in current:
+    before, remainder = current.split(start, 1)
+    _, after = remainder.split(end, 1)
+    current = before.rstrip() + "\n" + after.lstrip("\n")
+
+rollback = current.rstrip() + "\n"
+block = "\n".join(
+    [
+        start,
+        'anchor "com.stablyai.orca-server"',
+        f'load anchor "com.stablyai.orca-server" from "{anchor_file}"',
+        end,
+    ]
+)
+managed_config = rollback.rstrip() + "\n\n" + block + "\n"
+anchor = "\n".join(
+    [
+        f"pass in quick inet proto tcp from 100.64.0.0/10 to any port {port}",
+        f"pass in quick inet6 proto tcp from fd7a:115c:a1e0::/48 to any port {port}",
+        f"block drop in quick proto tcp from any to any port {port}",
+        "",
+    ]
+)
+daemon = {
+    "Label": firewall_label,
+    "ProgramArguments": [
+        "/bin/sh",
+        "-c",
+        "/sbin/pfctl -f /etc/pf.conf && (/sbin/pfctl -s info | /usr/bin/grep -q '^Status: Enabled' || /sbin/pfctl -E) && /sbin/pfctl -a com.stablyai.orca-server -sr",
+    ],
+    "RunAtLoad": True,
+    "StandardOutPath": f"{home}/Library/Logs/orca-server/firewall-stdout.log",
+    "StandardErrorPath": f"{home}/Library/Logs/orca-server/firewall-stderr.log",
+}
+daemon_content = plistlib.dumps(daemon, fmt=plistlib.FMT_XML, sort_keys=False).decode("utf-8")
+
+atomic_write_text(pf_source, managed_config, 0o600, ".orca-pf-config.")
+atomic_write_text(pf_rollback, rollback, 0o600, ".orca-pf-rollback.")
+atomic_write_text(anchor_source, anchor, 0o600, ".orca-pf-anchor.")
+atomic_write_text(daemon_source, daemon_content, 0o600, ".orca-firewall-daemon.")
+PY
+  chmod 600 \
+    "$ORCA_PF_CONFIG_SOURCE_FILE" \
+    "$ORCA_PF_CONFIG_ROLLBACK_FILE" \
+    "$ORCA_PF_ANCHOR_SOURCE_FILE" \
+    "$ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE"
+
+  if [[ -x /sbin/pfctl ]]; then
+    /sbin/pfctl -nf "$ORCA_PF_CONFIG_FILE" >/dev/null || \
+      die "Existing system PF configuration is invalid"
+    /sbin/pfctl -nf "$ORCA_PF_ANCHOR_SOURCE_FILE" >/dev/null || \
+      die "Generated Orca PF anchor is invalid"
+  fi
+}
+
+orca_firewall_daemon_matches() {
+  python3 - "$ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE" "$ORCA_FIREWALL_LAUNCH_DAEMON_FILE" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+
+try:
+    source = plistlib.loads(Path(sys.argv[1]).read_bytes())
+    installed = plistlib.loads(Path(sys.argv[2]).read_bytes())
+except (OSError, plistlib.InvalidFileException):
+    raise SystemExit(1)
+
+raise SystemExit(0 if source == installed else 1)
+PY
+}
+
+start_orca_firewall() {
+  local target anchor_contract config_contract daemon_contract
+  target="system/$ORCA_FIREWALL_LABEL"
+
+  log "Verifying the Orca Tailscale-only firewall"
+  install_orca_firewall_sources
+  anchor_contract="$(stat -f '%Su:%Sg:%Lp' "$ORCA_PF_ANCHOR_FILE" 2>/dev/null || true)"
+  config_contract="$(stat -f '%Su:%Sg:%Lp' "$ORCA_PF_CONFIG_FILE" 2>/dev/null || true)"
+  daemon_contract="$(stat -f '%Su:%Sg:%Lp' "$ORCA_FIREWALL_LAUNCH_DAEMON_FILE" 2>/dev/null || true)"
+  if [[ "$anchor_contract" != "root:wheel:644" ]] || \
+    [[ "$config_contract" != "root:wheel:644" ]] || \
+    [[ "$daemon_contract" != "root:wheel:644" ]] || \
+    ! cmp -s "$ORCA_PF_ANCHOR_SOURCE_FILE" "$ORCA_PF_ANCHOR_FILE" || \
+    ! cmp -s "$ORCA_PF_CONFIG_SOURCE_FILE" "$ORCA_PF_CONFIG_FILE" || \
+    ! orca_firewall_daemon_matches; then
+    die "Orca firewall requires privileged installation. Run these commands:
+sudo launchctl bootout '$target' >/dev/null 2>&1 || true
+sudo install -o root -g wheel -m 0644 '$ORCA_PF_ANCHOR_SOURCE_FILE' '$ORCA_PF_ANCHOR_FILE'
+sudo install -o root -g wheel -m 0644 '$ORCA_PF_CONFIG_SOURCE_FILE' '$ORCA_PF_CONFIG_FILE'
+sudo install -o root -g wheel -m 0644 '$ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE' '$ORCA_FIREWALL_LAUNCH_DAEMON_FILE'
+sudo launchctl bootstrap system '$ORCA_FIREWALL_LAUNCH_DAEMON_FILE'
+sudo launchctl kickstart -k '$target'"
+  fi
+  if ! launchctl print "$target" >/dev/null 2>&1; then
+    die "Orca firewall LaunchDaemon is installed but inactive. Run these commands:
+sudo launchctl bootstrap system '$ORCA_FIREWALL_LAUNCH_DAEMON_FILE'
+sudo launchctl kickstart -k '$target'"
+  fi
+}
+
+start_orca_launch_daemon() {
+  local target installed_contract
+  target="system/$ORCA_LAUNCH_DAEMON_LABEL"
+
+  log "Verifying the Orca LaunchDaemon"
+  install_orca_launch_daemon
+  installed_contract="$(stat -f '%Su:%Sg:%Lp' "$ORCA_LAUNCH_DAEMON_FILE" 2>/dev/null || true)"
+  if [[ ! -f "$ORCA_LAUNCH_DAEMON_FILE" ]] || \
+    [[ "$installed_contract" != "root:wheel:644" ]] || \
+    ! orca_launch_daemon_matches; then
+    die "Orca LaunchDaemon requires privileged installation. Run these commands:
+sudo launchctl bootout '$target' >/dev/null 2>&1 || true
+sudo install -o root -g wheel -m 0644 '$ORCA_LAUNCH_DAEMON_SOURCE_FILE' '$ORCA_LAUNCH_DAEMON_FILE'
+sudo launchctl bootstrap system '$ORCA_LAUNCH_DAEMON_FILE'
+sudo launchctl kickstart -k '$target'"
+  fi
+  if ! launchctl print "$target" >/dev/null 2>&1; then
+    die "Orca LaunchDaemon is installed but inactive. Run these commands:
+sudo launchctl bootstrap system '$ORCA_LAUNCH_DAEMON_FILE'
+sudo launchctl kickstart -k '$target'"
+  fi
+}
+
+setup_orca() {
+  [[ "$(agent_stack_platform)" == "Darwin" ]] || return 0
+  start_orca_firewall
+  start_orca_launch_daemon
 }
 
 report_optional_ai_jail() {
@@ -1645,10 +1971,12 @@ main() {
   install_opencode
   require_minimum_version opencode "$LEARN_MIN_OPENCODE_VERSION"
   install_ai_memory
+  install_orca
   report_optional_ai_jail
   verify_ai_memory_unauthenticated_loopback
   setup_opencode
   setup_ai_memory
+  setup_orca
   merge_opencode_shell_override
   configure_macos_bash_profile
   install_plugins
