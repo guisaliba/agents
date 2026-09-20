@@ -30,6 +30,7 @@ component documentation before applying it.
 | OpenCode plugins | [plugins/README.md](plugins/README.md) |
 | OpenCode MCP servers | [mcps/README.md](mcps/README.md) |
 | ai-memory service | [ai-memory/README.md](ai-memory/README.md) |
+| Orca remote server | [orca/README.md](orca/README.md) |
 | ai-jail policy | [ai-jail/README.md](ai-jail/README.md) |
 | Bash entry point | [shell/README.md](shell/README.md) |
 | Skills | [skills/README.md](skills/README.md) |
