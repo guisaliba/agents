@@ -76,6 +76,10 @@ changes anything. A mismatch stops the script with a non-zero status and
 installs nothing. Rerun `./apply.sh` to regenerate the sources from the new
 file.
 
+After the install, the script removes any earlier evidence file and waits for
+the gate to publish evidence for the current boot that also carries the
+expected anchor hash. It reports success only after that evidence appears.
+
 ## Network Boundary
 
 Port `6768` is for private Tailscale access only. Do not publish it to the
@@ -89,8 +93,11 @@ anchor permits TCP port `6768` only from the Tailscale IPv4 range
 sources, including the loopback interface and the LAN. Apply preserves existing
 PF content and maintains one marked Orca anchor block.
 
-Apply places the managed anchor at the top of `/etc/pf.conf`, before the
-existing rules. An earlier `pass ... quick` rule cannot skip the anchor.
+Apply places the managed anchor at the start of the filtering section of
+`/etc/pf.conf`: after the system normalization and translation anchors, and
+before every filter rule. PF requires that rule order. An earlier `pass ...
+quick` rule cannot skip the anchor. The anchor and the whole generated
+configuration are parsed with `pfctl -nf` before installation.
 The pass rules also require the Tailscale `utun*` interface, so a local network
 that uses the same address ranges cannot match them.
 

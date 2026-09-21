@@ -2206,8 +2206,19 @@ test_macos_orca_firewall() {
   live_rules="$fixture_root/live-rules"
   expected_rules="$fixture_root/expected-rules"
   boot_id="FIXTURE-BOOT-SESSION"
-  mkdir -p "$stub_bin" "$(dirname "$pf_config")" "$(dirname "$evidence_file")"
-  printf '%s\n' '# preserve system PF rules' 'anchor "com.apple/*"' >"$pf_config"
+  mkdir -p "$stub_bin" "$(dirname "$pf_config")" "$(dirname "$evidence_file")" "$(dirname "$anchor_file")"
+  printf '%s\n' \
+    '# preserve system PF rules' \
+    'scrub-anchor "com.apple/*"' \
+    'nat-anchor "com.apple/*"' \
+    'rdr-anchor "com.apple/*"' \
+    'dummynet-anchor "com.apple/*"' \
+    'anchor "com.apple/*"' \
+    "load anchor \"com.apple\" from \"$fixture_root/etc/pf.anchors/com.apple\"" \
+    'pass in quick proto tcp from any to any port 6768' >"$pf_config"
+  printf '%s\n' 'pass in proto tcp from any to any port 22' \
+    >"$fixture_root/etc/pf.anchors/com.apple"
+  cp "$pf_config" "$fixture_root/pf-config.original"
   printf '%s\n' \
     'pass in quick on utun* inet proto tcp from 100.64.0.0/10 to any port = 6768 flags S/SA keep state' \
     'pass in quick on utun* inet6 proto tcp from fd7a:115c:a1e0::/48 to any port = 6768 flags S/SA keep state' \
@@ -2278,7 +2289,12 @@ PY
   printf '%s\n' \
     '#!/bin/bash' \
     'printf '\''install %s\n'\'' "$*" >>"$ORCA_TEST_INSTALL_CMD_LOG"' \
+    'if [[ "${ORCA_TEST_INSTALL_PUBLISH:-0}" == "1" && "$*" == *com.stablyai.orca-server.pf* ]]; then' \
+    '  hash="$(shasum -a 256 "$ORCA_TEST_EXPECTED_RULES" | awk '\''{print $1}'\'')"' \
+    '  printf '\''bootsession=%s\nanchor_sha256=%s\n'\'' "$ORCA_TEST_BOOT_ID" "$hash" >"$ORCA_TEST_EVIDENCE_FILE"' \
+    'fi' \
     'exit 0' >"$stub_bin/install"
+  printf '%s\n' '#!/bin/bash' 'exit 0' >"$stub_bin/sleep"
   chmod +x \
     "$stub_bin/pfctl" \
     "$stub_bin/launchctl" \
@@ -2286,7 +2302,8 @@ PY
     "$stub_bin/stat" \
     "$stub_bin/chown" \
     "$stub_bin/shasum" \
-    "$stub_bin/install"
+    "$stub_bin/install" \
+    "$stub_bin/sleep"
 
   if (
     HOME="$fixture_home"
@@ -2339,20 +2356,23 @@ PY
   require_contains "$anchor_source" "pass in quick on utun* inet proto tcp from 100.64.0.0/10 to any port 6768"
   require_contains "$anchor_source" "pass in quick on utun* inet6 proto tcp from fd7a:115c:a1e0::/48 to any port 6768"
   require_contains "$anchor_source" "block drop in quick proto tcp from any to any port 6768"
+  require_same_file "$fixture_root/pf-config.original" "$pf_config_rollback"
   if python3 - "$pf_config_source" <<'PY'
 import sys
 from pathlib import Path
 
 text = Path(sys.argv[1]).read_text(encoding="utf-8")
-start = text.index("# >>> guisaliba/agents Orca firewall >>>")
-anchor = text.index('anchor "com.stablyai.orca-server"')
-preserved = text.index("# preserve system PF rules")
-raise SystemExit(0 if start < anchor < preserved else 1)
+translation = text.index('dummynet-anchor "com.apple/*"')
+block = text.index("# >>> guisaliba/agents Orca firewall >>>")
+orca = text.index('\nanchor "com.stablyai.orca-server"\n')
+apple = text.index('\nanchor "com.apple/*"\n')
+rule = text.index("pass in quick proto tcp from any to any port 6768")
+raise SystemExit(0 if translation < block < orca < apple < rule else 1)
 PY
   then
-    ok "macOS Orca anchor is placed before existing firewall rules"
+    ok "macOS Orca anchor is placed at the start of the filtering section"
   else
-    not_ok "macOS Orca anchor is not placed before existing firewall rules"
+    not_ok "macOS Orca anchor is not placed at the start of the filtering section"
   fi
   require_contains "$install_script" "set -Eeuo pipefail"
   require_contains "$install_script" "$pf_config_hash"
@@ -2765,7 +2785,7 @@ PY
   require_empty_file "$launch_log"
 
   cp "$pf_config_source" "$pf_config"
-  printf '%s\n' "bootsession=$boot_id" "anchor_sha256=$expected_hash" >"$evidence_file"
+  printf '%s\n' "bootsession=$boot_id" "anchor_sha256=$other_hash" >"$evidence_file"
   : >"$launch_log"
   : >"$install_cmd_log"
   if (
@@ -2773,6 +2793,28 @@ PY
       ORCA_TEST_LAUNCH_LOG="$launch_log" \
       ORCA_TEST_INSTALL_CMD_LOG="$install_cmd_log" \
       ORCA_TEST_BOOT_ID="$boot_id" \
+      ORCA_TEST_EXPECTED_RULES="$expected_rules" \
+      ORCA_TEST_EVIDENCE_FILE="$evidence_file" \
+      ORCA_TEST_INSTALL_PUBLISH="0" \
+      bash "$install_script"
+  ) >"$install_log" 2>&1; then
+    not_ok "privileged install script accepted evidence from the previous rollout"
+  else
+    ok "privileged install script requires fresh gate evidence"
+  fi
+  [[ ! -e "$evidence_file" ]] && ok "privileged install script removed old evidence" || \
+    not_ok "privileged install script kept old evidence"
+
+  : >"$launch_log"
+  : >"$install_cmd_log"
+  if (
+    PATH="$stub_bin:/usr/bin:/bin" \
+      ORCA_TEST_LAUNCH_LOG="$launch_log" \
+      ORCA_TEST_INSTALL_CMD_LOG="$install_cmd_log" \
+      ORCA_TEST_BOOT_ID="$boot_id" \
+      ORCA_TEST_EXPECTED_RULES="$expected_rules" \
+      ORCA_TEST_EVIDENCE_FILE="$evidence_file" \
+      ORCA_TEST_INSTALL_PUBLISH="1" \
       bash "$install_script"
   ) >/dev/null 2>&1; then
     ok "privileged install script installs and starts the gate"
@@ -2785,6 +2827,32 @@ PY
   require_contains "$launch_log" "enable system/com.stablyai.orca-firewall"
   require_contains "$launch_log" "bootstrap system"
   require_contains "$launch_log" "kickstart -k system/com.stablyai.orca-firewall"
+  require_contains "$evidence_file" "bootsession=$boot_id"
+  require_contains "$evidence_file" "anchor_sha256=$expected_hash"
+
+  rm -rf -- "$fixture_root"
+}
+
+test_macos_orca_setup_order() {
+  local fixture_root setup_log expected_log
+  fixture_root="$(mktemp -d)"
+  setup_log="$fixture_root/setup.log"
+  expected_log="$fixture_root/expected.log"
+
+  if (
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Darwin; }
+    install_orca_launch_daemon() { printf '%s\n' install-server >>"$setup_log"; }
+    start_orca_firewall() { printf '%s\n' firewall >>"$setup_log"; }
+    start_orca_launch_daemon() { printf '%s\n' verify-server >>"$setup_log"; }
+    setup_orca
+  ) >/dev/null 2>&1; then
+    ok "macOS Orca setup runs its stages"
+  else
+    not_ok "macOS Orca setup order fixture failed"
+  fi
+  printf '%s\n' install-server firewall verify-server >"$expected_log"
+  require_same_file "$expected_log" "$setup_log"
 
   rm -rf -- "$fixture_root"
 }
@@ -3151,6 +3219,7 @@ test_macos_ai_memory_installation
 test_macos_orca_installation
 test_macos_orca_launch_daemon
 test_macos_orca_firewall
+test_macos_orca_setup_order
 test_ai_memory_user_service_installation
 test_macos_ai_memory_launch_daemon
 test_macos_bash_profile
@@ -3458,6 +3527,11 @@ if [[ "$(uname -s)" == Darwin ]]; then
 
   require_file "$ORCA_PF_CONFIG_SOURCE_FILE"
   require_file_mode "$ORCA_PF_CONFIG_SOURCE_FILE" "600"
+  if /sbin/pfctl -nf "$ORCA_PF_CONFIG_SOURCE_FILE" >/dev/null 2>&1; then
+    ok "generated Orca PF configuration parses"
+  else
+    not_ok "generated Orca PF configuration is invalid"
+  fi
   require_file "$ORCA_PF_CONFIG_ROLLBACK_FILE"
   require_file_mode "$ORCA_PF_CONFIG_ROLLBACK_FILE" "600"
   require_file "$ORCA_PF_CONFIG_DIGEST_FILE"

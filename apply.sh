@@ -588,22 +588,50 @@ current = pf_config_data.decode("utf-8")
 
 if current.count(start) != current.count(end) or current.count(start) > 1:
     raise SystemExit(f"ERROR: Expected at most one balanced Orca firewall block in {pf_config}")
-if start in current:
-    before, remainder = current.split(start, 1)
-    _, after = remainder.split(end, 1)
-    current = before.rstrip("\n") + "\n" + after.lstrip("\n")
 
-rollback = current.strip("\n")
-rollback = rollback + "\n" if rollback else ""
-block = "\n".join(
-    [
-        start,
-        f'anchor "{anchor_name}"',
-        f'load anchor "{anchor_name}" from "{anchor_file}"',
-        end,
-    ]
-)
-managed_config = block + "\n\n" + rollback
+lines = current.split("\n")
+if lines and lines[-1] == "":
+    lines.pop()
+if start in current and not (start in lines and end in lines):
+    raise SystemExit(f"ERROR: Orca firewall block must use standalone marker lines in {pf_config}")
+if start in lines:
+    begin = lines.index(start)
+    finish = lines.index(end, begin)
+    del lines[begin : finish + 1]
+    if begin > 0 and lines[begin - 1].strip() == "":
+        del lines[begin - 1]
+        begin -= 1
+    if begin < len(lines) and lines[begin].strip() == "":
+        del lines[begin]
+while lines and lines[0].strip() == "":
+    del lines[0]
+while lines and lines[-1].strip() == "":
+    lines.pop()
+
+rollback = "\n".join(lines) + "\n" if lines else ""
+
+block_lines = [
+    start,
+    f'anchor "{anchor_name}"',
+    f'load anchor "{anchor_name}" from "{anchor_file}"',
+    end,
+]
+filter_keywords = {"pass", "block", "match", "anchor", "antispoof"}
+insert_at = len(lines)
+for index, line in enumerate(lines):
+    keyword = line.strip().split(None, 1)[0] if line.strip() else ""
+    if keyword in filter_keywords:
+        insert_at = index
+        break
+
+managed_lines = list(lines[:insert_at])
+if managed_lines:
+    managed_lines.append("")
+managed_lines.extend(block_lines)
+if insert_at < len(lines):
+    managed_lines.append("")
+managed_lines.extend(lines[insert_at:])
+managed_config = "\n".join(managed_lines) + "\n"
 anchor = "\n".join(
     [
         f"pass in quick on utun* inet proto tcp from 100.64.0.0/10 to any port {port}",
@@ -729,9 +757,11 @@ set -Eeuo pipefail
 
 LAUNCHCTL="{launchctl_bin}"
 SYSCTL="{sysctl_bin}"
+PFCTL="{pfctl_bin}"
 PF_CONFIG="{pf_config}"
 PF_CONFIG_SOURCE="{pf_source}"
 PF_CONFIG_DIGEST="{digest}"
+ANCHOR_NAME="{anchor_name}"
 ANCHOR_SOURCE="{anchor_source}"
 ANCHOR="{anchor_file}"
 FIREWALL_SCRIPT_SOURCE="{gate_source}"
@@ -761,6 +791,7 @@ fi
 "$LAUNCHCTL" disable "system/$ORCA_LABEL"
 "$LAUNCHCTL" bootout "system/$ORCA_LABEL" >/dev/null 2>&1 || true
 "$LAUNCHCTL" bootout "system/$FIREWALL_LABEL" >/dev/null 2>&1 || true
+rm -f "$EVIDENCE_FILE"
 
 install -d -o root -g wheel -m 0755 "$FIREWALL_SCRIPT_DIR"
 install -o root -g wheel -m 0755 "$FIREWALL_SCRIPT_SOURCE" "$FIREWALL_SCRIPT"
@@ -775,15 +806,21 @@ install -o root -g wheel -m 0644 "$SERVER_PLIST_SOURCE" "$SERVER_PLIST"
 "$LAUNCHCTL" kickstart -k "system/$FIREWALL_LABEL"
 
 boot="$("$SYSCTL" -n kern.bootsessionuuid)"
+expected_hash="$("$PFCTL" -a "$ANCHOR_NAME" -nvf "$ANCHOR" 2>/dev/null | shasum -a 256 | awk '{{print $1}}')"
+if [[ -z "$expected_hash" ]]; then
+  log "ERROR: cannot read the expected anchor rules from $ANCHOR."
+  exit 1
+fi
+
 for _ in 1 2 3 4 5 6 7 8 9 10; do
-  if [[ -s "$EVIDENCE_FILE" ]] && grep -q "bootsession=$boot" "$EVIDENCE_FILE"; then
+  if [[ -s "$EVIDENCE_FILE" ]] && grep -q "bootsession=$boot" "$EVIDENCE_FILE" && grep -q "anchor_sha256=$expected_hash" "$EVIDENCE_FILE"; then
     log "Orca firewall gate is active for this boot."
     exit 0
   fi
   sleep 1
 done
 
-log "ERROR: the gate did not publish current-boot evidence."
+log "ERROR: the gate did not publish current-boot evidence with the expected anchor hash."
 log "Inspect the gate log at {home}/Library/Logs/orca-server/firewall-stderr.log"
 exit 1
 """
@@ -817,10 +854,37 @@ PY
   chmod 700 "$ORCA_INSTALL_SCRIPT_FILE"
 
   if [[ -x /sbin/pfctl ]]; then
+    local generated_config
     /sbin/pfctl -nf "$ORCA_PF_CONFIG_FILE" >/dev/null || \
       die "Existing system PF configuration is invalid"
     /sbin/pfctl -nf "$ORCA_PF_ANCHOR_SOURCE_FILE" >/dev/null || \
       die "Generated Orca PF anchor is invalid"
+    generated_config="$(mktemp)" || die "Could not create a temporary PF configuration"
+    python3 - \
+      "$ORCA_PF_CONFIG_SOURCE_FILE" \
+      "$ORCA_PF_ANCHOR_FILE" \
+      "$ORCA_PF_ANCHOR_SOURCE_FILE" \
+      "$generated_config" <<'PY'
+import sys
+from pathlib import Path
+
+source = Path(sys.argv[1])
+installed_anchor = sys.argv[2]
+source_anchor = sys.argv[3]
+target = Path(sys.argv[4])
+text = source.read_text(encoding="utf-8")
+if f'from "{installed_anchor}"' not in text:
+    raise SystemExit(f"ERROR: Missing Orca anchor reference in {source}")
+target.write_text(
+    text.replace(f'from "{installed_anchor}"', f'from "{source_anchor}"'),
+    encoding="utf-8",
+)
+PY
+    if ! /sbin/pfctl -nf "$generated_config" >/dev/null; then
+      rm -f "$generated_config"
+      die "Generated Orca PF configuration is invalid"
+    fi
+    rm -f "$generated_config"
   fi
 }
 
@@ -933,6 +997,7 @@ $(orca_privileged_install_message)"
 
 setup_orca() {
   [[ "$(agent_stack_platform)" == "Darwin" ]] || return 0
+  install_orca_launch_daemon
   start_orca_firewall
   start_orca_launch_daemon
 }
