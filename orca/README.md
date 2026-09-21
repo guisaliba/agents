@@ -98,8 +98,10 @@ Apply places the managed anchor at the start of the filtering section of
 before every filter rule. PF requires that rule order. An earlier `pass ...
 quick` rule cannot skip the anchor. The anchor and the whole generated
 configuration are parsed with `pfctl -nf` before installation.
-The pass rules also require the Tailscale `utun*` interface, so a local network
-that uses the same address ranges cannot match them.
+The pass rules require the exact Tailscale interface that owns the addresses
+reported by the Tailscale CLI, so a local network that uses the same address
+ranges, or another tunnel, cannot match them. A changed tunnel name makes the
+gate fail closed until `./apply.sh` regenerates the rules.
 
 Apply rejects every `set skip` directive. PF does not run filter rules on a
 skipped interface, so the anchor cannot protect the port there. A loopback
@@ -124,11 +126,12 @@ The gate also checks the established connections of the listener. It counts
 only sockets whose local endpoint is TCP `6768`, so an unrelated outbound
 connection to a remote port `6768` is ignored. A listener connection whose peer
 is not in the Tailscale ranges is unsafe. The gate asks the Tailscale CLI
-(`tailscale ip -4` and `ip -6`) for the node addresses, finds the `utun*`
-interface that owns them, and requires the route to each peer to leave through
-that exact interface. It fails closed when Tailscale reports no address or when
-more than one interface owns the addresses. Another tunnel, or a local network
-that reuses the ranges, therefore cannot pass. The gate stops Orca, which
+(`tailscale ip -4` and `ip -6`) for the node addresses, finds the interface
+that owns them, and requires that interface to be the one named in the anchor
+and the route to each peer to leave through it. It fails closed when Tailscale
+reports no address, when more than one interface owns the addresses, or when
+the interface changed since apply generated the rules. Another tunnel, or a
+local network that reuses the ranges, therefore cannot pass. The gate stops Orca, which
 closes that connection, before it continues. This removes a connection that an
 earlier permissive PF state allowed even when the rules match again.
 

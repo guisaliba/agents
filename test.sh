@@ -2225,8 +2225,8 @@ test_macos_orca_firewall() {
     >"$fixture_root/etc/pf.anchors/com.apple"
   cp "$pf_config" "$fixture_root/pf-config.original"
   printf '%s\n' \
-    'pass in quick on utun* inet proto tcp from 100.64.0.0/10 to any port = 6768 flags S/SA keep state' \
-    'pass in quick on utun* inet6 proto tcp from fd7a:115c:a1e0::/48 to any port = 6768 flags S/SA keep state' \
+    'pass in quick on utun0 inet proto tcp from 100.64.0.0/10 to any port = 6768 flags S/SA keep state' \
+    'pass in quick on utun0 inet6 proto tcp from fd7a:115c:a1e0::/48 to any port = 6768 flags S/SA keep state' \
     'block drop in quick proto tcp from any to any port = 6768' >"$expected_rules"
   cp "$expected_rules" "$live_rules"
   printf '%s\n' \
@@ -2339,7 +2339,8 @@ PY
   printf '%s\n' \
     '#!/bin/bash' \
     '[[ "$1" == "ip" ]] || exit 1' \
-    '[[ -n "${ORCA_TEST_TAILSCALE_IPS:-}" ]] && printf '\''%s\n'\'' ${ORCA_TEST_TAILSCALE_IPS}' \
+    'ips="${ORCA_TEST_TAILSCALE_IPS-100.120.225.13}"' \
+    '[[ -n "$ips" ]] && printf '\''%s\n'\'' $ips' \
     'exit 0' >"$stub_bin/tailscale"
   chmod +x \
     "$stub_bin/pfctl" \
@@ -2472,8 +2473,8 @@ PY
   require_file_mode "$install_script" "700"
   require_contains "$pf_config_source" "# preserve system PF rules"
   require_text_count "$pf_config_source" "# >>> guisaliba/agents Orca firewall >>>" "1"
-  require_contains "$anchor_source" "pass in quick on utun* inet proto tcp from 100.64.0.0/10 to any port 6768"
-  require_contains "$anchor_source" "pass in quick on utun* inet6 proto tcp from fd7a:115c:a1e0::/48 to any port 6768"
+  require_contains "$anchor_source" "pass in quick on utun0 inet proto tcp from 100.64.0.0/10 to any port 6768"
+  require_contains "$anchor_source" "pass in quick on utun0 inet6 proto tcp from fd7a:115c:a1e0::/48 to any port 6768"
   require_contains "$anchor_source" "block drop in quick proto tcp from any to any port 6768"
   require_same_file "$fixture_root/pf-config.original" "$pf_config_rollback"
   if python3 - "$pf_config_source" <<'PY'
@@ -2756,6 +2757,7 @@ PY
       ORCA_TEST_UTUN_IFACES="${8:-utun0}" \
       ORCA_TEST_EXTRA_TAILSCALE_IFACE="${9:-}" \
       ORCA_TEST_TAILSCALE_IPS="${10-100.120.225.13}" \
+      ORCA_TEST_TAILSCALE_IFACE="${11:-utun0}" \
       bash "$gate_source"
   }
 
@@ -2917,6 +2919,16 @@ PY
     not_ok "gate accepted an interface when Tailscale reports no address"
   else
     ok "gate fails closed when Tailscale reports no address"
+  fi
+  require_contains "$launch_log" "kill SIGTERM system/com.stablyai.orca-server"
+
+  : >"$pfctl_log"
+  : >"$launch_log"
+  write_orca_gate_evidence
+  if run_orca_gate Enabled 0 0 1 "" "" "utun5" "utun5" "" "100.120.225.13" "utun5" >/dev/null 2>&1; then
+    not_ok "gate accepted a renumbered Tailscale interface"
+  else
+    ok "gate fails closed when the Tailscale interface changed"
   fi
   require_contains "$launch_log" "kill SIGTERM system/com.stablyai.orca-server"
 

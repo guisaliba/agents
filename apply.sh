@@ -490,9 +490,34 @@ raise SystemExit(0 if source == installed else 1)
 PY
 }
 
+orca_tailscale_interface() {
+  local ips candidate found="" count=0
+  ips="$("$ORCA_TAILSCALE_BIN" ip -4 2>/dev/null || true) $("$ORCA_TAILSCALE_BIN" ip -6 2>/dev/null || true)"
+  [[ -n "${ips//[[:space:]]/}" ]] || return 1
+  for candidate in $("$ORCA_IFCONFIG_BIN" -l 2>/dev/null); do
+    case "$candidate" in
+      utun*) ;;
+      *) continue ;;
+    esac
+    if "$ORCA_IFCONFIG_BIN" "$candidate" 2>/dev/null | awk -v ips="$ips" '
+      BEGIN { n = split(ips, list, " ") }
+      ($1 == "inet" || $1 == "inet6") { for (i = 1; i <= n; i++) if ($2 == list[i]) found = 1 }
+      END { exit found ? 0 : 1 }
+    '; then
+      found="$candidate"
+      count=$((count + 1))
+    fi
+  done
+  [[ "$count" -eq 1 ]] || return 1
+  printf '%s\n' "$found"
+}
+
 install_orca_firewall_sources() {
-  local path
+  local path tailscale_interface
   log "Generating the managed Orca PF and firewall gate sources"
+
+  tailscale_interface="$(orca_tailscale_interface)" || \
+    die "Cannot identify the Tailscale interface. Start Tailscale and rerun apply."
 
   for path in \
     "$ORCA_PF_CONFIG_SOURCE_FILE" \
@@ -547,7 +572,8 @@ install_orca_firewall_sources() {
     "$ORCA_LSOF_BIN" \
     "$ORCA_ROUTE_BIN" \
     "$ORCA_IFCONFIG_BIN" \
-    "$ORCA_TAILSCALE_BIN" <<'PY' || return 1
+    "$ORCA_TAILSCALE_BIN" \
+    "$tailscale_interface" <<'PY' || return 1
 import hashlib
 import plistlib
 import sys
@@ -584,6 +610,7 @@ lsof_bin = sys.argv[28]
 route_bin = sys.argv[29]
 ifconfig_bin = sys.argv[30]
 tailscale_bin = sys.argv[31]
+tailscale_interface = sys.argv[32]
 sys.path.insert(0, str(helper_path.parent))
 sys.dont_write_bytecode = True
 
@@ -658,8 +685,8 @@ managed_lines.extend(lines[insert_at:])
 managed_config = "\n".join(managed_lines) + "\n"
 anchor = "\n".join(
     [
-        f"pass in quick on utun* inet proto tcp from 100.64.0.0/10 to any port {port}",
-        f"pass in quick on utun* inet6 proto tcp from fd7a:115c:a1e0::/48 to any port {port}",
+        f"pass in quick on {tailscale_interface} inet proto tcp from 100.64.0.0/10 to any port {port}",
+        f"pass in quick on {tailscale_interface} inet6 proto tcp from fd7a:115c:a1e0::/48 to any port {port}",
         f"block drop in quick proto tcp from any to any port {port}",
         "",
     ]
@@ -724,6 +751,7 @@ LSOF="{lsof_bin}"
 ROUTE="{route_bin}"
 IFCONFIG="{ifconfig_bin}"
 TAILSCALE="{tailscale_bin}"
+TAILSCALE_IFACE="{tailscale_interface}"
 
 log() {{
   printf 'orca-firewall-gate: %s\\n' "$*" >&2
@@ -852,7 +880,7 @@ peers_are_safe() {{
 
 state_matches() {{
   [[ "$enabled" -eq 1 && "$live_anchor" == "$expected" && "$first_filter" == "$EXPECTED_FIRST_FILTER" ]] && skips_are_safe && \
-    [[ "$tailscale_iface_count" -eq 1 ]] && peers_are_safe
+    [[ "$tailscale_iface_count" -eq 1 && "$tailscale_ifaces" == " $TAILSCALE_IFACE" ]] && peers_are_safe
 }}
 
 read_state
