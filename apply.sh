@@ -91,6 +91,7 @@ ORCA_CHOWN_BIN="${ORCA_CHOWN_BIN:-/usr/sbin/chown}"
 ORCA_LSOF_BIN="${ORCA_LSOF_BIN:-/usr/sbin/lsof}"
 ORCA_ROUTE_BIN="${ORCA_ROUTE_BIN:-/sbin/route}"
 ORCA_IFCONFIG_BIN="${ORCA_IFCONFIG_BIN:-/sbin/ifconfig}"
+ORCA_TAILSCALE_BIN="${ORCA_TAILSCALE_BIN:-/opt/homebrew/bin/tailscale}"
 
 log() {
   printf '\n==> %s\n' "$*"
@@ -545,7 +546,8 @@ install_orca_firewall_sources() {
     "$ORCA_INSTALL_SCRIPT_FILE" \
     "$ORCA_LSOF_BIN" \
     "$ORCA_ROUTE_BIN" \
-    "$ORCA_IFCONFIG_BIN" <<'PY' || return 1
+    "$ORCA_IFCONFIG_BIN" \
+    "$ORCA_TAILSCALE_BIN" <<'PY' || return 1
 import hashlib
 import plistlib
 import sys
@@ -581,6 +583,7 @@ install_script = Path(sys.argv[27])
 lsof_bin = sys.argv[28]
 route_bin = sys.argv[29]
 ifconfig_bin = sys.argv[30]
+tailscale_bin = sys.argv[31]
 sys.path.insert(0, str(helper_path.parent))
 sys.dont_write_bytecode = True
 
@@ -604,12 +607,10 @@ for raw_line in current.splitlines():
         continue
     spec = stripped[len("set skip on") :].strip()
     for entry in spec.replace("{", " ").replace("}", " ").replace(",", " ").split():
-        if entry in {"utun", "utun*"} or (entry.startswith("utun") and entry[4:].isdigit()):
-            continue
         raise SystemExit(
             f"ERROR: {pf_config} uses 'set skip on {entry}'. PF skips all filter rules "
             f"on that interface, so the Orca anchor cannot protect TCP {port}. "
-            "Limit the skip to utun* before running apply."
+            "Remove the set skip directive before running apply."
         )
 
 lines = current.split("\n")
@@ -635,7 +636,7 @@ rollback = "\n".join(lines) + "\n" if lines else ""
 
 block_lines = [
     start,
-    f'anchor "{anchor_name}"',
+    f'anchor "{anchor_name}" quick',
     f'load anchor "{anchor_name}" from "{anchor_file}"',
     end,
 ]
@@ -722,6 +723,7 @@ CHOWN="{chown_bin}"
 LSOF="{lsof_bin}"
 ROUTE="{route_bin}"
 IFCONFIG="{ifconfig_bin}"
+TAILSCALE="{tailscale_bin}"
 
 log() {{
   printf 'orca-firewall-gate: %s\\n' "$*" >&2
@@ -752,7 +754,7 @@ fail() {{
 [[ -s "$ANCHOR_FILE" ]] || fail "missing or empty $ANCHOR_FILE"
 
 expected="$("$PFCTL" -a "$ANCHOR_NAME" -nvf "$ANCHOR_FILE" 2>/dev/null)" || fail "cannot parse $ANCHOR_FILE"
-EXPECTED_FIRST_FILTER='anchor "{anchor_name}" all'
+EXPECTED_FIRST_FILTER='anchor "{anchor_name}" quick all'
 enabled=0
 live_anchor=""
 first_filter=""
@@ -768,6 +770,8 @@ read_state() {{
   "$PFCTL" -s info 2>/dev/null | /usr/bin/grep -q '^Status: Enabled' && enabled=1
   live_anchor="$("$PFCTL" -a "$ANCHOR_NAME" -sr 2>/dev/null || true)"
   first_filter="$("$PFCTL" -sr 2>/dev/null | /usr/bin/grep -E '^(pass|block|match|anchor|antispoof) ' | /usr/bin/head -n 1)"
+  tailscale_ips="$("$TAILSCALE" ip -4 2>/dev/null || true)"
+  tailscale_ips="$tailscale_ips $("$TAILSCALE" ip -6 2>/dev/null || true)"
   tailscale_ifaces=""
   tailscale_iface_count=0
   for candidate in $("$IFCONFIG" -l 2>/dev/null); do
@@ -775,9 +779,11 @@ read_state() {{
       utun*) ;;
       *) continue ;;
     esac
-    if "$IFCONFIG" "$candidate" 2>/dev/null | /usr/bin/awk '
-      $1 == "inet" {{ split($2, parts, "."); if (parts[1] == "100" && parts[2] + 0 >= 64 && parts[2] + 0 <= 127) found = 1 }}
-      $1 == "inet6" && $2 ~ /^fd7a:115c:a1e0:/ {{ found = 1 }}
+    if "$IFCONFIG" "$candidate" 2>/dev/null | /usr/bin/awk -v ips="$tailscale_ips" '
+      BEGIN {{ count = split(ips, list, " ") }}
+      ($1 == "inet" || $1 == "inet6") {{
+        for (i = 1; i <= count; i++) if ($2 == list[i]) found = 1
+      }}
       END {{ exit found ? 0 : 1 }}
     '; then
       tailscale_ifaces="$tailscale_ifaces $candidate"
@@ -803,15 +809,8 @@ read_state() {{
 }}
 
 skips_are_safe() {{
-  local iface
   [[ "$skip_query" -eq 0 ]] || return 1
-  for iface in $skipped; do
-    case "$iface" in
-      utun*) ;;
-      *) return 1 ;;
-    esac
-  done
-  return 0
+  [[ -z "$skipped" ]]
 }}
 
 peer_is_tailscale() {{

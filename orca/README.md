@@ -101,12 +101,16 @@ configuration are parsed with `pfctl -nf` before installation.
 The pass rules also require the Tailscale `utun*` interface, so a local network
 that uses the same address ranges cannot match them.
 
-Apply rejects a `set skip` directive for any interface other than `utun*`. PF
-does not run filter rules on a skipped interface, so the anchor cannot protect
-the port there. A loopback skip is rejected too, because the anchor blocks
-local connections to TCP `6768` as well. The gate also reads the live skip
-list and fails closed when another process activates a skip on a non-Tailscale
-interface.
+Apply rejects every `set skip` directive. PF does not run filter rules on a
+skipped interface, so the anchor cannot protect the port there. A loopback
+skip is rejected too, because the anchor blocks local connections to TCP
+`6768` as well, and a tunnel wildcard can include a non-Tailscale tunnel. The
+gate also reads the live skip list and fails closed when any interface skips
+filtering.
+
+The managed anchor is `quick`. A packet that matches a rule inside the anchor
+is final, so a later pass rule in the parent ruleset cannot override the Orca
+block.
 
 The root-owned gate is the only component that starts Orca. It loads
 `/etc/pf.conf`, enables PF, compares the live anchor with the expected anchor,
@@ -119,11 +123,12 @@ rules are active.
 The gate also checks the established connections of the listener. It counts
 only sockets whose local endpoint is TCP `6768`, so an unrelated outbound
 connection to a remote port `6768` is ignored. A listener connection whose peer
-is not in the Tailscale ranges is unsafe. The gate also finds the `utun*`
-interface that owns the Tailscale addresses and requires the route to each peer
-to leave through that exact interface. It fails closed when no interface or
-more than one interface carries the Tailscale ranges. Another tunnel, or a
-local network that reuses the ranges, therefore cannot pass. The gate stops Orca, which
+is not in the Tailscale ranges is unsafe. The gate asks the Tailscale CLI
+(`tailscale ip -4` and `ip -6`) for the node addresses, finds the `utun*`
+interface that owns them, and requires the route to each peer to leave through
+that exact interface. It fails closed when Tailscale reports no address or when
+more than one interface owns the addresses. Another tunnel, or a local network
+that reuses the ranges, therefore cannot pass. The gate stops Orca, which
 closes that connection, before it continues. This removes a connection that an
 earlier permissive PF state allowed even when the rules match again.
 

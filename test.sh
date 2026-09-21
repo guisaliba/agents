@@ -2230,7 +2230,7 @@ test_macos_orca_firewall() {
     'block drop in quick proto tcp from any to any port = 6768' >"$expected_rules"
   cp "$expected_rules" "$live_rules"
   printf '%s\n' \
-    'anchor "com.stablyai.orca-server" all' \
+    'anchor "com.stablyai.orca-server" quick all' \
     'anchor "/*" all' \
     'pass in quick proto tcp from any to any port 22 flags S/SA keep state' >"$main_rules"
   cp "$main_rules" "$main_rules_after"
@@ -2326,11 +2326,21 @@ PY
     'if [[ "$1" == "-l" ]]; then printf '\''%s\n'\'' "${ORCA_TEST_UTUN_IFACES:-utun0}"; exit 0; fi' \
     'iface="$1"' \
     'if [[ "$iface" == "${ORCA_TEST_TAILSCALE_IFACE:-utun0}" || "$iface" == "${ORCA_TEST_EXTRA_TAILSCALE_IFACE:-}" ]]; then' \
-    '  printf '\''inet 100.120.225.13 --> 100.120.225.13 netmask 0xffffffff\n'\''' \
+    '  for ip in ${ORCA_TEST_TAILSCALE_IPS:-100.120.225.13}; do' \
+    '    case "$ip" in' \
+    '      *:*) printf '\''inet6 %s prefixlen 128\n'\'' "$ip" ;;' \
+    '      *) printf '\''inet %s --> %s netmask 0xffffffff\n'\'' "$ip" "$ip" ;;' \
+    '    esac' \
+    '  done' \
     'else' \
     '  printf '\''inet6 fe80::1%%utun9 prefixlen 64 scopeid 0x1\n'\''' \
     'fi' \
     'exit 0' >"$stub_bin/ifconfig"
+  printf '%s\n' \
+    '#!/bin/bash' \
+    '[[ "$1" == "ip" ]] || exit 1' \
+    '[[ -n "${ORCA_TEST_TAILSCALE_IPS:-}" ]] && printf '\''%s\n'\'' ${ORCA_TEST_TAILSCALE_IPS}' \
+    'exit 0' >"$stub_bin/tailscale"
   chmod +x \
     "$stub_bin/pfctl" \
     "$stub_bin/launchctl" \
@@ -2342,7 +2352,8 @@ PY
     "$stub_bin/sleep" \
     "$stub_bin/lsof" \
     "$stub_bin/route" \
-    "$stub_bin/ifconfig"
+    "$stub_bin/ifconfig" \
+    "$stub_bin/tailscale"
 
   run_orca_source_generation() {
     local config="$1"
@@ -2370,6 +2381,7 @@ PY
       export ORCA_LSOF_BIN="$stub_bin/lsof"
       export ORCA_ROUTE_BIN="$stub_bin/route"
       export ORCA_IFCONFIG_BIN="$stub_bin/ifconfig"
+      export ORCA_TAILSCALE_BIN="$stub_bin/tailscale"
       source "$REPO_DIR/apply.sh"
       install_orca_firewall_sources
     )
@@ -2400,12 +2412,13 @@ PY
   printf '%s\n' \
     '# preserve system PF rules' \
     'set skip on utun*' \
-    'anchor "com.apple/*"' >"$fixture_root/pf-skip-ok.conf"
-  if run_orca_source_generation "$fixture_root/pf-skip-ok.conf" >/dev/null 2>&1; then
-    ok "tunnel set skip is accepted"
+    'anchor "com.apple/*"' >"$fixture_root/pf-skip-tunnel.conf"
+  if run_orca_source_generation "$fixture_root/pf-skip-tunnel.conf" >"$install_log" 2>&1; then
+    not_ok "tunnel set skip was accepted"
   else
-    not_ok "tunnel set skip was rejected"
+    ok "tunnel set skip is rejected"
   fi
+  require_contains "$install_log" "set skip"
 
   if (
     HOME="$fixture_home"
@@ -2432,12 +2445,13 @@ PY
     ORCA_LSOF_BIN="$stub_bin/lsof"
     ORCA_ROUTE_BIN="$stub_bin/route"
     ORCA_IFCONFIG_BIN="$stub_bin/ifconfig"
+    ORCA_TAILSCALE_BIN="$stub_bin/tailscale"
     export HOME PATH ORCA_PF_CONFIG_FILE ORCA_PF_CONFIG_SOURCE_FILE ORCA_PF_CONFIG_ROLLBACK_FILE
     export ORCA_PF_CONFIG_DIGEST_FILE ORCA_PF_ANCHOR_SOURCE_FILE ORCA_PF_ANCHOR_FILE
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
     export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
-    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN ORCA_IFCONFIG_BIN
+    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN ORCA_IFCONFIG_BIN ORCA_TAILSCALE_BIN
     source "$REPO_DIR/apply.sh"
     install_orca_firewall_sources
     install_orca_firewall_sources
@@ -2469,7 +2483,7 @@ from pathlib import Path
 text = Path(sys.argv[1]).read_text(encoding="utf-8")
 translation = text.index('dummynet-anchor "com.apple/*"')
 block = text.index("# >>> guisaliba/agents Orca firewall >>>")
-orca = text.index('\nanchor "com.stablyai.orca-server"\n')
+orca = text.index('\nanchor "com.stablyai.orca-server" quick\n')
 apple = text.index('\nanchor "com.apple/*"\n')
 rule = text.index("pass in quick proto tcp from any to any port 6768")
 raise SystemExit(0 if translation < block < orca < apple < rule else 1)
@@ -2554,12 +2568,13 @@ PY
     ORCA_LSOF_BIN="$stub_bin/lsof"
     ORCA_ROUTE_BIN="$stub_bin/route"
     ORCA_IFCONFIG_BIN="$stub_bin/ifconfig"
+    ORCA_TAILSCALE_BIN="$stub_bin/tailscale"
     export HOME PATH ORCA_PF_CONFIG_FILE ORCA_PF_CONFIG_SOURCE_FILE ORCA_PF_CONFIG_ROLLBACK_FILE
     export ORCA_PF_CONFIG_DIGEST_FILE ORCA_PF_ANCHOR_SOURCE_FILE ORCA_PF_ANCHOR_FILE
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
     export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
-    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN ORCA_IFCONFIG_BIN
+    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN ORCA_IFCONFIG_BIN ORCA_TAILSCALE_BIN
     source "$REPO_DIR/apply.sh"
     start_orca_firewall
   ) >"$install_log" 2>&1; then
@@ -2602,6 +2617,7 @@ PY
     ORCA_LSOF_BIN="$stub_bin/lsof"
     ORCA_ROUTE_BIN="$stub_bin/route"
     ORCA_IFCONFIG_BIN="$stub_bin/ifconfig"
+    ORCA_TAILSCALE_BIN="$stub_bin/tailscale"
     ORCA_TEST_EXPECTED_RULES="$expected_rules"
     ORCA_TEST_BOOT_ID="$boot_id"
     ORCA_TEST_LAUNCH_PRINT_RC="0"
@@ -2610,7 +2626,7 @@ PY
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
     export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
-    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN ORCA_IFCONFIG_BIN
+    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN ORCA_IFCONFIG_BIN ORCA_TAILSCALE_BIN
     export ORCA_TEST_EXPECTED_RULES ORCA_TEST_BOOT_ID ORCA_TEST_LAUNCH_PRINT_RC
     source "$REPO_DIR/apply.sh"
     orca_expected_anchor_rules() { cat "$ORCA_TEST_EXPECTED_RULES"; }
@@ -2649,6 +2665,7 @@ PY
     ORCA_LSOF_BIN="$stub_bin/lsof"
     ORCA_ROUTE_BIN="$stub_bin/route"
     ORCA_IFCONFIG_BIN="$stub_bin/ifconfig"
+    ORCA_TAILSCALE_BIN="$stub_bin/tailscale"
     ORCA_TEST_EXPECTED_RULES="$expected_rules"
     ORCA_TEST_BOOT_ID="$boot_id"
     ORCA_TEST_LAUNCH_PRINT_RC="0"
@@ -2657,7 +2674,7 @@ PY
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
     export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
-    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN ORCA_IFCONFIG_BIN
+    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN ORCA_IFCONFIG_BIN ORCA_TAILSCALE_BIN
     export ORCA_TEST_EXPECTED_RULES ORCA_TEST_BOOT_ID ORCA_TEST_LAUNCH_PRINT_RC
     source "$REPO_DIR/apply.sh"
     orca_expected_anchor_rules() { cat "$ORCA_TEST_EXPECTED_RULES"; }
@@ -2696,6 +2713,7 @@ PY
     ORCA_LSOF_BIN="$stub_bin/lsof"
     ORCA_ROUTE_BIN="$stub_bin/route"
     ORCA_IFCONFIG_BIN="$stub_bin/ifconfig"
+    ORCA_TAILSCALE_BIN="$stub_bin/tailscale"
     ORCA_TEST_EXPECTED_RULES="$expected_rules"
     ORCA_TEST_BOOT_ID="$boot_id"
     ORCA_TEST_LAUNCH_PRINT_RC="0"
@@ -2705,7 +2723,7 @@ PY
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
     export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
-    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN ORCA_IFCONFIG_BIN
+    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN ORCA_IFCONFIG_BIN ORCA_TAILSCALE_BIN
     export ORCA_TEST_EXPECTED_RULES ORCA_TEST_BOOT_ID ORCA_TEST_LAUNCH_LOG ORCA_TEST_LAUNCH_PRINT_RC
     source "$REPO_DIR/apply.sh"
     orca_expected_anchor_rules() { cat "$ORCA_TEST_EXPECTED_RULES"; }
@@ -2737,6 +2755,7 @@ PY
       ORCA_TEST_ROUTE_IFACE="${7:-utun0}" \
       ORCA_TEST_UTUN_IFACES="${8:-utun0}" \
       ORCA_TEST_EXTRA_TAILSCALE_IFACE="${9:-}" \
+      ORCA_TEST_TAILSCALE_IPS="${10-100.120.225.13}" \
       bash "$gate_source"
   }
 
@@ -2891,6 +2910,16 @@ PY
   fi
   require_contains "$launch_log" "kill SIGTERM system/com.stablyai.orca-server"
 
+  : >"$pfctl_log"
+  : >"$launch_log"
+  write_orca_gate_evidence
+  if run_orca_gate Enabled 0 0 1 "" "" "utun0" "utun0" "" "" >/dev/null 2>&1; then
+    not_ok "gate accepted an interface when Tailscale reports no address"
+  else
+    ok "gate fails closed when Tailscale reports no address"
+  fi
+  require_contains "$launch_log" "kill SIGTERM system/com.stablyai.orca-server"
+
   printf '%s\n' \
     'Orca 789 user 58u IPv4 0x0 0t0 TCP 192.168.15.131:54321->203.0.113.9:6768 (ESTABLISHED)' >"$peers_file"
   : >"$pfctl_log"
@@ -2903,7 +2932,7 @@ PY
   fi
   rm -f "$peers_file"
 
-  printf '%s\n' 'pass in quick proto tcp from any to any port 6768 flags S/SA keep state' 'anchor "com.stablyai.orca-server" all' >"$main_rules"
+  printf '%s\n' 'pass in quick proto tcp from any to any port 6768 flags S/SA keep state' 'anchor "com.stablyai.orca-server" quick all' >"$main_rules"
   : >"$pfctl_log"
   : >"$launch_log"
   write_orca_gate_evidence
@@ -2917,7 +2946,7 @@ PY
   require_contains "$launch_log" "disable system/com.stablyai.orca-server"
   require_contains "$launch_log" "kill SIGTERM system/com.stablyai.orca-server"
 
-  printf '%s\n' 'pass in quick proto tcp from any to any port 6768 flags S/SA keep state' 'anchor "com.stablyai.orca-server" all' >"$main_rules"
+  printf '%s\n' 'pass in quick proto tcp from any to any port 6768 flags S/SA keep state' 'anchor "com.stablyai.orca-server" quick all' >"$main_rules"
   printf '%s' 'Enabled' >"$pf_status_file"
   : >"$pfctl_log"
   : >"$launch_log"
@@ -2931,6 +2960,7 @@ PY
       ORCA_TEST_BOOT_ID="$boot_id" \
       ORCA_TEST_PF_STATUS_FILE="$pf_status_file" \
       ORCA_TEST_LAUNCH_PRINT_RC="1" \
+      ORCA_TEST_TAILSCALE_IPS="100.120.225.13" \
       bash "$gate_source"
   ) >/dev/null 2>&1; then
     ok "gate recovers the main ruleset after a reload"
