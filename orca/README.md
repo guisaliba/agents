@@ -50,6 +50,7 @@ The managed files are:
 ~/.config/orca-server/com.stablyai.orca-firewall.sh
 /usr/local/libexec/com.stablyai.orca-server/com.stablyai.orca-firewall.sh
 ~/.config/orca-server/com.stablyai.orca-firewall.plist
+~/.config/orca-server/install-privileged.sh
 /etc/pf.anchors/com.stablyai.orca-server
 /Library/LaunchDaemons/com.stablyai.orca-firewall.plist
 /var/run/com.stablyai.orca-server.gate
@@ -63,13 +64,17 @@ file has mode `0600`. The Orca service sets a deterministic `HOME` and `PATH`,
 starts at boot after FileVault unlock, uses `KeepAlive`, and has a 10-second
 restart throttle. The preflight runs on every Orca start and restart.
 
-Apply stops when privileged installation is necessary and prints the required
-commands. It does not use hidden or passwordless `sudo`. Apply records the
-SHA-256 of `/etc/pf.conf` in `~/.config/orca-server/pf.conf.sha256` when it
-generates the Orca sources. The printed commands install the generated
-`/etc/pf.conf` only when the current file still matches that digest. A changed
-system PF configuration therefore stops the install. Rerun `./apply.sh` to
-regenerate the sources from the new file.
+Apply stops when privileged installation is necessary and writes
+`~/.config/orca-server/install-privileged.sh`. Inspect that script and run
+`sudo bash ~/.config/orca-server/install-privileged.sh`. Apply does not use
+hidden or passwordless `sudo`.
+
+Apply records the SHA-256 of `/etc/pf.conf` in
+`~/.config/orca-server/pf.conf.sha256` when it generates the Orca sources. The
+privileged install script compares the current file with that digest before it
+changes anything. A mismatch stops the script with a non-zero status and
+installs nothing. Rerun `./apply.sh` to regenerate the sources from the new
+file.
 
 ## Network Boundary
 
@@ -83,6 +88,11 @@ anchor permits TCP port `6768` only from the Tailscale IPv4 range
 `100.64.0.0/10` and IPv6 range `fd7a:115c:a1e0::/48`, then blocks all other
 sources, including the loopback interface and the LAN. Apply preserves existing
 PF content and maintains one marked Orca anchor block.
+
+Apply places the managed anchor at the top of `/etc/pf.conf`, before the
+existing rules. An earlier `pass ... quick` rule cannot skip the anchor.
+The pass rules also require the Tailscale `utun*` interface, so a local network
+that uses the same address ranges cannot match them.
 
 The root-owned gate is the only component that starts Orca. It loads
 `/etc/pf.conf`, enables PF, compares the live anchor with the expected anchor,
@@ -269,15 +279,15 @@ sudo launchctl bootout system/com.stablyai.orca-firewall 2>/dev/null || true
 test "$(shasum -a 256 /etc/pf.conf | awk '{print $1}')" = \
   "$(shasum -a 256 "$HOME/.config/orca-server/pf.conf" | awk '{print $1}')" && \
   sudo install -o root -g wheel -m 0644 \
-    "$HOME/.config/orca-server/pf.conf.without-orca" /etc/pf.conf || \
-  printf 'ERROR: /etc/pf.conf changed since apply generated the Orca sources; refusing the restore\n' >&2
-sudo pfctl -f /etc/pf.conf
-sudo rm -f /etc/pf.anchors/com.stablyai.orca-server
-sudo rm -f /Library/LaunchDaemons/com.stablyai.orca-firewall.plist
-sudo rm -f /Library/LaunchDaemons/com.stablyai.orca-server.plist
-sudo rm -f /usr/local/libexec/com.stablyai.orca-server/com.stablyai.orca-firewall.sh
-sudo rm -f /usr/local/libexec/com.stablyai.orca-server/com.stablyai.orca-server.sh
-sudo rm -f /var/run/com.stablyai.orca-server.gate
+    "$HOME/.config/orca-server/pf.conf.without-orca" /etc/pf.conf && \
+  sudo pfctl -f /etc/pf.conf && \
+  sudo rm -f /etc/pf.anchors/com.stablyai.orca-server \
+    /Library/LaunchDaemons/com.stablyai.orca-firewall.plist \
+    /Library/LaunchDaemons/com.stablyai.orca-server.plist \
+    /usr/local/libexec/com.stablyai.orca-server/com.stablyai.orca-firewall.sh \
+    /usr/local/libexec/com.stablyai.orca-server/com.stablyai.orca-server.sh \
+    /var/run/com.stablyai.orca-server.gate || \
+  printf 'ERROR: /etc/pf.conf changed since apply generated the Orca sources; the restore and cleanup did not run. Fix the file or rerun apply.sh.\n' >&2
 ```
 
 This rollback preserves repositories, worktrees, Orca state, paired-client

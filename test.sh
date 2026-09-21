@@ -2093,7 +2093,7 @@ PY
     ORCA_SERVER_SCRIPT_SOURCE_FILE="$server_source"
     ORCA_SERVER_SCRIPT_FILE="$server_file"
     export HOME PATH ORCA_LAUNCH_DAEMON_SOURCE_FILE ORCA_LAUNCH_DAEMON_FILE
-    export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE
+    export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     source "$REPO_DIR/apply.sh"
     agent_stack_platform() { printf '%s\n' Darwin; }
     start_orca_launch_daemon
@@ -2102,9 +2102,8 @@ PY
   else
     ok "missing macOS Orca LaunchDaemon requires privileged installation"
   fi
-  require_contains "$install_log" "sudo install -o root -g wheel -m 0644"
-  require_contains "$install_log" "sudo launchctl bootstrap system"
-  require_contains "$install_log" "sudo launchctl kickstart -k"
+  require_contains "$install_log" "sudo bash"
+  require_contains "$install_log" "install-privileged.sh"
 
   mkdir -p "$(dirname "$daemon_file")"
   python3 - "$daemon_source" "$daemon_file" <<'PY'
@@ -2143,7 +2142,7 @@ PY
     ORCA_SERVER_SCRIPT_FILE="$server_file"
     ORCA_TEST_LSOF_RC="1"
     export HOME PATH ORCA_LAUNCH_DAEMON_SOURCE_FILE ORCA_LAUNCH_DAEMON_FILE ORCA_TEST_LSOF_RC
-    export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE
+    export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     source "$REPO_DIR/apply.sh"
     agent_stack_platform() { printf '%s\n' Darwin; }
     start_orca_launch_daemon
@@ -2164,7 +2163,7 @@ PY
     ORCA_TEST_LAUNCH_LOG="$launch_log"
     ORCA_TEST_LSOF_RC="0"
     export HOME PATH ORCA_LAUNCH_DAEMON_SOURCE_FILE ORCA_LAUNCH_DAEMON_FILE ORCA_TEST_LAUNCH_LOG ORCA_TEST_LSOF_RC
-    export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE
+    export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     source "$REPO_DIR/apply.sh"
     agent_stack_platform() { printf '%s\n' Darwin; }
     start_orca_launch_daemon
@@ -2181,8 +2180,8 @@ PY
 
 test_macos_orca_firewall() {
   local fixture_root fixture_home stub_bin pf_config pf_config_source pf_config_rollback pf_config_digest anchor_source anchor_file
-  local gate_source gate_file server_source server_file evidence_file daemon_source daemon_file install_log launch_log pfctl_log live_rules expected_rules
-  local boot_id expected_hash pf_config_hash other_hash orca_daemon_file
+  local gate_source gate_file server_source server_file install_script evidence_file daemon_source daemon_file install_log launch_log pfctl_log live_rules expected_rules
+  local boot_id expected_hash pf_config_hash other_hash orca_daemon_file install_cmd_log
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
   stub_bin="$fixture_root/bin"
@@ -2196,20 +2195,22 @@ test_macos_orca_firewall() {
   gate_file="$fixture_home/usr/local/libexec/com.stablyai.orca-server/com.stablyai.orca-firewall.sh"
   server_source="$fixture_home/.config/orca-server/com.stablyai.orca-server.sh"
   server_file="$fixture_home/usr/local/libexec/com.stablyai.orca-server/com.stablyai.orca-server.sh"
+  install_script="$fixture_home/.config/orca-server/install-privileged.sh"
   evidence_file="$fixture_root/run/com.stablyai.orca-server.gate"
   daemon_source="$fixture_home/.config/orca-server/com.stablyai.orca-firewall.plist"
   daemon_file="$fixture_root/Library/LaunchDaemons/com.stablyai.orca-firewall.plist"
   install_log="$fixture_root/install-required.log"
   launch_log="$fixture_root/launchctl.log"
   pfctl_log="$fixture_root/pfctl.log"
+  install_cmd_log="$fixture_root/install-commands.log"
   live_rules="$fixture_root/live-rules"
   expected_rules="$fixture_root/expected-rules"
   boot_id="FIXTURE-BOOT-SESSION"
   mkdir -p "$stub_bin" "$(dirname "$pf_config")" "$(dirname "$evidence_file")"
   printf '%s\n' '# preserve system PF rules' 'anchor "com.apple/*"' >"$pf_config"
   printf '%s\n' \
-    'pass in quick inet proto tcp from 100.64.0.0/10 to any port = 6768 flags S/SA keep state' \
-    'pass in quick inet6 proto tcp from fd7a:115c:a1e0::/48 to any port = 6768 flags S/SA keep state' \
+    'pass in quick on utun* inet proto tcp from 100.64.0.0/10 to any port = 6768 flags S/SA keep state' \
+    'pass in quick on utun* inet6 proto tcp from fd7a:115c:a1e0::/48 to any port = 6768 flags S/SA keep state' \
     'block drop in quick proto tcp from any to any port = 6768' >"$expected_rules"
   cp "$expected_rules" "$live_rules"
   orca_daemon_file="/Library/LaunchDaemons/com.stablyai.orca-server.plist"
@@ -2270,14 +2271,22 @@ PY
   printf '%s\n' '#!/bin/bash' 'exit 0' >"$stub_bin/chown"
   printf '%s\n' \
     '#!/usr/bin/env bash' \
+    'if [[ "${3:-}" != "" ]]; then' \
+    '  exec python3 -c "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],\"rb\").read()).hexdigest())" "$3"' \
+    'fi' \
     'exec python3 -c "import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())"' >"$stub_bin/shasum"
+  printf '%s\n' \
+    '#!/bin/bash' \
+    'printf '\''install %s\n'\'' "$*" >>"$ORCA_TEST_INSTALL_CMD_LOG"' \
+    'exit 0' >"$stub_bin/install"
   chmod +x \
     "$stub_bin/pfctl" \
     "$stub_bin/launchctl" \
     "$stub_bin/sysctl" \
     "$stub_bin/stat" \
     "$stub_bin/chown" \
-    "$stub_bin/shasum"
+    "$stub_bin/shasum" \
+    "$stub_bin/install"
 
   if (
     HOME="$fixture_home"
@@ -2292,6 +2301,7 @@ PY
     ORCA_FIREWALL_SCRIPT_FILE="$gate_file"
     ORCA_SERVER_SCRIPT_SOURCE_FILE="$server_source"
     ORCA_SERVER_SCRIPT_FILE="$server_file"
+    ORCA_INSTALL_SCRIPT_FILE="$install_script"
     ORCA_GATE_EVIDENCE_FILE="$evidence_file"
     ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE="$daemon_source"
     ORCA_FIREWALL_LAUNCH_DAEMON_FILE="$daemon_file"
@@ -2303,7 +2313,7 @@ PY
     export HOME PATH ORCA_PF_CONFIG_FILE ORCA_PF_CONFIG_SOURCE_FILE ORCA_PF_CONFIG_ROLLBACK_FILE
     export ORCA_PF_CONFIG_DIGEST_FILE ORCA_PF_ANCHOR_SOURCE_FILE ORCA_PF_ANCHOR_FILE
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
-    export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE
+    export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
     export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN
     source "$REPO_DIR/apply.sh"
@@ -2323,11 +2333,34 @@ PY
   require_file_mode "$gate_source" "600"
   require_file_mode "$server_source" "600"
   require_file_mode "$daemon_source" "600"
+  require_file_mode "$install_script" "700"
   require_contains "$pf_config_source" "# preserve system PF rules"
   require_text_count "$pf_config_source" "# >>> guisaliba/agents Orca firewall >>>" "1"
-  require_contains "$anchor_source" "pass in quick inet proto tcp from 100.64.0.0/10 to any port 6768"
-  require_contains "$anchor_source" "pass in quick inet6 proto tcp from fd7a:115c:a1e0::/48 to any port 6768"
+  require_contains "$anchor_source" "pass in quick on utun* inet proto tcp from 100.64.0.0/10 to any port 6768"
+  require_contains "$anchor_source" "pass in quick on utun* inet6 proto tcp from fd7a:115c:a1e0::/48 to any port 6768"
   require_contains "$anchor_source" "block drop in quick proto tcp from any to any port 6768"
+  if python3 - "$pf_config_source" <<'PY'
+import sys
+from pathlib import Path
+
+text = Path(sys.argv[1]).read_text(encoding="utf-8")
+start = text.index("# >>> guisaliba/agents Orca firewall >>>")
+anchor = text.index('anchor "com.stablyai.orca-server"')
+preserved = text.index("# preserve system PF rules")
+raise SystemExit(0 if start < anchor < preserved else 1)
+PY
+  then
+    ok "macOS Orca anchor is placed before existing firewall rules"
+  else
+    not_ok "macOS Orca anchor is not placed before existing firewall rules"
+  fi
+  require_contains "$install_script" "set -Eeuo pipefail"
+  require_contains "$install_script" "$pf_config_hash"
+  require_contains "$install_script" "install -o root -g wheel -m 0755"
+  require_contains "$install_script" "install -o root -g wheel -m 0644"
+  require_contains "$install_script" "disable \"system/\$ORCA_LABEL\""
+  require_contains "$install_script" "bootstrap system \"\$FIREWALL_PLIST\""
+  require_contains "$install_script" "kickstart -k \"system/\$FIREWALL_LABEL\""
   require_contains "$gate_source" "-s info"
   require_contains "$gate_source" "-a \"\$ANCHOR_NAME\" -sr"
   require_contains "$gate_source" "-a \"\$ANCHOR_NAME\" -nvf"
@@ -2384,6 +2417,7 @@ PY
     ORCA_FIREWALL_SCRIPT_FILE="$gate_file"
     ORCA_SERVER_SCRIPT_SOURCE_FILE="$server_source"
     ORCA_SERVER_SCRIPT_FILE="$server_file"
+    ORCA_INSTALL_SCRIPT_FILE="$install_script"
     ORCA_GATE_EVIDENCE_FILE="$evidence_file"
     ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE="$daemon_source"
     ORCA_FIREWALL_LAUNCH_DAEMON_FILE="$daemon_file"
@@ -2395,7 +2429,7 @@ PY
     export HOME PATH ORCA_PF_CONFIG_FILE ORCA_PF_CONFIG_SOURCE_FILE ORCA_PF_CONFIG_ROLLBACK_FILE
     export ORCA_PF_CONFIG_DIGEST_FILE ORCA_PF_ANCHOR_SOURCE_FILE ORCA_PF_ANCHOR_FILE
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
-    export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE
+    export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
     export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN
     source "$REPO_DIR/apply.sh"
@@ -2405,12 +2439,8 @@ PY
   else
     ok "missing macOS Orca firewall requires privileged installation"
   fi
-  require_contains "$install_log" "sudo install -o root -g wheel -m 0644"
-  require_contains "$install_log" "sudo install -o root -g wheel -m 0755"
-  require_contains "$install_log" "sudo launchctl disable 'system/com.stablyai.orca-server'"
-  require_contains "$install_log" "sudo launchctl bootstrap system"
-  require_contains "$install_log" "sudo launchctl kickstart -k"
-  require_contains "$install_log" "$pf_config_hash"
+  require_contains "$install_log" "sudo bash"
+  require_contains "$install_log" "$install_script"
 
   mkdir -p "$(dirname "$anchor_file")" "$(dirname "$daemon_file")" "$(dirname "$gate_file")"
   cp "$pf_config_source" "$pf_config"
@@ -2432,6 +2462,7 @@ PY
     ORCA_FIREWALL_SCRIPT_FILE="$gate_file"
     ORCA_SERVER_SCRIPT_SOURCE_FILE="$server_source"
     ORCA_SERVER_SCRIPT_FILE="$server_file"
+    ORCA_INSTALL_SCRIPT_FILE="$install_script"
     ORCA_GATE_EVIDENCE_FILE="$evidence_file"
     ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE="$daemon_source"
     ORCA_FIREWALL_LAUNCH_DAEMON_FILE="$daemon_file"
@@ -2446,7 +2477,7 @@ PY
     export HOME PATH ORCA_PF_CONFIG_FILE ORCA_PF_CONFIG_SOURCE_FILE ORCA_PF_CONFIG_ROLLBACK_FILE
     export ORCA_PF_CONFIG_DIGEST_FILE ORCA_PF_ANCHOR_SOURCE_FILE ORCA_PF_ANCHOR_FILE
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
-    export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE
+    export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
     export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN
     export ORCA_TEST_EXPECTED_RULES ORCA_TEST_BOOT_ID ORCA_TEST_LAUNCH_PRINT_RC
@@ -2475,6 +2506,7 @@ PY
     ORCA_FIREWALL_SCRIPT_FILE="$gate_file"
     ORCA_SERVER_SCRIPT_SOURCE_FILE="$server_source"
     ORCA_SERVER_SCRIPT_FILE="$server_file"
+    ORCA_INSTALL_SCRIPT_FILE="$install_script"
     ORCA_GATE_EVIDENCE_FILE="$evidence_file"
     ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE="$daemon_source"
     ORCA_FIREWALL_LAUNCH_DAEMON_FILE="$daemon_file"
@@ -2489,7 +2521,7 @@ PY
     export HOME PATH ORCA_PF_CONFIG_FILE ORCA_PF_CONFIG_SOURCE_FILE ORCA_PF_CONFIG_ROLLBACK_FILE
     export ORCA_PF_CONFIG_DIGEST_FILE ORCA_PF_ANCHOR_SOURCE_FILE ORCA_PF_ANCHOR_FILE
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
-    export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE
+    export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
     export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN
     export ORCA_TEST_EXPECTED_RULES ORCA_TEST_BOOT_ID ORCA_TEST_LAUNCH_PRINT_RC
@@ -2518,6 +2550,7 @@ PY
     ORCA_FIREWALL_SCRIPT_FILE="$gate_file"
     ORCA_SERVER_SCRIPT_SOURCE_FILE="$server_source"
     ORCA_SERVER_SCRIPT_FILE="$server_file"
+    ORCA_INSTALL_SCRIPT_FILE="$install_script"
     ORCA_GATE_EVIDENCE_FILE="$evidence_file"
     ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE="$daemon_source"
     ORCA_FIREWALL_LAUNCH_DAEMON_FILE="$daemon_file"
@@ -2533,7 +2566,7 @@ PY
     export HOME PATH ORCA_PF_CONFIG_FILE ORCA_PF_CONFIG_SOURCE_FILE ORCA_PF_CONFIG_ROLLBACK_FILE
     export ORCA_PF_CONFIG_DIGEST_FILE ORCA_PF_ANCHOR_SOURCE_FILE ORCA_PF_ANCHOR_FILE
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
-    export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE
+    export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
     export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN
     export ORCA_TEST_EXPECTED_RULES ORCA_TEST_BOOT_ID ORCA_TEST_LAUNCH_LOG ORCA_TEST_LAUNCH_PRINT_RC
@@ -2713,6 +2746,45 @@ PY
   else
     not_ok "Orca preflight rejected current-boot gate evidence"
   fi
+
+  printf '%s\n' '# preserve system PF rules' 'anchor "com.apple/*"' >"$pf_config"
+  : >"$launch_log"
+  : >"$install_cmd_log"
+  if (
+    PATH="$stub_bin:/usr/bin:/bin" \
+      ORCA_TEST_LAUNCH_LOG="$launch_log" \
+      ORCA_TEST_INSTALL_CMD_LOG="$install_cmd_log" \
+      ORCA_TEST_BOOT_ID="$boot_id" \
+      bash "$install_script"
+  ) >"$install_log" 2>&1; then
+    not_ok "privileged install script continued after a pf.conf digest mismatch"
+  else
+    ok "privileged install script aborts on a pf.conf digest mismatch"
+  fi
+  require_empty_file "$install_cmd_log"
+  require_empty_file "$launch_log"
+
+  cp "$pf_config_source" "$pf_config"
+  printf '%s\n' "bootsession=$boot_id" "anchor_sha256=$expected_hash" >"$evidence_file"
+  : >"$launch_log"
+  : >"$install_cmd_log"
+  if (
+    PATH="$stub_bin:/usr/bin:/bin" \
+      ORCA_TEST_LAUNCH_LOG="$launch_log" \
+      ORCA_TEST_INSTALL_CMD_LOG="$install_cmd_log" \
+      ORCA_TEST_BOOT_ID="$boot_id" \
+      bash "$install_script"
+  ) >/dev/null 2>&1; then
+    ok "privileged install script installs and starts the gate"
+  else
+    not_ok "privileged install script failed with a matching digest"
+  fi
+  require_contains "$install_cmd_log" "install -o root -g wheel -m 0755"
+  require_contains "$install_cmd_log" "install -o root -g wheel -m 0644"
+  require_contains "$launch_log" "disable system/com.stablyai.orca-server"
+  require_contains "$launch_log" "enable system/com.stablyai.orca-firewall"
+  require_contains "$launch_log" "bootstrap system"
+  require_contains "$launch_log" "kickstart -k system/com.stablyai.orca-firewall"
 
   rm -rf -- "$fixture_root"
 }
@@ -3355,6 +3427,8 @@ if [[ "$(uname -s)" == Darwin ]]; then
   require_file "$ORCA_SERVER_SCRIPT_FILE"
   require_file_mode "$ORCA_SERVER_SCRIPT_FILE" "755"
   require_same_file "$ORCA_SERVER_SCRIPT_SOURCE_FILE" "$ORCA_SERVER_SCRIPT_FILE"
+  require_file "$ORCA_INSTALL_SCRIPT_FILE"
+  require_file_mode "$ORCA_INSTALL_SCRIPT_FILE" "700"
   require_file_mode "$HOME/Library/Logs/orca-server" "700"
   require_file_mode "$HOME/Library/Logs/orca-server/stdout.log" "600"
   require_file_mode "$HOME/Library/Logs/orca-server/stderr.log" "600"

@@ -81,6 +81,7 @@ ORCA_FIREWALL_SCRIPT_SOURCE_FILE="${ORCA_FIREWALL_SCRIPT_SOURCE_FILE:-$HOME/.con
 ORCA_FIREWALL_SCRIPT_FILE="${ORCA_FIREWALL_SCRIPT_FILE:-/usr/local/libexec/com.stablyai.orca-server/$ORCA_FIREWALL_LABEL.sh}"
 ORCA_SERVER_SCRIPT_SOURCE_FILE="${ORCA_SERVER_SCRIPT_SOURCE_FILE:-$HOME/.config/orca-server/$ORCA_LAUNCH_DAEMON_LABEL.sh}"
 ORCA_SERVER_SCRIPT_FILE="${ORCA_SERVER_SCRIPT_FILE:-/usr/local/libexec/com.stablyai.orca-server/$ORCA_LAUNCH_DAEMON_LABEL.sh}"
+ORCA_INSTALL_SCRIPT_FILE="${ORCA_INSTALL_SCRIPT_FILE:-$HOME/.config/orca-server/install-privileged.sh}"
 ORCA_GATE_EVIDENCE_FILE="${ORCA_GATE_EVIDENCE_FILE:-/var/run/com.stablyai.orca-server.gate}"
 ORCA_PFCTL_BIN="${ORCA_PFCTL_BIN:-/sbin/pfctl}"
 ORCA_LAUNCHCTL_BIN="${ORCA_LAUNCHCTL_BIN:-/bin/launchctl}"
@@ -496,6 +497,7 @@ install_orca_firewall_sources() {
     "$ORCA_PF_ANCHOR_SOURCE_FILE" \
     "$ORCA_FIREWALL_SCRIPT_SOURCE_FILE" \
     "$ORCA_SERVER_SCRIPT_SOURCE_FILE" \
+    "$ORCA_INSTALL_SCRIPT_FILE" \
     "$ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE"
   do
     python3 "$AGENT_STACK_HELPER" guard-regular-file "$path" "Orca PF source path"
@@ -534,7 +536,10 @@ install_orca_firewall_sources() {
     "$ORCA_SHASUM_BIN" \
     "$ORCA_CHOWN_BIN" \
     "$ORCA_SERVER_SCRIPT_SOURCE_FILE" \
-    "$ORCA_SERVER_SCRIPT_FILE" <<'PY'
+    "$ORCA_SERVER_SCRIPT_FILE" \
+    "$ORCA_FIREWALL_LAUNCH_DAEMON_FILE" \
+    "$ORCA_LAUNCH_DAEMON_SOURCE_FILE" \
+    "$ORCA_INSTALL_SCRIPT_FILE" <<'PY'
 import hashlib
 import plistlib
 import sys
@@ -564,6 +569,9 @@ shasum_bin = sys.argv[21]
 chown_bin = sys.argv[22]
 server_source = Path(sys.argv[23])
 server_file = sys.argv[24]
+firewall_daemon_file = sys.argv[25]
+server_daemon_source = sys.argv[26]
+install_script = Path(sys.argv[27])
 sys.path.insert(0, str(helper_path.parent))
 sys.dont_write_bytecode = True
 
@@ -583,9 +591,10 @@ if current.count(start) != current.count(end) or current.count(start) > 1:
 if start in current:
     before, remainder = current.split(start, 1)
     _, after = remainder.split(end, 1)
-    current = before.rstrip() + "\n" + after.lstrip("\n")
+    current = before.rstrip("\n") + "\n" + after.lstrip("\n")
 
-rollback = current.rstrip() + "\n"
+rollback = current.strip("\n")
+rollback = rollback + "\n" if rollback else ""
 block = "\n".join(
     [
         start,
@@ -594,11 +603,11 @@ block = "\n".join(
         end,
     ]
 )
-managed_config = rollback.rstrip() + "\n\n" + block + "\n"
+managed_config = block + "\n\n" + rollback
 anchor = "\n".join(
     [
-        f"pass in quick inet proto tcp from 100.64.0.0/10 to any port {port}",
-        f"pass in quick inet6 proto tcp from fd7a:115c:a1e0::/48 to any port {port}",
+        f"pass in quick on utun* inet proto tcp from 100.64.0.0/10 to any port {port}",
+        f"pass in quick on utun* inet6 proto tcp from fd7a:115c:a1e0::/48 to any port {port}",
         f"block drop in quick proto tcp from any to any port {port}",
         "",
     ]
@@ -713,6 +722,71 @@ printf 'bootsession=%s\\nanchor_sha256=%s\\n' "$boot" "$hash" >"$temp"
 
 printf 'orca-firewall-gate: ok bootsession=%s anchor_sha256=%s\\n' "$boot" "$hash"
 """
+digest = hashlib.sha256(pf_config_data).hexdigest()
+installer = f"""#!/bin/bash
+# Managed by guisaliba/agents apply.sh.
+set -Eeuo pipefail
+
+LAUNCHCTL="{launchctl_bin}"
+SYSCTL="{sysctl_bin}"
+PF_CONFIG="{pf_config}"
+PF_CONFIG_SOURCE="{pf_source}"
+PF_CONFIG_DIGEST="{digest}"
+ANCHOR_SOURCE="{anchor_source}"
+ANCHOR="{anchor_file}"
+FIREWALL_SCRIPT_SOURCE="{gate_source}"
+FIREWALL_SCRIPT="{gate_file}"
+FIREWALL_SCRIPT_DIR="{Path(gate_file).parent}"
+SERVER_SCRIPT_SOURCE="{server_source}"
+SERVER_SCRIPT="{server_file}"
+FIREWALL_PLIST_SOURCE="{daemon_source}"
+FIREWALL_PLIST="{firewall_daemon_file}"
+SERVER_PLIST_SOURCE="{server_daemon_source}"
+SERVER_PLIST="{orca_daemon_file}"
+EVIDENCE_FILE="{evidence_file}"
+FIREWALL_LABEL="{firewall_label}"
+ORCA_LABEL="{orca_label}"
+
+log() {{
+  printf '%s\\n' "$*" >&2
+}}
+
+current_digest="$(shasum -a 256 "$PF_CONFIG" | awk '{{print $1}}')"
+if [[ "$current_digest" != "$PF_CONFIG_DIGEST" ]]; then
+  log "ERROR: $PF_CONFIG changed since apply.sh generated the Orca sources."
+  log "Rerun apply.sh to regenerate the sources. No changes were made."
+  exit 1
+fi
+
+"$LAUNCHCTL" disable "system/$ORCA_LABEL"
+"$LAUNCHCTL" bootout "system/$ORCA_LABEL" >/dev/null 2>&1 || true
+"$LAUNCHCTL" bootout "system/$FIREWALL_LABEL" >/dev/null 2>&1 || true
+
+install -d -o root -g wheel -m 0755 "$FIREWALL_SCRIPT_DIR"
+install -o root -g wheel -m 0755 "$FIREWALL_SCRIPT_SOURCE" "$FIREWALL_SCRIPT"
+install -o root -g wheel -m 0755 "$SERVER_SCRIPT_SOURCE" "$SERVER_SCRIPT"
+install -o root -g wheel -m 0644 "$ANCHOR_SOURCE" "$ANCHOR"
+install -o root -g wheel -m 0644 "$PF_CONFIG_SOURCE" "$PF_CONFIG"
+install -o root -g wheel -m 0644 "$FIREWALL_PLIST_SOURCE" "$FIREWALL_PLIST"
+install -o root -g wheel -m 0644 "$SERVER_PLIST_SOURCE" "$SERVER_PLIST"
+
+"$LAUNCHCTL" enable "system/$FIREWALL_LABEL"
+"$LAUNCHCTL" bootstrap system "$FIREWALL_PLIST"
+"$LAUNCHCTL" kickstart -k "system/$FIREWALL_LABEL"
+
+boot="$("$SYSCTL" -n kern.bootsessionuuid)"
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  if [[ -s "$EVIDENCE_FILE" ]] && grep -q "bootsession=$boot" "$EVIDENCE_FILE"; then
+    log "Orca firewall gate is active for this boot."
+    exit 0
+  fi
+  sleep 1
+done
+
+log "ERROR: the gate did not publish current-boot evidence."
+log "Inspect the gate log at {home}/Library/Logs/orca-server/firewall-stderr.log"
+exit 1
+"""
 daemon = {
     "Label": firewall_label,
     "ProgramArguments": ["/bin/bash", str(gate_file)],
@@ -725,11 +799,12 @@ daemon_content = plistlib.dumps(daemon, fmt=plistlib.FMT_XML, sort_keys=False).d
 
 atomic_write_text(pf_source, managed_config, 0o600, ".orca-pf-config.")
 atomic_write_text(pf_rollback, rollback, 0o600, ".orca-pf-rollback.")
-atomic_write_text(pf_digest, hashlib.sha256(pf_config_data).hexdigest() + "\n", 0o600, ".orca-pf-digest.")
+atomic_write_text(pf_digest, digest + "\n", 0o600, ".orca-pf-digest.")
 atomic_write_text(anchor_source, anchor, 0o600, ".orca-pf-anchor.")
 atomic_write_text(server_source, server, 0o600, ".orca-server-preflight.")
 atomic_write_text(gate_source, gate, 0o600, ".orca-firewall-gate.")
 atomic_write_text(daemon_source, daemon_content, 0o600, ".orca-firewall-daemon.")
+atomic_write_text(install_script, installer, 0o700, ".orca-install.")
 PY
   chmod 600 \
     "$ORCA_PF_CONFIG_SOURCE_FILE" \
@@ -739,6 +814,7 @@ PY
     "$ORCA_FIREWALL_SCRIPT_SOURCE_FILE" \
     "$ORCA_SERVER_SCRIPT_SOURCE_FILE" \
     "$ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE"
+  chmod 700 "$ORCA_INSTALL_SCRIPT_FILE"
 
   if [[ -x /sbin/pfctl ]]; then
     /sbin/pfctl -nf "$ORCA_PF_CONFIG_FILE" >/dev/null || \
@@ -790,23 +866,10 @@ orca_gate_evidence_matches() {
 }
 
 orca_privileged_install_message() {
-  local digest
-  digest="$(cat "$ORCA_PF_CONFIG_DIGEST_FILE" 2>/dev/null || true)"
-  cat <<EOF
-sudo launchctl disable 'system/$ORCA_LAUNCH_DAEMON_LABEL'
-sudo launchctl bootout 'system/$ORCA_LAUNCH_DAEMON_LABEL' >/dev/null 2>&1 || true
-sudo launchctl bootout 'system/$ORCA_FIREWALL_LABEL' >/dev/null 2>&1 || true
-sudo install -d -o root -g wheel -m 0755 '$(dirname "$ORCA_FIREWALL_SCRIPT_FILE")'
-sudo install -o root -g wheel -m 0755 '$ORCA_FIREWALL_SCRIPT_SOURCE_FILE' '$ORCA_FIREWALL_SCRIPT_FILE'
-sudo install -o root -g wheel -m 0755 '$ORCA_SERVER_SCRIPT_SOURCE_FILE' '$ORCA_SERVER_SCRIPT_FILE'
-sudo install -o root -g wheel -m 0644 '$ORCA_PF_ANCHOR_SOURCE_FILE' '$ORCA_PF_ANCHOR_FILE'
-test "\$(shasum -a 256 '$ORCA_PF_CONFIG_FILE' | awk '{print \$1}')" = '$digest' && sudo install -o root -g wheel -m 0644 '$ORCA_PF_CONFIG_SOURCE_FILE' '$ORCA_PF_CONFIG_FILE' || printf 'ERROR: $ORCA_PF_CONFIG_FILE changed since apply.sh generated the Orca PF sources; rerun apply.sh before installing\n' >&2
-sudo install -o root -g wheel -m 0644 '$ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE' '$ORCA_FIREWALL_LAUNCH_DAEMON_FILE'
-sudo install -o root -g wheel -m 0644 '$ORCA_LAUNCH_DAEMON_SOURCE_FILE' '$ORCA_LAUNCH_DAEMON_FILE'
-sudo launchctl enable 'system/$ORCA_FIREWALL_LABEL'
-sudo launchctl bootstrap system '$ORCA_FIREWALL_LAUNCH_DAEMON_FILE'
-sudo launchctl kickstart -k 'system/$ORCA_FIREWALL_LABEL'
-EOF
+  printf 'Run this command to install and start the Orca firewall gate:
+sudo bash %s
+The command stops without changes when %s changed since apply.sh generated the Orca sources. Rerun apply.sh in that case.
+' "$ORCA_INSTALL_SCRIPT_FILE" "$ORCA_PF_CONFIG_FILE"
 }
 
 start_orca_firewall() {
