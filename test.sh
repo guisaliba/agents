@@ -2314,7 +2314,7 @@ PY
   printf '%s\n' \
     '#!/bin/bash' \
     'case "$*" in' \
-    '  *ESTABLISHED*) [[ -n "${ORCA_TEST_PEERS:-}" && -f "$ORCA_TEST_PEERS" ]] && cat "$ORCA_TEST_PEERS"; exit 0 ;;' \
+    '  *ESTABLISHED*) if [[ -n "${ORCA_TEST_PEERS:-}" && -s "$ORCA_TEST_PEERS" ]]; then cat "$ORCA_TEST_PEERS"; exit 0; fi; exit 1 ;;' \
     'esac' \
     'exit 1' >"$stub_bin/lsof"
   chmod +x \

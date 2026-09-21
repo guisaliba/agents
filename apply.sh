@@ -765,7 +765,9 @@ read_state() {{
     skip_query=1
     skipped=""
   fi
-  if peer_output="$("$LSOF" -nP -iTCP:"$ORCA_PORT" -sTCP:ESTABLISHED 2>/dev/null)"; then
+  peer_output="$("$LSOF" -nP -iTCP:"$ORCA_PORT" -sTCP:ESTABLISHED 2>/dev/null)"
+  peer_status=$?
+  if [[ "$peer_status" -eq 0 ]] || [[ "$peer_status" -eq 1 && -z "$peer_output" ]]; then
     peer_query=0
     established_peers="$(printf '%s\\n' "$peer_output" | /usr/bin/awk '{{ for (i = 1; i <= NF; i++) if (index($i, "->") > 0) {{ split($i, parts, "->"); print parts[2] }} }}')"
   else
