@@ -715,25 +715,36 @@ fail() {{
 [[ -s "$PF_CONFIG" ]] || fail "missing or empty $PF_CONFIG"
 [[ -s "$ANCHOR_FILE" ]] || fail "missing or empty $ANCHOR_FILE"
 
-enabled=0
-"$PFCTL" -s info 2>/dev/null | /usr/bin/grep -q '^Status: Enabled' && enabled=1
-
-live="$("$PFCTL" -a "$ANCHOR_NAME" -sr 2>/dev/null || true)"
 expected="$("$PFCTL" -a "$ANCHOR_NAME" -nvf "$ANCHOR_FILE" 2>/dev/null)" || fail "cannot parse $ANCHOR_FILE"
+EXPECTED_FIRST_FILTER='anchor "{anchor_name}" all'
+enabled=0
+live_anchor=""
+first_filter=""
 
-if [[ "$enabled" -ne 1 || "$live" != "$expected" ]]; then
+read_state() {{
+  enabled=0
+  "$PFCTL" -s info 2>/dev/null | /usr/bin/grep -q '^Status: Enabled' && enabled=1
+  live_anchor="$("$PFCTL" -a "$ANCHOR_NAME" -sr 2>/dev/null || true)"
+  first_filter="$("$PFCTL" -sr 2>/dev/null | /usr/bin/grep -E '^(pass|block|match|anchor|antispoof) ' | /usr/bin/head -n 1)"
+}}
+
+state_matches() {{
+  [[ "$enabled" -eq 1 && "$live_anchor" == "$expected" && "$first_filter" == "$EXPECTED_FIRST_FILTER" ]]
+}}
+
+read_state
+if ! state_matches; then
   log "live PF state is not current; loading $PF_CONFIG"
   "$PFCTL" -f "$PF_CONFIG" || fail "cannot load $PF_CONFIG"
   "$PFCTL" -s info 2>/dev/null | /usr/bin/grep -q '^Status: Enabled' || \\
     "$PFCTL" -E || fail "cannot enable PF"
-  live="$("$PFCTL" -a "$ANCHOR_NAME" -sr 2>/dev/null || true)"
+  read_state
+  state_matches || fail "live PF state does not match $PF_CONFIG"
 fi
-
-[[ "$live" == "$expected" ]] || fail "live anchor rules do not match $ANCHOR_FILE"
 
 boot="$("$SYSCTL" -n kern.bootsessionuuid 2>/dev/null || true)"
 [[ -n "$boot" ]] || fail "cannot read kern.bootsessionuuid"
-hash="$(printf '%s\\n' "$live" | "$SHASUM" -a 256 | /usr/bin/awk '{{print $1}}')"
+hash="$(printf '%s\\n' "$live_anchor" | "$SHASUM" -a 256 | /usr/bin/awk '{{print $1}}')"
 [[ -n "$hash" ]] || fail "cannot hash live anchor rules"
 
 temp="$(/usr/bin/mktemp "${{EVIDENCE_FILE}}.XXXXXX")" || fail "cannot create gate evidence"

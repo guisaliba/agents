@@ -2182,6 +2182,7 @@ test_macos_orca_firewall() {
   local fixture_root fixture_home stub_bin pf_config pf_config_source pf_config_rollback pf_config_digest anchor_source anchor_file
   local gate_source gate_file server_source server_file install_script evidence_file daemon_source daemon_file install_log launch_log pfctl_log live_rules expected_rules
   local boot_id expected_hash pf_config_hash other_hash orca_daemon_file install_cmd_log
+  local main_rules main_rules_after pf_status_file
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
   stub_bin="$fixture_root/bin"
@@ -2205,6 +2206,9 @@ test_macos_orca_firewall() {
   install_cmd_log="$fixture_root/install-commands.log"
   live_rules="$fixture_root/live-rules"
   expected_rules="$fixture_root/expected-rules"
+  main_rules="$fixture_root/main-rules"
+  main_rules_after="$fixture_root/main-rules-after"
+  pf_status_file="$fixture_root/pf-status"
   boot_id="FIXTURE-BOOT-SESSION"
   mkdir -p "$stub_bin" "$(dirname "$pf_config")" "$(dirname "$evidence_file")" "$(dirname "$anchor_file")"
   printf '%s\n' \
@@ -2224,6 +2228,11 @@ test_macos_orca_firewall() {
     'pass in quick on utun* inet6 proto tcp from fd7a:115c:a1e0::/48 to any port = 6768 flags S/SA keep state' \
     'block drop in quick proto tcp from any to any port = 6768' >"$expected_rules"
   cp "$expected_rules" "$live_rules"
+  printf '%s\n' \
+    'anchor "com.stablyai.orca-server" all' \
+    'anchor "/*" all' \
+    'pass in quick proto tcp from any to any port 22 flags S/SA keep state' >"$main_rules"
+  cp "$main_rules" "$main_rules_after"
   orca_daemon_file="/Library/LaunchDaemons/com.stablyai.orca-server.plist"
   expected_hash="$(python3 - "$expected_rules" <<'PY'
 import hashlib
@@ -2247,9 +2256,14 @@ PY
     '#!/bin/bash' \
     'printf '\''%s\n'\'' "$*" >>"$ORCA_TEST_PFCTL_LOG"' \
     'case "$1" in' \
-    '  -s) printf '\''Status: %s\n'\'' "${ORCA_TEST_PF_STATUS:-Enabled}"; exit 0 ;;' \
-    '  -E) exit "${ORCA_TEST_PF_ENABLE_RC:-0}" ;;' \
-    '  -f) exit "${ORCA_TEST_PF_LOAD_RC:-0}" ;;' \
+    '  -s)' \
+    '    case "$2" in' \
+    '      info) printf '\''Status: %s\n'\'' "$(cat "$ORCA_TEST_PF_STATUS_FILE")"; exit 0 ;;' \
+    '      rules) cat "$ORCA_TEST_MAIN_RULES"; exit 0 ;;' \
+    '    esac ;;' \
+    '  -sr) cat "$ORCA_TEST_MAIN_RULES"; exit 0 ;;' \
+    '  -E) rc="${ORCA_TEST_PF_ENABLE_RC:-0}"; [[ "$rc" == "0" ]] && printf '\''Enabled'\'' >"$ORCA_TEST_PF_STATUS_FILE"; exit "$rc" ;;' \
+    '  -f) rc="${ORCA_TEST_PF_LOAD_RC:-0}"; [[ "$rc" == "0" && -n "${ORCA_TEST_MAIN_RULES_AFTER:-}" ]] && cp "$ORCA_TEST_MAIN_RULES_AFTER" "$ORCA_TEST_MAIN_RULES"; exit "$rc" ;;' \
     '  -a)' \
     '    case "$3" in' \
     '      -sr) cat "$ORCA_TEST_LIVE_RULES"; exit 0 ;;' \
@@ -2603,12 +2617,15 @@ PY
   require_text_count "$launch_log" "print system/com.stablyai.orca-firewall" "2"
 
   run_orca_gate() {
+    local status="${1:-Enabled}"
+    printf '%s' "$status" >"$pf_status_file"
     ORCA_TEST_PFCTL_LOG="$pfctl_log" \
       ORCA_TEST_LAUNCH_LOG="$launch_log" \
       ORCA_TEST_LIVE_RULES="$live_rules" \
       ORCA_TEST_EXPECTED_RULES="$expected_rules" \
+      ORCA_TEST_MAIN_RULES="$main_rules" \
       ORCA_TEST_BOOT_ID="$boot_id" \
-      ORCA_TEST_PF_STATUS="${1:-Enabled}" \
+      ORCA_TEST_PF_STATUS_FILE="$pf_status_file" \
       ORCA_TEST_PF_LOAD_RC="${2:-0}" \
       ORCA_TEST_PF_ENABLE_RC="${3:-0}" \
       ORCA_TEST_LAUNCH_PRINT_RC="${4:-1}" \
@@ -2633,9 +2650,10 @@ PY
     not_ok "healthy gate did not publish evidence or start Orca"
   fi
   printf '%s\n' \
+    "-a com.stablyai.orca-server -nvf $anchor_file" \
     "-s info" \
     "-a com.stablyai.orca-server -sr" \
-    "-a com.stablyai.orca-server -nvf $anchor_file" >"$fixture_root/expected-pfctl.log"
+    "-sr" >"$fixture_root/expected-pfctl.log"
   require_same_file "$fixture_root/expected-pfctl.log" "$pfctl_log"
   if grep -qF -- "-f " "$pfctl_log"; then
     not_ok "healthy gate reloaded the system PF configuration"
@@ -2702,6 +2720,41 @@ PY
     ok "gate fails closed when PF cannot be enabled"
   fi
   require_contains "$launch_log" "disable system/com.stablyai.orca-server"
+
+  printf '%s\n' 'pass in quick proto tcp from any to any port 6768 flags S/SA keep state' 'anchor "com.stablyai.orca-server" all' >"$main_rules"
+  : >"$pfctl_log"
+  : >"$launch_log"
+  write_orca_gate_evidence
+  if run_orca_gate Enabled >/dev/null 2>&1; then
+    not_ok "gate accepted an earlier quick rule before the Orca anchor"
+  else
+    ok "gate fails closed when an earlier quick rule can bypass the anchor"
+  fi
+  require_contains "$pfctl_log" "-sr"
+  require_contains "$pfctl_log" "-f $pf_config"
+  require_contains "$launch_log" "disable system/com.stablyai.orca-server"
+
+  printf '%s\n' 'pass in quick proto tcp from any to any port 6768 flags S/SA keep state' 'anchor "com.stablyai.orca-server" all' >"$main_rules"
+  printf '%s' 'Enabled' >"$pf_status_file"
+  : >"$pfctl_log"
+  : >"$launch_log"
+  if (
+    ORCA_TEST_PFCTL_LOG="$pfctl_log" \
+      ORCA_TEST_LAUNCH_LOG="$launch_log" \
+      ORCA_TEST_LIVE_RULES="$live_rules" \
+      ORCA_TEST_EXPECTED_RULES="$expected_rules" \
+      ORCA_TEST_MAIN_RULES="$main_rules" \
+      ORCA_TEST_MAIN_RULES_AFTER="$main_rules_after" \
+      ORCA_TEST_BOOT_ID="$boot_id" \
+      ORCA_TEST_PF_STATUS_FILE="$pf_status_file" \
+      ORCA_TEST_LAUNCH_PRINT_RC="1" \
+      bash "$gate_source"
+  ) >/dev/null 2>&1; then
+    ok "gate recovers the main ruleset after a reload"
+  else
+    not_ok "gate did not recover the main ruleset after a reload"
+  fi
+  require_contains "$launch_log" "kickstart system/com.stablyai.orca-server"
 
   printf '%s\n' '#!/bin/bash' 'exit 0' >"$stub_bin/exec-ok"
   chmod +x "$stub_bin/exec-ok"

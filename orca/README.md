@@ -103,10 +103,16 @@ that uses the same address ranges cannot match them.
 
 The root-owned gate is the only component that starts Orca. It loads
 `/etc/pf.conf`, enables PF, compares the live anchor with the expected anchor,
-and publishes current-boot evidence before it starts the service. The Orca
-preflight then checks that evidence before it executes Orca. This ordering
-removes the boot window in which the port could listen before the rules are
-active.
+and checks that the live main ruleset calls the Orca anchor before every other
+filter rule. It publishes current-boot evidence only after those checks pass.
+The Orca preflight then checks that evidence before it executes Orca. This
+ordering removes the boot window in which the port could listen before the
+rules are active.
+
+When the live state does not match, the gate reloads `/etc/pf.conf`. If the
+state still does not match, Orca stays stopped. A later PF load that moves the
+anchor behind an earlier quick rule is therefore detected and repaired within
+one gate cycle.
 
 Pairing links are bearer credentials. Use them only in a controlled foreground
 session. Do not put them in source control, shell history, normal service logs,
