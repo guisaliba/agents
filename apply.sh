@@ -89,6 +89,7 @@ ORCA_SYSCTL_BIN="${ORCA_SYSCTL_BIN:-/usr/sbin/sysctl}"
 ORCA_SHASUM_BIN="${ORCA_SHASUM_BIN:-/usr/bin/shasum}"
 ORCA_CHOWN_BIN="${ORCA_CHOWN_BIN:-/usr/sbin/chown}"
 ORCA_LSOF_BIN="${ORCA_LSOF_BIN:-/usr/sbin/lsof}"
+ORCA_ROUTE_BIN="${ORCA_ROUTE_BIN:-/sbin/route}"
 
 log() {
   printf '\n==> %s\n' "$*"
@@ -541,7 +542,8 @@ install_orca_firewall_sources() {
     "$ORCA_FIREWALL_LAUNCH_DAEMON_FILE" \
     "$ORCA_LAUNCH_DAEMON_SOURCE_FILE" \
     "$ORCA_INSTALL_SCRIPT_FILE" \
-    "$ORCA_LSOF_BIN" <<'PY' || return 1
+    "$ORCA_LSOF_BIN" \
+    "$ORCA_ROUTE_BIN" <<'PY' || return 1
 import hashlib
 import plistlib
 import sys
@@ -575,6 +577,7 @@ firewall_daemon_file = sys.argv[25]
 server_daemon_source = sys.argv[26]
 install_script = Path(sys.argv[27])
 lsof_bin = sys.argv[28]
+route_bin = sys.argv[29]
 sys.path.insert(0, str(helper_path.parent))
 sys.dont_write_bytecode = True
 
@@ -714,6 +717,7 @@ SYSCTL="{sysctl_bin}"
 SHASUM="{shasum_bin}"
 CHOWN="{chown_bin}"
 LSOF="{lsof_bin}"
+ROUTE="{route_bin}"
 
 log() {{
   printf 'orca-firewall-gate: %s\\n' "$*" >&2
@@ -769,7 +773,7 @@ read_state() {{
   peer_status=$?
   if [[ "$peer_status" -eq 0 ]] || [[ "$peer_status" -eq 1 && -z "$peer_output" ]]; then
     peer_query=0
-    established_peers="$(printf '%s\\n' "$peer_output" | /usr/bin/awk '{{ for (i = 1; i <= NF; i++) if (index($i, "->") > 0) {{ split($i, parts, "->"); if (parts[1] ~ /:6768$/ || parts[1] ~ /\[6768\]$/) print parts[2] }} }}')"
+    established_peers="$(printf '%s\\n' "$peer_output" | /usr/bin/awk '{{ for (i = 1; i <= NF; i++) if (index($i, "->") > 0) {{ split($i, parts, "->"); if (parts[1] ~ /:{port}$/ || parts[1] ~ /\[{port}\]$/) print parts[2] }} }}')"
   else
     peer_query=1
     established_peers=""
@@ -789,7 +793,7 @@ skips_are_safe() {{
 }}
 
 peer_is_tailscale() {{
-  local endpoint="$1" address second
+  local endpoint="$1" address second interface
   if [[ "$endpoint" == \[*\]* ]]; then
     address="${{endpoint#[}}"
     address="${{address%%]*}}"
@@ -797,7 +801,7 @@ peer_is_tailscale() {{
     address="${{endpoint%:*}}"
   fi
   case "$address" in
-    fd7a:115c:a1e0:*) return 0 ;;
+    fd7a:115c:a1e0:*) ;;
     100.*)
       second="${{address#100.}}"
       second="${{second%%.*}}"
@@ -805,10 +809,15 @@ peer_is_tailscale() {{
         ''|*[!0-9]*) return 1 ;;
       esac
       (( 10#$second >= 64 && 10#$second <= 127 )) || return 1
-      return 0
       ;;
+    *) return 1 ;;
   esac
-  return 1
+  if [[ "$address" == *:* ]]; then
+    interface="$("$ROUTE" -n get -inet6 "$address" 2>/dev/null | /usr/bin/awk '/^[ \t]*interface: / {{print $2; exit}}')"
+  else
+    interface="$("$ROUTE" -n get "$address" 2>/dev/null | /usr/bin/awk '/^[ \t]*interface: / {{print $2; exit}}')"
+  fi
+  [[ -n "$interface" && "$interface" == utun* ]]
 }}
 
 peers_are_safe() {{
