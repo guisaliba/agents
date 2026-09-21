@@ -119,9 +119,11 @@ rules are active.
 The gate also checks the established connections of the listener. It counts
 only sockets whose local endpoint is TCP `6768`, so an unrelated outbound
 connection to a remote port `6768` is ignored. A listener connection whose peer
-is not in the Tailscale ranges is unsafe. The gate also confirms that the route
-to the peer leaves through a `utun*` interface, so a local network that reuses
-the Tailscale address ranges cannot pass. The gate stops Orca, which
+is not in the Tailscale ranges is unsafe. The gate also finds the `utun*`
+interface that owns the Tailscale addresses and requires the route to each peer
+to leave through that exact interface. It fails closed when no interface or
+more than one interface carries the Tailscale ranges. Another tunnel, or a
+local network that reuses the ranges, therefore cannot pass. The gate stops Orca, which
 closes that connection, before it continues. This removes a connection that an
 earlier permissive PF state allowed even when the rules match again.
 

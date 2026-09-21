@@ -90,6 +90,7 @@ ORCA_SHASUM_BIN="${ORCA_SHASUM_BIN:-/usr/bin/shasum}"
 ORCA_CHOWN_BIN="${ORCA_CHOWN_BIN:-/usr/sbin/chown}"
 ORCA_LSOF_BIN="${ORCA_LSOF_BIN:-/usr/sbin/lsof}"
 ORCA_ROUTE_BIN="${ORCA_ROUTE_BIN:-/sbin/route}"
+ORCA_IFCONFIG_BIN="${ORCA_IFCONFIG_BIN:-/sbin/ifconfig}"
 
 log() {
   printf '\n==> %s\n' "$*"
@@ -543,7 +544,8 @@ install_orca_firewall_sources() {
     "$ORCA_LAUNCH_DAEMON_SOURCE_FILE" \
     "$ORCA_INSTALL_SCRIPT_FILE" \
     "$ORCA_LSOF_BIN" \
-    "$ORCA_ROUTE_BIN" <<'PY' || return 1
+    "$ORCA_ROUTE_BIN" \
+    "$ORCA_IFCONFIG_BIN" <<'PY' || return 1
 import hashlib
 import plistlib
 import sys
@@ -578,6 +580,7 @@ server_daemon_source = sys.argv[26]
 install_script = Path(sys.argv[27])
 lsof_bin = sys.argv[28]
 route_bin = sys.argv[29]
+ifconfig_bin = sys.argv[30]
 sys.path.insert(0, str(helper_path.parent))
 sys.dont_write_bytecode = True
 
@@ -718,6 +721,7 @@ SHASUM="{shasum_bin}"
 CHOWN="{chown_bin}"
 LSOF="{lsof_bin}"
 ROUTE="{route_bin}"
+IFCONFIG="{ifconfig_bin}"
 
 log() {{
   printf 'orca-firewall-gate: %s\\n' "$*" >&2
@@ -756,12 +760,30 @@ skipped=""
 skip_query=1
 established_peers=""
 peer_query=1
+tailscale_ifaces=""
+tailscale_iface_count=0
 
 read_state() {{
   enabled=0
   "$PFCTL" -s info 2>/dev/null | /usr/bin/grep -q '^Status: Enabled' && enabled=1
   live_anchor="$("$PFCTL" -a "$ANCHOR_NAME" -sr 2>/dev/null || true)"
   first_filter="$("$PFCTL" -sr 2>/dev/null | /usr/bin/grep -E '^(pass|block|match|anchor|antispoof) ' | /usr/bin/head -n 1)"
+  tailscale_ifaces=""
+  tailscale_iface_count=0
+  for candidate in $("$IFCONFIG" -l 2>/dev/null); do
+    case "$candidate" in
+      utun*) ;;
+      *) continue ;;
+    esac
+    if "$IFCONFIG" "$candidate" 2>/dev/null | /usr/bin/awk '
+      $1 == "inet" {{ split($2, parts, "."); if (parts[1] == "100" && parts[2] + 0 >= 64 && parts[2] + 0 <= 127) found = 1 }}
+      $1 == "inet6" && $2 ~ /^fd7a:115c:a1e0:/ {{ found = 1 }}
+      END {{ exit found ? 0 : 1 }}
+    '; then
+      tailscale_ifaces="$tailscale_ifaces $candidate"
+      tailscale_iface_count=$((tailscale_iface_count + 1))
+    fi
+  done
   if skip_output="$("$PFCTL" -s Interfaces -v 2>/dev/null)"; then
     skip_query=0
     skipped="$(printf '%s\\n' "$skip_output" | /usr/bin/grep -F '(skip)' | /usr/bin/awk '{{print $1}}')"
@@ -817,7 +839,7 @@ peer_is_tailscale() {{
   else
     interface="$("$ROUTE" -n get "$address" 2>/dev/null | /usr/bin/awk '/^[ \t]*interface: / {{print $2; exit}}')"
   fi
-  [[ -n "$interface" && "$interface" == utun* ]]
+  [[ -n "$interface" && "$tailscale_iface_count" -eq 1 && " $tailscale_ifaces " == *" $interface "* ]]
 }}
 
 peers_are_safe() {{
@@ -830,7 +852,8 @@ peers_are_safe() {{
 }}
 
 state_matches() {{
-  [[ "$enabled" -eq 1 && "$live_anchor" == "$expected" && "$first_filter" == "$EXPECTED_FIRST_FILTER" ]] && skips_are_safe && peers_are_safe
+  [[ "$enabled" -eq 1 && "$live_anchor" == "$expected" && "$first_filter" == "$EXPECTED_FIRST_FILTER" ]] && skips_are_safe && \
+    [[ "$tailscale_iface_count" -eq 1 ]] && peers_are_safe
 }}
 
 read_state

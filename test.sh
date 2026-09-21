@@ -2321,6 +2321,16 @@ PY
     '#!/bin/bash' \
     'printf '\''  interface: %s\n'\'' "${ORCA_TEST_ROUTE_IFACE:-utun0}"' \
     'exit 0' >"$stub_bin/route"
+  printf '%s\n' \
+    '#!/bin/bash' \
+    'if [[ "$1" == "-l" ]]; then printf '\''%s\n'\'' "${ORCA_TEST_UTUN_IFACES:-utun0}"; exit 0; fi' \
+    'iface="$1"' \
+    'if [[ "$iface" == "${ORCA_TEST_TAILSCALE_IFACE:-utun0}" || "$iface" == "${ORCA_TEST_EXTRA_TAILSCALE_IFACE:-}" ]]; then' \
+    '  printf '\''inet 100.120.225.13 --> 100.120.225.13 netmask 0xffffffff\n'\''' \
+    'else' \
+    '  printf '\''inet6 fe80::1%%utun9 prefixlen 64 scopeid 0x1\n'\''' \
+    'fi' \
+    'exit 0' >"$stub_bin/ifconfig"
   chmod +x \
     "$stub_bin/pfctl" \
     "$stub_bin/launchctl" \
@@ -2331,7 +2341,8 @@ PY
     "$stub_bin/install" \
     "$stub_bin/sleep" \
     "$stub_bin/lsof" \
-    "$stub_bin/route"
+    "$stub_bin/route" \
+    "$stub_bin/ifconfig"
 
   run_orca_source_generation() {
     local config="$1"
@@ -2358,6 +2369,7 @@ PY
       export ORCA_CHOWN_BIN="$stub_bin/chown"
       export ORCA_LSOF_BIN="$stub_bin/lsof"
       export ORCA_ROUTE_BIN="$stub_bin/route"
+      export ORCA_IFCONFIG_BIN="$stub_bin/ifconfig"
       source "$REPO_DIR/apply.sh"
       install_orca_firewall_sources
     )
@@ -2419,12 +2431,13 @@ PY
     ORCA_CHOWN_BIN="$stub_bin/chown"
     ORCA_LSOF_BIN="$stub_bin/lsof"
     ORCA_ROUTE_BIN="$stub_bin/route"
+    ORCA_IFCONFIG_BIN="$stub_bin/ifconfig"
     export HOME PATH ORCA_PF_CONFIG_FILE ORCA_PF_CONFIG_SOURCE_FILE ORCA_PF_CONFIG_ROLLBACK_FILE
     export ORCA_PF_CONFIG_DIGEST_FILE ORCA_PF_ANCHOR_SOURCE_FILE ORCA_PF_ANCHOR_FILE
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
     export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
-    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN
+    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN ORCA_IFCONFIG_BIN
     source "$REPO_DIR/apply.sh"
     install_orca_firewall_sources
     install_orca_firewall_sources
@@ -2540,12 +2553,13 @@ PY
     ORCA_CHOWN_BIN="$stub_bin/chown"
     ORCA_LSOF_BIN="$stub_bin/lsof"
     ORCA_ROUTE_BIN="$stub_bin/route"
+    ORCA_IFCONFIG_BIN="$stub_bin/ifconfig"
     export HOME PATH ORCA_PF_CONFIG_FILE ORCA_PF_CONFIG_SOURCE_FILE ORCA_PF_CONFIG_ROLLBACK_FILE
     export ORCA_PF_CONFIG_DIGEST_FILE ORCA_PF_ANCHOR_SOURCE_FILE ORCA_PF_ANCHOR_FILE
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
     export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
-    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN
+    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN ORCA_IFCONFIG_BIN
     source "$REPO_DIR/apply.sh"
     start_orca_firewall
   ) >"$install_log" 2>&1; then
@@ -2587,6 +2601,7 @@ PY
     ORCA_CHOWN_BIN="$stub_bin/chown"
     ORCA_LSOF_BIN="$stub_bin/lsof"
     ORCA_ROUTE_BIN="$stub_bin/route"
+    ORCA_IFCONFIG_BIN="$stub_bin/ifconfig"
     ORCA_TEST_EXPECTED_RULES="$expected_rules"
     ORCA_TEST_BOOT_ID="$boot_id"
     ORCA_TEST_LAUNCH_PRINT_RC="0"
@@ -2595,7 +2610,7 @@ PY
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
     export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
-    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN
+    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN ORCA_IFCONFIG_BIN
     export ORCA_TEST_EXPECTED_RULES ORCA_TEST_BOOT_ID ORCA_TEST_LAUNCH_PRINT_RC
     source "$REPO_DIR/apply.sh"
     orca_expected_anchor_rules() { cat "$ORCA_TEST_EXPECTED_RULES"; }
@@ -2633,6 +2648,7 @@ PY
     ORCA_CHOWN_BIN="$stub_bin/chown"
     ORCA_LSOF_BIN="$stub_bin/lsof"
     ORCA_ROUTE_BIN="$stub_bin/route"
+    ORCA_IFCONFIG_BIN="$stub_bin/ifconfig"
     ORCA_TEST_EXPECTED_RULES="$expected_rules"
     ORCA_TEST_BOOT_ID="$boot_id"
     ORCA_TEST_LAUNCH_PRINT_RC="0"
@@ -2641,7 +2657,7 @@ PY
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
     export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
-    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN
+    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN ORCA_IFCONFIG_BIN
     export ORCA_TEST_EXPECTED_RULES ORCA_TEST_BOOT_ID ORCA_TEST_LAUNCH_PRINT_RC
     source "$REPO_DIR/apply.sh"
     orca_expected_anchor_rules() { cat "$ORCA_TEST_EXPECTED_RULES"; }
@@ -2679,6 +2695,7 @@ PY
     ORCA_CHOWN_BIN="$stub_bin/chown"
     ORCA_LSOF_BIN="$stub_bin/lsof"
     ORCA_ROUTE_BIN="$stub_bin/route"
+    ORCA_IFCONFIG_BIN="$stub_bin/ifconfig"
     ORCA_TEST_EXPECTED_RULES="$expected_rules"
     ORCA_TEST_BOOT_ID="$boot_id"
     ORCA_TEST_LAUNCH_PRINT_RC="0"
@@ -2688,7 +2705,7 @@ PY
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
     export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
-    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN
+    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN ORCA_ROUTE_BIN ORCA_IFCONFIG_BIN
     export ORCA_TEST_EXPECTED_RULES ORCA_TEST_BOOT_ID ORCA_TEST_LAUNCH_LOG ORCA_TEST_LAUNCH_PRINT_RC
     source "$REPO_DIR/apply.sh"
     orca_expected_anchor_rules() { cat "$ORCA_TEST_EXPECTED_RULES"; }
@@ -2718,6 +2735,8 @@ PY
       ORCA_TEST_SKIP="${5:-}" \
       ORCA_TEST_PEERS="${6:-}" \
       ORCA_TEST_ROUTE_IFACE="${7:-utun0}" \
+      ORCA_TEST_UTUN_IFACES="${8:-utun0}" \
+      ORCA_TEST_EXTRA_TAILSCALE_IFACE="${9:-}" \
       bash "$gate_source"
   }
 
@@ -2859,6 +2878,16 @@ PY
     not_ok "gate accepted a local-network peer in the Tailscale ranges"
   else
     ok "gate fails closed on a local-network peer in the Tailscale ranges"
+  fi
+  require_contains "$launch_log" "kill SIGTERM system/com.stablyai.orca-server"
+
+  : >"$pfctl_log"
+  : >"$launch_log"
+  write_orca_gate_evidence
+  if run_orca_gate Enabled 0 0 1 "" "" "utun0" "utun0 utun5" "utun5" >/dev/null 2>&1; then
+    not_ok "gate accepted a second tunnel with Tailscale addresses"
+  else
+    ok "gate fails closed on a second tunnel with Tailscale addresses"
   fi
   require_contains "$launch_log" "kill SIGTERM system/com.stablyai.orca-server"
 
