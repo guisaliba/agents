@@ -60,6 +60,7 @@ ORCA_FIREWALL_SCRIPT_SOURCE_FILE="$HOME/.config/orca-server/com.stablyai.orca-fi
 ORCA_FIREWALL_SCRIPT_FILE="/usr/local/libexec/com.stablyai.orca-server/com.stablyai.orca-firewall.sh"
 ORCA_SERVER_SCRIPT_SOURCE_FILE="$HOME/.config/orca-server/com.stablyai.orca-server.sh"
 ORCA_SERVER_SCRIPT_FILE="/usr/local/libexec/com.stablyai.orca-server/com.stablyai.orca-server.sh"
+ORCA_INSTALL_SCRIPT_FILE="$HOME/.config/orca-server/install-privileged.sh"
 ORCA_GATE_EVIDENCE_FILE="/var/run/com.stablyai.orca-server.gate"
 ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE="$HOME/.config/orca-server/com.stablyai.orca-firewall.plist"
 ORCA_FIREWALL_LAUNCH_DAEMON_FILE="/Library/LaunchDaemons/com.stablyai.orca-firewall.plist"
