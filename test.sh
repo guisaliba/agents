@@ -2660,6 +2660,7 @@ PY
   else
     ok "healthy gate did not reload the system PF configuration"
   fi
+  require_absent "$launch_log" "kill SIGTERM system/com.stablyai.orca-server"
 
   : >"$pfctl_log"
   : >"$launch_log"
@@ -2670,6 +2671,10 @@ PY
   fi
   require_contains "$pfctl_log" "-f $pf_config"
   require_contains "$pfctl_log" "-E"
+  require_contains "$launch_log" "disable system/com.stablyai.orca-server"
+  require_contains "$launch_log" "kill SIGTERM system/com.stablyai.orca-server"
+  require_contains "$launch_log" "enable system/com.stablyai.orca-server"
+  require_contains "$launch_log" "kickstart system/com.stablyai.orca-server"
 
   : >"$pfctl_log"
   : >"$launch_log"
@@ -2733,6 +2738,7 @@ PY
   require_contains "$pfctl_log" "-sr"
   require_contains "$pfctl_log" "-f $pf_config"
   require_contains "$launch_log" "disable system/com.stablyai.orca-server"
+  require_contains "$launch_log" "kill SIGTERM system/com.stablyai.orca-server"
 
   printf '%s\n' 'pass in quick proto tcp from any to any port 6768 flags S/SA keep state' 'anchor "com.stablyai.orca-server" all' >"$main_rules"
   printf '%s' 'Enabled' >"$pf_status_file"
@@ -2754,6 +2760,7 @@ PY
   else
     not_ok "gate did not recover the main ruleset after a reload"
   fi
+  require_contains "$launch_log" "kill SIGTERM system/com.stablyai.orca-server"
   require_contains "$launch_log" "kickstart system/com.stablyai.orca-server"
 
   printf '%s\n' '#!/bin/bash' 'exit 0' >"$stub_bin/exec-ok"

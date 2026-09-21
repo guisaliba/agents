@@ -734,7 +734,8 @@ state_matches() {{
 
 read_state
 if ! state_matches; then
-  log "live PF state is not current; loading $PF_CONFIG"
+  log "live PF state is not current; stopping Orca and loading $PF_CONFIG"
+  stop_orca
   "$PFCTL" -f "$PF_CONFIG" || fail "cannot load $PF_CONFIG"
   "$PFCTL" -s info 2>/dev/null | /usr/bin/grep -q '^Status: Enabled' || \\
     "$PFCTL" -E || fail "cannot enable PF"

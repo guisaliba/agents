@@ -109,10 +109,12 @@ The Orca preflight then checks that evidence before it executes Orca. This
 ordering removes the boot window in which the port could listen before the
 rules are active.
 
-When the live state does not match, the gate reloads `/etc/pf.conf`. If the
-state still does not match, Orca stays stopped. A later PF load that moves the
-anchor behind an earlier quick rule is therefore detected and repaired within
-one gate cycle.
+When the live state does not match, the gate stops Orca first, then reloads
+`/etc/pf.conf`. Stopping Orca closes any session that an earlier rule allowed,
+and the reload does not preserve those sessions. Orca starts again only after
+the reloaded state matches; if it still does not match, Orca stays stopped. A
+later PF load that moves the anchor behind an earlier quick rule is therefore
+detected and repaired within one gate cycle.
 
 Pairing links are bearer credentials. Use them only in a controlled foreground
 session. Do not put them in source control, shell history, normal service logs,
