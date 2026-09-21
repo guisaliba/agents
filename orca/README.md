@@ -18,6 +18,22 @@ The service runs as the user who generated the plist:
   --no-pairing
 ```
 
+The root-owned `com.stablyai.orca-firewall` LaunchDaemon is the startup gate.
+The gate runs at load and every 60 seconds. Each run does this work:
+
+1. Stop Orca when the gate cannot prove the required firewall state.
+2. Load `/etc/pf.conf` and enable PF when the live state is not current.
+3. Read the live Orca anchor and compare it with the expected anchor rules.
+4. Publish current-boot evidence only after the comparison succeeds.
+5. Enable, load, and start the Orca service only after the comparison succeeds.
+
+The Orca service runs a root-owned preflight script as the selected user. The
+preflight refuses to execute Orca unless the gate evidence belongs to the
+current boot and matches the expected anchor rules. Orca therefore cannot
+listen on TCP `6768` before the gate succeeds. The design fails closed: a
+missing anchor, an invalid PF configuration, a disabled PF, or a failed gate
+run leaves Orca stopped.
+
 The managed files are:
 
 ```text
@@ -25,22 +41,35 @@ The managed files are:
 /Library/LaunchDaemons/com.stablyai.orca-server.plist
 ~/Library/Logs/orca-server/stdout.log
 ~/Library/Logs/orca-server/stderr.log
+~/.config/orca-server/com.stablyai.orca-server.sh
+/usr/local/libexec/com.stablyai.orca-server/com.stablyai.orca-server.sh
 ~/.config/orca-server/com.stablyai.orca-server.pf
 ~/.config/orca-server/pf.conf
 ~/.config/orca-server/pf.conf.without-orca
+~/.config/orca-server/pf.conf.sha256
+~/.config/orca-server/com.stablyai.orca-firewall.sh
+/usr/local/libexec/com.stablyai.orca-server/com.stablyai.orca-firewall.sh
 ~/.config/orca-server/com.stablyai.orca-firewall.plist
 /etc/pf.anchors/com.stablyai.orca-server
 /Library/LaunchDaemons/com.stablyai.orca-firewall.plist
+/var/run/com.stablyai.orca-server.gate
 ```
 
-The generated source plist has mode `0600`. The installed plist must be
+Generated source files have mode `0600`. The installed plists and the anchor
+file must be `root:wheel` with mode `0644`. The installed gate and preflight
+scripts must be `root:wheel` with mode `0755`. The evidence file must be
 `root:wheel` with mode `0644`. The log directory has mode `0700`, and each log
-file has mode `0600`. The service sets a deterministic `HOME` and `PATH`, starts
-at boot after FileVault unlock, uses `KeepAlive`, and has a 10-second restart
-throttle.
+file has mode `0600`. The Orca service sets a deterministic `HOME` and `PATH`,
+starts at boot after FileVault unlock, uses `KeepAlive`, and has a 10-second
+restart throttle. The preflight runs on every Orca start and restart.
 
 Apply stops when privileged installation is necessary and prints the required
-commands. It does not use hidden or passwordless `sudo`.
+commands. It does not use hidden or passwordless `sudo`. Apply records the
+SHA-256 of `/etc/pf.conf` in `~/.config/orca-server/pf.conf.sha256` when it
+generates the Orca sources. The printed commands install the generated
+`/etc/pf.conf` only when the current file still matches that digest. A changed
+system PF configuration therefore stops the install. Rerun `./apply.sh` to
+regenerate the sources from the new file.
 
 ## Network Boundary
 
@@ -52,9 +81,15 @@ ai-memory directly.
 Orca listens on all interfaces and has no bind-address option. The managed PF
 anchor permits TCP port `6768` only from the Tailscale IPv4 range
 `100.64.0.0/10` and IPv6 range `fd7a:115c:a1e0::/48`, then blocks all other
-sources. A separate root-owned one-shot LaunchDaemon loads `/etc/pf.conf`,
-enables PF, and records the loaded Orca anchor rules at each boot. Apply
-preserves existing PF content and maintains one marked Orca anchor block.
+sources, including the loopback interface and the LAN. Apply preserves existing
+PF content and maintains one marked Orca anchor block.
+
+The root-owned gate is the only component that starts Orca. It loads
+`/etc/pf.conf`, enables PF, compares the live anchor with the expected anchor,
+and publishes current-boot evidence before it starts the service. The Orca
+preflight then checks that evidence before it executes Orca. This ordering
+removes the boot window in which the port could listen before the rules are
+active.
 
 Pairing links are bearer credentials. Use them only in a controlled foreground
 session. Do not put them in source control, shell history, normal service logs,
@@ -65,22 +100,25 @@ mobile grant survive a restart with `--no-pairing`.
 
 ## Pair A Client
 
-Stop the service before a controlled pairing session:
+Stop the gate and the service before a controlled pairing session. The gate
+runs every 60 seconds and restarts the service, so it must not stay loaded:
 
 ```sh
-sudo launchctl bootout system/com.stablyai.orca-server
+sudo launchctl bootout system/com.stablyai.orca-firewall 2>/dev/null || true
+sudo launchctl bootout system/com.stablyai.orca-server 2>/dev/null || true
 orca serve --port 6768 \
   --pairing-address aurealabs-mac-mini-m4.taildc6550.ts.net
 ```
 
 Use a separate controlled session with `--mobile-pairing` for a phone. Do not
 combine runtime-environment pairing and mobile pairing in one process start.
-After pairing, stop the foreground process and restore the service:
+After pairing, stop the foreground process and restore the gate. The gate
+validates PF, starts the service, and re-enables it:
 
 ```sh
 sudo launchctl bootstrap system \
-  /Library/LaunchDaemons/com.stablyai.orca-server.plist
-sudo launchctl kickstart -k system/com.stablyai.orca-server
+  /Library/LaunchDaemons/com.stablyai.orca-firewall.plist
+sudo launchctl kickstart -k system/com.stablyai.orca-firewall
 ```
 
 Confirm that all established clients reconnect while the server uses
@@ -92,14 +130,24 @@ On the M4:
 
 ```sh
 orca --version
-sudo launchctl print system/com.stablyai.orca-server
-sudo launchctl print system/com.stablyai.orca-firewall
+launchctl print system/com.stablyai.orca-server
+launchctl print system/com.stablyai.orca-firewall
 sudo pfctl -s info
 sudo pfctl -a com.stablyai.orca-server -sr
+cat /var/run/com.stablyai.orca-server.gate
+sysctl -n kern.bootsessionuuid
 lsof -nP -iTCP:6768 -sTCP:LISTEN
 stat -f '%Su:%Sg:%Lp' \
-  /Library/LaunchDaemons/com.stablyai.orca-server.plist
+  /Library/LaunchDaemons/com.stablyai.orca-server.plist \
+  /Library/LaunchDaemons/com.stablyai.orca-firewall.plist \
+  /usr/local/libexec/com.stablyai.orca-server/com.stablyai.orca-server.sh \
+  /usr/local/libexec/com.stablyai.orca-server/com.stablyai.orca-firewall.sh \
+  /var/run/com.stablyai.orca-server.gate
 ```
+
+The evidence file must record `bootsession` equal to `kern.bootsessionuuid`
+and the `anchor_sha256` of the live anchor rules. A run of `./test.sh` checks
+these values and the listener. The evidence from an earlier boot is not proof.
 
 On a paired desktop client:
 
@@ -110,6 +158,32 @@ stably-orca status --environment "M4 Server" --json
 The runtime must report `ready`, `reachable`, and `connected`. The live M4
 test also proved that launchd starts a new Orca process and clients reconnect
 after the listener process exits.
+
+## Fail-Closed Checks
+
+Test the gate behavior on the M4 with controlled changes:
+
+```sh
+# Disable PF. Orca must stop within one gate cycle (60 seconds).
+sudo pfctl -d
+
+# Restore PF. The gate repairs the state and starts Orca again.
+sudo launchctl kickstart -k system/com.stablyai.orca-firewall
+```
+
+To prove the boot path from a clean state, unload both jobs, remove the
+evidence file, and load only the gate. Orca must not listen until the gate
+publishes evidence:
+
+```sh
+sudo launchctl bootout system/com.stablyai.orca-server 2>/dev/null || true
+sudo launchctl bootout system/com.stablyai.orca-firewall 2>/dev/null || true
+sudo rm -f /var/run/com.stablyai.orca-server.gate
+sudo launchctl bootstrap system \
+  /Library/LaunchDaemons/com.stablyai.orca-firewall.plist
+sudo launchctl kickstart -k system/com.stablyai.orca-firewall
+lsof -nP -iTCP:6768 -sTCP:LISTEN
+```
 
 ## Reboot Acceptance
 
@@ -129,8 +203,19 @@ sudo reboot
 At startup, unlock FileVault with an authorized local account and remain at the
 macOS login screen. If Tailscale starts before GUI login, verify the services
 remotely there. Otherwise, log in and use boot logs and process start times to
-confirm that PF, ai-memory, and Orca started before the GUI session. Also verify
-that paired clients reconnect and existing Orca terminals remain recoverable.
+confirm that PF, ai-memory, and Orca started before the GUI session.
+
+The gate holds Orca stopped until it proves the required PF state. The
+per-boot sequence is:
+
+1. The gate loads `/etc/pf.conf`, enables PF, and compares the live anchor.
+2. The gate publishes evidence for the current boot.
+3. The gate starts the Orca service.
+4. The Orca preflight reads the evidence before it executes Orca.
+
+Old evidence cannot start Orca after a reboot because the boot session changes.
+Also verify that paired clients reconnect and existing Orca terminals remain
+recoverable.
 
 ## Parallel Work
 
@@ -145,11 +230,12 @@ Use a maintenance window because an upgrade interrupts active sessions:
 
 ```sh
 brew upgrade --cask stablyai/orca/orca
-sudo launchctl kickstart -k system/com.stablyai.orca-server
+sudo launchctl kickstart -k system/com.stablyai.orca-firewall
 ```
 
-Rerun `./apply.sh` and the verification steps after the upgrade. Orca serve
-does not run an automatic updater.
+The gate kickstart revalidates PF and restarts the Orca service. Rerun
+`./apply.sh` and the verification steps after the upgrade. Orca serve does not
+run an automatic updater.
 
 ## Known Limits
 
@@ -161,6 +247,11 @@ Remote Orca Server is beta. Current upstream macOS limits include:
 - [Issue 16061](https://github.com/stablyai/orca/issues/16061): serve mode can
   show a Dock icon. Do not modify or re-sign Orca to hide it.
 
+The gate revalidates PF every 60 seconds. A PF change that another process makes
+is repaired within one interval, and Orca stops when the repair fails. The
+evidence file is current-boot data, not a durable certificate. Do not copy it
+between boots.
+
 The validated system LaunchDaemon is the selected service model. If a future
 Orca release cannot run in the system launchd domain, use a user LaunchAgent as
 the fallback. This requires one GUI login after a reboot. Keep FileVault
@@ -168,20 +259,28 @@ enabled, and do not enable automatic login.
 
 ## Rollback
 
-Remove only the managed service and installed plist:
+Remove only the managed services and installed files. The first command refuses
+the restore when `/etc/pf.conf` changed after apply generated the rollback file:
 
 ```sh
+sudo launchctl disable system/com.stablyai.orca-server
 sudo launchctl bootout system/com.stablyai.orca-server 2>/dev/null || true
-sudo rm -f /Library/LaunchDaemons/com.stablyai.orca-server.plist
 sudo launchctl bootout system/com.stablyai.orca-firewall 2>/dev/null || true
-sudo install -o root -g wheel -m 0644 \
-  "$HOME/.config/orca-server/pf.conf.without-orca" /etc/pf.conf
+test "$(shasum -a 256 /etc/pf.conf | awk '{print $1}')" = \
+  "$(shasum -a 256 "$HOME/.config/orca-server/pf.conf" | awk '{print $1}')" && \
+  sudo install -o root -g wheel -m 0644 \
+    "$HOME/.config/orca-server/pf.conf.without-orca" /etc/pf.conf || \
+  printf 'ERROR: /etc/pf.conf changed since apply generated the Orca sources; refusing the restore\n' >&2
+sudo pfctl -f /etc/pf.conf
 sudo rm -f /etc/pf.anchors/com.stablyai.orca-server
 sudo rm -f /Library/LaunchDaemons/com.stablyai.orca-firewall.plist
-sudo pfctl -f /etc/pf.conf
+sudo rm -f /Library/LaunchDaemons/com.stablyai.orca-server.plist
+sudo rm -f /usr/local/libexec/com.stablyai.orca-server/com.stablyai.orca-firewall.sh
+sudo rm -f /usr/local/libexec/com.stablyai.orca-server/com.stablyai.orca-server.sh
+sudo rm -f /var/run/com.stablyai.orca-server.gate
 ```
 
 This rollback preserves repositories, worktrees, Orca state, paired-client
-grants, credentials, logs, the generated source plist, and all ai-memory data.
+grants, credentials, logs, the generated source files, and all ai-memory data.
 It does not disable PF because other system services can own enable references.
 Remove the Homebrew cask only when Orca itself is no longer required.
