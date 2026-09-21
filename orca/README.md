@@ -101,10 +101,11 @@ configuration are parsed with `pfctl -nf` before installation.
 The pass rules also require the Tailscale `utun*` interface, so a local network
 that uses the same address ranges cannot match them.
 
-Apply rejects a `set skip` directive for any interface other than `lo0` or
-`utun*`. PF does not run filter rules on a skipped interface, so the anchor
-cannot protect the port there. The gate also reads the live skip list and
-fails closed when another process activates a skip on a non-Tailscale
+Apply rejects a `set skip` directive for any interface other than `utun*`. PF
+does not run filter rules on a skipped interface, so the anchor cannot protect
+the port there. A loopback skip is rejected too, because the anchor blocks
+local connections to TCP `6768` as well. The gate also reads the live skip
+list and fails closed when another process activates a skip on a non-Tailscale
 interface.
 
 The root-owned gate is the only component that starts Orca. It loads
@@ -115,8 +116,10 @@ The Orca preflight then checks that evidence before it executes Orca. This
 ordering removes the boot window in which the port could listen before the
 rules are active.
 
-The gate also checks the established connections of the listener. A connection
-whose peer is not in the Tailscale ranges is unsafe. The gate stops Orca, which
+The gate also checks the established connections of the listener. It counts
+only sockets whose local endpoint is TCP `6768`, so an unrelated outbound
+connection to a remote port `6768` is ignored. A listener connection whose peer
+is not in the Tailscale ranges is unsafe. The gate stops Orca, which
 closes that connection, before it continues. This removes a connection that an
 earlier permissive PF state allowed even when the rules match again.
 

@@ -598,12 +598,12 @@ for raw_line in current.splitlines():
         continue
     spec = stripped[len("set skip on") :].strip()
     for entry in spec.replace("{", " ").replace("}", " ").replace(",", " ").split():
-        if entry in {"lo0", "utun", "utun*"} or (entry.startswith("utun") and entry[4:].isdigit()):
+        if entry in {"utun", "utun*"} or (entry.startswith("utun") and entry[4:].isdigit()):
             continue
         raise SystemExit(
             f"ERROR: {pf_config} uses 'set skip on {entry}'. PF skips all filter rules "
             f"on that interface, so the Orca anchor cannot protect TCP {port}. "
-            "Limit the skip to lo0 or utun* before running apply."
+            "Limit the skip to utun* before running apply."
         )
 
 lines = current.split("\n")
@@ -769,7 +769,7 @@ read_state() {{
   peer_status=$?
   if [[ "$peer_status" -eq 0 ]] || [[ "$peer_status" -eq 1 && -z "$peer_output" ]]; then
     peer_query=0
-    established_peers="$(printf '%s\\n' "$peer_output" | /usr/bin/awk '{{ for (i = 1; i <= NF; i++) if (index($i, "->") > 0) {{ split($i, parts, "->"); print parts[2] }} }}')"
+    established_peers="$(printf '%s\\n' "$peer_output" | /usr/bin/awk '{{ for (i = 1; i <= NF; i++) if (index($i, "->") > 0) {{ split($i, parts, "->"); if (parts[1] ~ /:6768$/ || parts[1] ~ /\[6768\]$/) print parts[2] }} }}')"
   else
     peer_query=1
     established_peers=""
@@ -781,7 +781,7 @@ skips_are_safe() {{
   [[ "$skip_query" -eq 0 ]] || return 1
   for iface in $skipped; do
     case "$iface" in
-      lo0|utun*) ;;
+      utun*) ;;
       *) return 1 ;;
     esac
   done

@@ -2371,12 +2371,22 @@ PY
   printf '%s\n' \
     '# preserve system PF rules' \
     'set skip on lo0' \
+    'anchor "com.apple/*"' >"$fixture_root/pf-skip-lo0.conf"
+  if run_orca_source_generation "$fixture_root/pf-skip-lo0.conf" >"$install_log" 2>&1; then
+    not_ok "loopback set skip was accepted"
+  else
+    ok "loopback set skip is rejected"
+  fi
+  require_contains "$install_log" "set skip"
+
+  printf '%s\n' \
+    '# preserve system PF rules' \
     'set skip on utun*' \
     'anchor "com.apple/*"' >"$fixture_root/pf-skip-ok.conf"
   if run_orca_source_generation "$fixture_root/pf-skip-ok.conf" >/dev/null 2>&1; then
-    ok "loopback and tunnel set skip are accepted"
+    ok "tunnel set skip is accepted"
   else
-    not_ok "loopback and tunnel set skip were rejected"
+    not_ok "tunnel set skip was rejected"
   fi
 
   if (
@@ -2827,6 +2837,17 @@ PY
     not_ok "gate rejected an established Tailscale peer"
   fi
   require_absent "$launch_log" "kill SIGTERM system/com.stablyai.orca-server"
+
+  printf '%s\n' \
+    'Orca 789 user 58u IPv4 0x0 0t0 TCP 192.168.15.131:54321->203.0.113.9:6768 (ESTABLISHED)' >"$peers_file"
+  : >"$pfctl_log"
+  : >"$launch_log"
+  write_orca_gate_evidence
+  if run_orca_gate Enabled 0 0 1 "" "$peers_file" >/dev/null 2>&1; then
+    ok "gate ignores unrelated outbound sockets to port 6768"
+  else
+    not_ok "gate treated an unrelated outbound socket as an Orca peer"
+  fi
   rm -f "$peers_file"
 
   printf '%s\n' 'pass in quick proto tcp from any to any port 6768 flags S/SA keep state' 'anchor "com.stablyai.orca-server" all' >"$main_rules"
