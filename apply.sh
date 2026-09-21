@@ -819,8 +819,13 @@ read_state() {{
     fi
   done
   if skip_output="$("$PFCTL" -s Interfaces -v 2>/dev/null)"; then
-    skip_query=0
-    skipped="$(printf '%s\\n' "$skip_output" | /usr/bin/grep -F '(skip)' | /usr/bin/awk '{{print $1}}')"
+    if printf '%s\\n' "$skip_output" | /usr/bin/grep -q '^lo0'; then
+      skip_query=0
+      skipped="$(printf '%s\\n' "$skip_output" | /usr/bin/grep -F '(skip)' | /usr/bin/awk '{{print $1}}')"
+    else
+      skip_query=1
+      skipped=""
+    fi
   else
     skip_query=1
     skipped=""

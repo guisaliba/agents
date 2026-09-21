@@ -301,10 +301,15 @@ Remote Orca Server is beta. Current upstream macOS limits include:
 - [Issue 16061](https://github.com/stablyai/orca/issues/16061): serve mode can
   show a Dock icon. Do not modify or re-sign Orca to hide it.
 
-The gate revalidates PF every 60 seconds. A PF change that another process makes
-is repaired within one interval, and Orca stops when the repair fails. The
-evidence file is current-boot data, not a durable certificate. Do not copy it
-between boots.
+The gate revalidates PF every 60 seconds. A PF change that another root process
+makes stays active until the next interval, and Orca stops when the repair
+fails. The preflight runs as the user and cannot read live PF state, so the
+gate is the runtime authority. The evidence file is current-boot data, not a
+durable certificate. Do not copy it between boots.
+
+A repair loads `/etc/pf.conf`, which flushes dynamically inserted system
+anchors. The system services add those anchors again when they are used. The
+gate loads the configuration only when the live state does not match.
 
 The validated system LaunchDaemon is the selected service model. If a future
 Orca release cannot run in the system launchd domain, use a user LaunchAgent as

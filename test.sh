@@ -2261,7 +2261,7 @@ PY
     '    case "$2" in' \
     '      info) printf '\''Status: %s\n'\'' "$(cat "$ORCA_TEST_PF_STATUS_FILE")"; exit 0 ;;' \
     '      rules) cat "$ORCA_TEST_MAIN_RULES"; exit 0 ;;' \
-    '      Interfaces) printf '\''%s\n'\'' "${ORCA_TEST_SKIP:-}"; exit 0 ;;' \
+    '      Interfaces) printf '\''lo0\n'\''; printf '\''%s\n'\'' "${ORCA_TEST_SKIP:-}"; exit 0 ;;' \
     '    esac ;;' \
     '  -sr) cat "$ORCA_TEST_MAIN_RULES"; exit 0 ;;' \
     '  -E) rc="${ORCA_TEST_PF_ENABLE_RC:-0}"; [[ "$rc" == "0" ]] && printf '\''Enabled'\'' >"$ORCA_TEST_PF_STATUS_FILE"; exit "$rc" ;;' \
@@ -3810,6 +3810,16 @@ if [[ "$(uname -s)" == Darwin ]]; then
     ok "generated Orca PF configuration parses"
   else
     not_ok "generated Orca PF configuration is invalid"
+  fi
+  current_tailscale_interface="$(
+    source "$REPO_DIR/apply.sh"
+    orca_tailscale_interface
+  )" || true
+  if [[ -n "$current_tailscale_interface" ]] && \
+    grep -q "pass in quick on $current_tailscale_interface inet proto tcp" "$ORCA_PF_ANCHOR_SOURCE_FILE"; then
+    ok "Orca anchor names the current Tailscale interface"
+  else
+    not_ok "Orca anchor does not name the current Tailscale interface"
   fi
   require_file "$ORCA_PF_CONFIG_ROLLBACK_FILE"
   require_file_mode "$ORCA_PF_CONFIG_ROLLBACK_FILE" "600"
