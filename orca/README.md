@@ -115,6 +115,11 @@ The Orca preflight then checks that evidence before it executes Orca. This
 ordering removes the boot window in which the port could listen before the
 rules are active.
 
+The gate also checks the established connections of the listener. A connection
+whose peer is not in the Tailscale ranges is unsafe. The gate stops Orca, which
+closes that connection, before it continues. This removes a connection that an
+earlier permissive PF state allowed even when the rules match again.
+
 When the live state does not match, the gate stops Orca first, waits until the
 process and the TCP `6768` listener stop, and then reloads `/etc/pf.conf`.
 Stopping Orca closes any session that an earlier rule allowed, and the reload
@@ -262,12 +267,14 @@ Use a maintenance window because an upgrade interrupts active sessions:
 
 ```sh
 brew upgrade --cask stablyai/orca/orca
+sudo launchctl kickstart -k system/com.stablyai.orca-server
 sudo launchctl kickstart -k system/com.stablyai.orca-firewall
 ```
 
-The gate kickstart revalidates PF and restarts the Orca service. Rerun
-`./apply.sh` and the verification steps after the upgrade. Orca serve does not
-run an automatic updater.
+The Orca kickstart replaces the running process with the new executable. The
+gate kickstart then revalidates PF and confirms the service. Rerun `./apply.sh`
+and the verification steps after the upgrade. Orca serve does not run an
+automatic updater.
 
 ## Known Limits
 

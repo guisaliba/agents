@@ -88,6 +88,7 @@ ORCA_LAUNCHCTL_BIN="${ORCA_LAUNCHCTL_BIN:-/bin/launchctl}"
 ORCA_SYSCTL_BIN="${ORCA_SYSCTL_BIN:-/usr/sbin/sysctl}"
 ORCA_SHASUM_BIN="${ORCA_SHASUM_BIN:-/usr/bin/shasum}"
 ORCA_CHOWN_BIN="${ORCA_CHOWN_BIN:-/usr/sbin/chown}"
+ORCA_LSOF_BIN="${ORCA_LSOF_BIN:-/usr/sbin/lsof}"
 
 log() {
   printf '\n==> %s\n' "$*"
@@ -539,7 +540,8 @@ install_orca_firewall_sources() {
     "$ORCA_SERVER_SCRIPT_FILE" \
     "$ORCA_FIREWALL_LAUNCH_DAEMON_FILE" \
     "$ORCA_LAUNCH_DAEMON_SOURCE_FILE" \
-    "$ORCA_INSTALL_SCRIPT_FILE" <<'PY' || return 1
+    "$ORCA_INSTALL_SCRIPT_FILE" \
+    "$ORCA_LSOF_BIN" <<'PY' || return 1
 import hashlib
 import plistlib
 import sys
@@ -572,6 +574,7 @@ server_file = sys.argv[24]
 firewall_daemon_file = sys.argv[25]
 server_daemon_source = sys.argv[26]
 install_script = Path(sys.argv[27])
+lsof_bin = sys.argv[28]
 sys.path.insert(0, str(helper_path.parent))
 sys.dont_write_bytecode = True
 
@@ -710,7 +713,7 @@ LAUNCHCTL="{launchctl_bin}"
 SYSCTL="{sysctl_bin}"
 SHASUM="{shasum_bin}"
 CHOWN="{chown_bin}"
-LSOF="/usr/sbin/lsof"
+LSOF="{lsof_bin}"
 
 log() {{
   printf 'orca-firewall-gate: %s\\n' "$*" >&2
@@ -747,6 +750,8 @@ live_anchor=""
 first_filter=""
 skipped=""
 skip_query=1
+established_peers=""
+peer_query=1
 
 read_state() {{
   enabled=0
@@ -759,6 +764,13 @@ read_state() {{
   else
     skip_query=1
     skipped=""
+  fi
+  if peer_output="$("$LSOF" -nP -iTCP:"$ORCA_PORT" -sTCP:ESTABLISHED 2>/dev/null)"; then
+    peer_query=0
+    established_peers="$(printf '%s\\n' "$peer_output" | /usr/bin/awk '{{ for (i = 1; i <= NF; i++) if (index($i, "->") > 0) {{ split($i, parts, "->"); print parts[2] }} }}')"
+  else
+    peer_query=1
+    established_peers=""
   fi
 }}
 
@@ -774,8 +786,40 @@ skips_are_safe() {{
   return 0
 }}
 
+peer_is_tailscale() {{
+  local endpoint="$1" address second
+  if [[ "$endpoint" == \[*\]* ]]; then
+    address="${{endpoint#[}}"
+    address="${{address%%]*}}"
+  else
+    address="${{endpoint%:*}}"
+  fi
+  case "$address" in
+    fd7a:115c:a1e0:*) return 0 ;;
+    100.*)
+      second="${{address#100.}}"
+      second="${{second%%.*}}"
+      case "$second" in
+        ''|*[!0-9]*) return 1 ;;
+      esac
+      (( 10#$second >= 64 && 10#$second <= 127 )) || return 1
+      return 0
+      ;;
+  esac
+  return 1
+}}
+
+peers_are_safe() {{
+  local endpoint
+  [[ "$peer_query" -eq 0 ]] || return 1
+  for endpoint in $established_peers; do
+    peer_is_tailscale "$endpoint" || return 1
+  done
+  return 0
+}}
+
 state_matches() {{
-  [[ "$enabled" -eq 1 && "$live_anchor" == "$expected" && "$first_filter" == "$EXPECTED_FIRST_FILTER" ]] && skips_are_safe
+  [[ "$enabled" -eq 1 && "$live_anchor" == "$expected" && "$first_filter" == "$EXPECTED_FIRST_FILTER" ]] && skips_are_safe && peers_are_safe
 }}
 
 read_state

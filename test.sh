@@ -2182,7 +2182,7 @@ test_macos_orca_firewall() {
   local fixture_root fixture_home stub_bin pf_config pf_config_source pf_config_rollback pf_config_digest anchor_source anchor_file
   local gate_source gate_file server_source server_file install_script evidence_file daemon_source daemon_file install_log launch_log pfctl_log live_rules expected_rules
   local boot_id expected_hash pf_config_hash other_hash orca_daemon_file install_cmd_log
-  local main_rules main_rules_after pf_status_file
+  local main_rules main_rules_after pf_status_file peers_file
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
   stub_bin="$fixture_root/bin"
@@ -2209,6 +2209,7 @@ test_macos_orca_firewall() {
   main_rules="$fixture_root/main-rules"
   main_rules_after="$fixture_root/main-rules-after"
   pf_status_file="$fixture_root/pf-status"
+  peers_file="$fixture_root/peers"
   boot_id="FIXTURE-BOOT-SESSION"
   mkdir -p "$stub_bin" "$(dirname "$pf_config")" "$(dirname "$evidence_file")" "$(dirname "$anchor_file")"
   printf '%s\n' \
@@ -2310,6 +2311,12 @@ PY
     'fi' \
     'exit 0' >"$stub_bin/install"
   printf '%s\n' '#!/bin/bash' 'exit 0' >"$stub_bin/sleep"
+  printf '%s\n' \
+    '#!/bin/bash' \
+    'case "$*" in' \
+    '  *ESTABLISHED*) [[ -n "${ORCA_TEST_PEERS:-}" && -f "$ORCA_TEST_PEERS" ]] && cat "$ORCA_TEST_PEERS"; exit 0 ;;' \
+    'esac' \
+    'exit 1' >"$stub_bin/lsof"
   chmod +x \
     "$stub_bin/pfctl" \
     "$stub_bin/launchctl" \
@@ -2318,7 +2325,8 @@ PY
     "$stub_bin/chown" \
     "$stub_bin/shasum" \
     "$stub_bin/install" \
-    "$stub_bin/sleep"
+    "$stub_bin/sleep" \
+    "$stub_bin/lsof"
 
   run_orca_source_generation() {
     local config="$1"
@@ -2343,6 +2351,7 @@ PY
       export ORCA_SYSCTL_BIN="$stub_bin/sysctl"
       export ORCA_SHASUM_BIN="$stub_bin/shasum"
       export ORCA_CHOWN_BIN="$stub_bin/chown"
+      export ORCA_LSOF_BIN="$stub_bin/lsof"
       source "$REPO_DIR/apply.sh"
       install_orca_firewall_sources
     )
@@ -2392,12 +2401,13 @@ PY
     ORCA_SYSCTL_BIN="$stub_bin/sysctl"
     ORCA_SHASUM_BIN="$stub_bin/shasum"
     ORCA_CHOWN_BIN="$stub_bin/chown"
+    ORCA_LSOF_BIN="$stub_bin/lsof"
     export HOME PATH ORCA_PF_CONFIG_FILE ORCA_PF_CONFIG_SOURCE_FILE ORCA_PF_CONFIG_ROLLBACK_FILE
     export ORCA_PF_CONFIG_DIGEST_FILE ORCA_PF_ANCHOR_SOURCE_FILE ORCA_PF_ANCHOR_FILE
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
     export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
-    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN
+    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN
     source "$REPO_DIR/apply.sh"
     install_orca_firewall_sources
     install_orca_firewall_sources
@@ -2511,12 +2521,13 @@ PY
     ORCA_SYSCTL_BIN="$stub_bin/sysctl"
     ORCA_SHASUM_BIN="$stub_bin/shasum"
     ORCA_CHOWN_BIN="$stub_bin/chown"
+    ORCA_LSOF_BIN="$stub_bin/lsof"
     export HOME PATH ORCA_PF_CONFIG_FILE ORCA_PF_CONFIG_SOURCE_FILE ORCA_PF_CONFIG_ROLLBACK_FILE
     export ORCA_PF_CONFIG_DIGEST_FILE ORCA_PF_ANCHOR_SOURCE_FILE ORCA_PF_ANCHOR_FILE
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
     export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
-    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN
+    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN
     source "$REPO_DIR/apply.sh"
     start_orca_firewall
   ) >"$install_log" 2>&1; then
@@ -2556,6 +2567,7 @@ PY
     ORCA_SYSCTL_BIN="$stub_bin/sysctl"
     ORCA_SHASUM_BIN="$stub_bin/shasum"
     ORCA_CHOWN_BIN="$stub_bin/chown"
+    ORCA_LSOF_BIN="$stub_bin/lsof"
     ORCA_TEST_EXPECTED_RULES="$expected_rules"
     ORCA_TEST_BOOT_ID="$boot_id"
     ORCA_TEST_LAUNCH_PRINT_RC="0"
@@ -2564,7 +2576,7 @@ PY
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
     export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
-    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN
+    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN
     export ORCA_TEST_EXPECTED_RULES ORCA_TEST_BOOT_ID ORCA_TEST_LAUNCH_PRINT_RC
     source "$REPO_DIR/apply.sh"
     orca_expected_anchor_rules() { cat "$ORCA_TEST_EXPECTED_RULES"; }
@@ -2600,6 +2612,7 @@ PY
     ORCA_SYSCTL_BIN="$stub_bin/sysctl"
     ORCA_SHASUM_BIN="$stub_bin/shasum"
     ORCA_CHOWN_BIN="$stub_bin/chown"
+    ORCA_LSOF_BIN="$stub_bin/lsof"
     ORCA_TEST_EXPECTED_RULES="$expected_rules"
     ORCA_TEST_BOOT_ID="$boot_id"
     ORCA_TEST_LAUNCH_PRINT_RC="0"
@@ -2608,7 +2621,7 @@ PY
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
     export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
-    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN
+    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN
     export ORCA_TEST_EXPECTED_RULES ORCA_TEST_BOOT_ID ORCA_TEST_LAUNCH_PRINT_RC
     source "$REPO_DIR/apply.sh"
     orca_expected_anchor_rules() { cat "$ORCA_TEST_EXPECTED_RULES"; }
@@ -2644,6 +2657,7 @@ PY
     ORCA_SYSCTL_BIN="$stub_bin/sysctl"
     ORCA_SHASUM_BIN="$stub_bin/shasum"
     ORCA_CHOWN_BIN="$stub_bin/chown"
+    ORCA_LSOF_BIN="$stub_bin/lsof"
     ORCA_TEST_EXPECTED_RULES="$expected_rules"
     ORCA_TEST_BOOT_ID="$boot_id"
     ORCA_TEST_LAUNCH_PRINT_RC="0"
@@ -2653,7 +2667,7 @@ PY
     export ORCA_FIREWALL_SCRIPT_SOURCE_FILE ORCA_FIREWALL_SCRIPT_FILE ORCA_GATE_EVIDENCE_FILE
     export ORCA_SERVER_SCRIPT_SOURCE_FILE ORCA_SERVER_SCRIPT_FILE ORCA_INSTALL_SCRIPT_FILE
     export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE ORCA_FIREWALL_LAUNCH_DAEMON_FILE
-    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN
+    export ORCA_PFCTL_BIN ORCA_LAUNCHCTL_BIN ORCA_SYSCTL_BIN ORCA_SHASUM_BIN ORCA_CHOWN_BIN ORCA_LSOF_BIN
     export ORCA_TEST_EXPECTED_RULES ORCA_TEST_BOOT_ID ORCA_TEST_LAUNCH_LOG ORCA_TEST_LAUNCH_PRINT_RC
     source "$REPO_DIR/apply.sh"
     orca_expected_anchor_rules() { cat "$ORCA_TEST_EXPECTED_RULES"; }
@@ -2681,6 +2695,7 @@ PY
       ORCA_TEST_PF_ENABLE_RC="${3:-0}" \
       ORCA_TEST_LAUNCH_PRINT_RC="${4:-1}" \
       ORCA_TEST_SKIP="${5:-}" \
+      ORCA_TEST_PEERS="${6:-}" \
       bash "$gate_source"
   }
 
@@ -2788,6 +2803,31 @@ PY
     ok "gate fails closed when an interface skips filtering"
   fi
   require_contains "$launch_log" "kill SIGTERM system/com.stablyai.orca-server"
+
+  printf '%s\n' \
+    'Orca 123 user 58u IPv4 0x0 0t0 TCP 192.168.15.131:6768->192.168.15.20:54321 (ESTABLISHED)' >"$peers_file"
+  : >"$pfctl_log"
+  : >"$launch_log"
+  write_orca_gate_evidence
+  if run_orca_gate Enabled 0 0 1 "" "$peers_file" >/dev/null 2>&1; then
+    not_ok "gate accepted an established non-Tailscale peer"
+  else
+    ok "gate fails closed on an established non-Tailscale peer"
+  fi
+  require_contains "$launch_log" "kill SIGTERM system/com.stablyai.orca-server"
+
+  printf '%s\n' \
+    'Orca 456 user 58u IPv6 0x0 0t0 TCP [100.120.225.13]:6768->[100.76.5.9]:54321 (ESTABLISHED)' >"$peers_file"
+  : >"$pfctl_log"
+  : >"$launch_log"
+  write_orca_gate_evidence
+  if run_orca_gate Enabled 0 0 1 "" "$peers_file" >/dev/null 2>&1; then
+    ok "gate accepts an established Tailscale peer"
+  else
+    not_ok "gate rejected an established Tailscale peer"
+  fi
+  require_absent "$launch_log" "kill SIGTERM system/com.stablyai.orca-server"
+  rm -f "$peers_file"
 
   printf '%s\n' 'pass in quick proto tcp from any to any port 6768 flags S/SA keep state' 'anchor "com.stablyai.orca-server" all' >"$main_rules"
   : >"$pfctl_log"
