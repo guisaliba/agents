@@ -502,7 +502,7 @@ install_orca_firewall_sources() {
   do
     python3 "$AGENT_STACK_HELPER" guard-regular-file "$path" "Orca PF source path"
   done
-  python3 "$AGENT_STACK_HELPER" guard-regular-file "$ORCA_PF_CONFIG_FILE" "system PF configuration"
+  python3 "$AGENT_STACK_HELPER" guard-regular-file "$ORCA_PF_CONFIG_FILE" "system PF configuration" || return 1
   mkdir -p "$(dirname "$ORCA_PF_CONFIG_SOURCE_FILE")" "$ORCA_LAUNCH_DAEMON_LOG_DIR"
   chmod 700 "$ORCA_LAUNCH_DAEMON_LOG_DIR"
   touch \
@@ -539,7 +539,7 @@ install_orca_firewall_sources() {
     "$ORCA_SERVER_SCRIPT_FILE" \
     "$ORCA_FIREWALL_LAUNCH_DAEMON_FILE" \
     "$ORCA_LAUNCH_DAEMON_SOURCE_FILE" \
-    "$ORCA_INSTALL_SCRIPT_FILE" <<'PY'
+    "$ORCA_INSTALL_SCRIPT_FILE" <<'PY' || return 1
 import hashlib
 import plistlib
 import sys
@@ -588,6 +588,20 @@ current = pf_config_data.decode("utf-8")
 
 if current.count(start) != current.count(end) or current.count(start) > 1:
     raise SystemExit(f"ERROR: Expected at most one balanced Orca firewall block in {pf_config}")
+
+for raw_line in current.splitlines():
+    stripped = raw_line.strip()
+    if not stripped.startswith("set skip on"):
+        continue
+    spec = stripped[len("set skip on") :].strip()
+    for entry in spec.replace("{", " ").replace("}", " ").replace(",", " ").split():
+        if entry in {"lo0", "utun", "utun*"} or (entry.startswith("utun") and entry[4:].isdigit()):
+            continue
+        raise SystemExit(
+            f"ERROR: {pf_config} uses 'set skip on {entry}'. PF skips all filter rules "
+            f"on that interface, so the Orca anchor cannot protect TCP {port}. "
+            "Limit the skip to lo0 or utun* before running apply."
+        )
 
 lines = current.split("\n")
 if lines and lines[-1] == "":
@@ -690,11 +704,13 @@ ANCHOR_FILE="{anchor_file}"
 EVIDENCE_FILE="{evidence_file}"
 ORCA_LABEL="{orca_label}"
 ORCA_DAEMON_FILE="{orca_daemon_file}"
+ORCA_PORT="{port}"
 PFCTL="{pfctl_bin}"
 LAUNCHCTL="{launchctl_bin}"
 SYSCTL="{sysctl_bin}"
 SHASUM="{shasum_bin}"
 CHOWN="{chown_bin}"
+LSOF="/usr/sbin/lsof"
 
 log() {{
   printf 'orca-firewall-gate: %s\\n' "$*" >&2
@@ -703,6 +719,15 @@ log() {{
 stop_orca() {{
   "$LAUNCHCTL" disable "system/$ORCA_LABEL" >/dev/null 2>&1 || true
   "$LAUNCHCTL" kill SIGTERM "system/$ORCA_LABEL" >/dev/null 2>&1 || true
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    if ! "$LAUNCHCTL" print "system/$ORCA_LABEL" 2>/dev/null | /usr/bin/grep -q 'state = running' && \\
+      ! "$LSOF" -nP -iTCP:"$ORCA_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+      return 0
+    fi
+    /bin/sleep 1
+  done
+  log "WARN: $ORCA_LABEL did not stop after SIGTERM"
+  return 1
 }}
 
 fail() {{
@@ -720,22 +745,43 @@ EXPECTED_FIRST_FILTER='anchor "{anchor_name}" all'
 enabled=0
 live_anchor=""
 first_filter=""
+skipped=""
+skip_query=1
 
 read_state() {{
   enabled=0
   "$PFCTL" -s info 2>/dev/null | /usr/bin/grep -q '^Status: Enabled' && enabled=1
   live_anchor="$("$PFCTL" -a "$ANCHOR_NAME" -sr 2>/dev/null || true)"
   first_filter="$("$PFCTL" -sr 2>/dev/null | /usr/bin/grep -E '^(pass|block|match|anchor|antispoof) ' | /usr/bin/head -n 1)"
+  if skip_output="$("$PFCTL" -s Interfaces -v 2>/dev/null)"; then
+    skip_query=0
+    skipped="$(printf '%s\\n' "$skip_output" | /usr/bin/grep -F '(skip)' | /usr/bin/awk '{{print $1}}')"
+  else
+    skip_query=1
+    skipped=""
+  fi
+}}
+
+skips_are_safe() {{
+  local iface
+  [[ "$skip_query" -eq 0 ]] || return 1
+  for iface in $skipped; do
+    case "$iface" in
+      lo0|utun*) ;;
+      *) return 1 ;;
+    esac
+  done
+  return 0
 }}
 
 state_matches() {{
-  [[ "$enabled" -eq 1 && "$live_anchor" == "$expected" && "$first_filter" == "$EXPECTED_FIRST_FILTER" ]]
+  [[ "$enabled" -eq 1 && "$live_anchor" == "$expected" && "$first_filter" == "$EXPECTED_FIRST_FILTER" ]] && skips_are_safe
 }}
 
 read_state
 if ! state_matches; then
   log "live PF state is not current; stopping Orca and loading $PF_CONFIG"
-  stop_orca
+  stop_orca || fail "cannot stop $ORCA_LABEL before reloading $PF_CONFIG"
   "$PFCTL" -f "$PF_CONFIG" || fail "cannot load $PF_CONFIG"
   "$PFCTL" -s info 2>/dev/null | /usr/bin/grep -q '^Status: Enabled' || \\
     "$PFCTL" -E || fail "cannot enable PF"

@@ -2260,6 +2260,7 @@ PY
     '    case "$2" in' \
     '      info) printf '\''Status: %s\n'\'' "$(cat "$ORCA_TEST_PF_STATUS_FILE")"; exit 0 ;;' \
     '      rules) cat "$ORCA_TEST_MAIN_RULES"; exit 0 ;;' \
+    '      Interfaces) printf '\''%s\n'\'' "${ORCA_TEST_SKIP:-}"; exit 0 ;;' \
     '    esac ;;' \
     '  -sr) cat "$ORCA_TEST_MAIN_RULES"; exit 0 ;;' \
     '  -E) rc="${ORCA_TEST_PF_ENABLE_RC:-0}"; [[ "$rc" == "0" ]] && printf '\''Enabled'\'' >"$ORCA_TEST_PF_STATUS_FILE"; exit "$rc" ;;' \
@@ -2318,6 +2319,56 @@ PY
     "$stub_bin/shasum" \
     "$stub_bin/install" \
     "$stub_bin/sleep"
+
+  run_orca_source_generation() {
+    local config="$1"
+    (
+      export HOME="$fixture_home" PATH="$stub_bin:/usr/bin:/bin"
+      export ORCA_PF_CONFIG_FILE="$config"
+      export ORCA_PF_CONFIG_SOURCE_FILE="$pf_config_source"
+      export ORCA_PF_CONFIG_ROLLBACK_FILE="$pf_config_rollback"
+      export ORCA_PF_CONFIG_DIGEST_FILE="$pf_config_digest"
+      export ORCA_PF_ANCHOR_SOURCE_FILE="$anchor_source"
+      export ORCA_PF_ANCHOR_FILE="$anchor_file"
+      export ORCA_FIREWALL_SCRIPT_SOURCE_FILE="$gate_source"
+      export ORCA_FIREWALL_SCRIPT_FILE="$gate_file"
+      export ORCA_SERVER_SCRIPT_SOURCE_FILE="$server_source"
+      export ORCA_SERVER_SCRIPT_FILE="$server_file"
+      export ORCA_INSTALL_SCRIPT_FILE="$install_script"
+      export ORCA_GATE_EVIDENCE_FILE="$evidence_file"
+      export ORCA_FIREWALL_LAUNCH_DAEMON_SOURCE_FILE="$daemon_source"
+      export ORCA_FIREWALL_LAUNCH_DAEMON_FILE="$daemon_file"
+      export ORCA_PFCTL_BIN="$stub_bin/pfctl"
+      export ORCA_LAUNCHCTL_BIN="$stub_bin/launchctl"
+      export ORCA_SYSCTL_BIN="$stub_bin/sysctl"
+      export ORCA_SHASUM_BIN="$stub_bin/shasum"
+      export ORCA_CHOWN_BIN="$stub_bin/chown"
+      source "$REPO_DIR/apply.sh"
+      install_orca_firewall_sources
+    )
+  }
+
+  printf '%s\n' \
+    '# preserve system PF rules' \
+    'set skip on { en0 en1 }' \
+    'anchor "com.apple/*"' >"$fixture_root/pf-skip-bad.conf"
+  if run_orca_source_generation "$fixture_root/pf-skip-bad.conf" >"$install_log" 2>&1; then
+    not_ok "harmful set skip was accepted"
+  else
+    ok "harmful set skip is rejected"
+  fi
+  require_contains "$install_log" "set skip"
+
+  printf '%s\n' \
+    '# preserve system PF rules' \
+    'set skip on lo0' \
+    'set skip on utun*' \
+    'anchor "com.apple/*"' >"$fixture_root/pf-skip-ok.conf"
+  if run_orca_source_generation "$fixture_root/pf-skip-ok.conf" >/dev/null 2>&1; then
+    ok "loopback and tunnel set skip are accepted"
+  else
+    not_ok "loopback and tunnel set skip were rejected"
+  fi
 
   if (
     HOME="$fixture_home"
@@ -2629,6 +2680,7 @@ PY
       ORCA_TEST_PF_LOAD_RC="${2:-0}" \
       ORCA_TEST_PF_ENABLE_RC="${3:-0}" \
       ORCA_TEST_LAUNCH_PRINT_RC="${4:-1}" \
+      ORCA_TEST_SKIP="${5:-}" \
       bash "$gate_source"
   }
 
@@ -2653,7 +2705,8 @@ PY
     "-a com.stablyai.orca-server -nvf $anchor_file" \
     "-s info" \
     "-a com.stablyai.orca-server -sr" \
-    "-sr" >"$fixture_root/expected-pfctl.log"
+    "-sr" \
+    "-s Interfaces -v" >"$fixture_root/expected-pfctl.log"
   require_same_file "$fixture_root/expected-pfctl.log" "$pfctl_log"
   if grep -qF -- "-f " "$pfctl_log"; then
     not_ok "healthy gate reloaded the system PF configuration"
@@ -2725,6 +2778,16 @@ PY
     ok "gate fails closed when PF cannot be enabled"
   fi
   require_contains "$launch_log" "disable system/com.stablyai.orca-server"
+
+  : >"$pfctl_log"
+  : >"$launch_log"
+  write_orca_gate_evidence
+  if run_orca_gate Enabled 0 0 1 "en0 (skip)" >/dev/null 2>&1; then
+    not_ok "gate accepted an interface that skips filtering"
+  else
+    ok "gate fails closed when an interface skips filtering"
+  fi
+  require_contains "$launch_log" "kill SIGTERM system/com.stablyai.orca-server"
 
   printf '%s\n' 'pass in quick proto tcp from any to any port 6768 flags S/SA keep state' 'anchor "com.stablyai.orca-server" all' >"$main_rules"
   : >"$pfctl_log"

@@ -101,6 +101,12 @@ configuration are parsed with `pfctl -nf` before installation.
 The pass rules also require the Tailscale `utun*` interface, so a local network
 that uses the same address ranges cannot match them.
 
+Apply rejects a `set skip` directive for any interface other than `lo0` or
+`utun*`. PF does not run filter rules on a skipped interface, so the anchor
+cannot protect the port there. The gate also reads the live skip list and
+fails closed when another process activates a skip on a non-Tailscale
+interface.
+
 The root-owned gate is the only component that starts Orca. It loads
 `/etc/pf.conf`, enables PF, compares the live anchor with the expected anchor,
 and checks that the live main ruleset calls the Orca anchor before every other
@@ -109,12 +115,13 @@ The Orca preflight then checks that evidence before it executes Orca. This
 ordering removes the boot window in which the port could listen before the
 rules are active.
 
-When the live state does not match, the gate stops Orca first, then reloads
-`/etc/pf.conf`. Stopping Orca closes any session that an earlier rule allowed,
-and the reload does not preserve those sessions. Orca starts again only after
-the reloaded state matches; if it still does not match, Orca stays stopped. A
-later PF load that moves the anchor behind an earlier quick rule is therefore
-detected and repaired within one gate cycle.
+When the live state does not match, the gate stops Orca first, waits until the
+process and the TCP `6768` listener stop, and then reloads `/etc/pf.conf`.
+Stopping Orca closes any session that an earlier rule allowed, and the reload
+does not preserve those sessions. Orca starts again only after the reloaded
+state matches; if it still does not match, Orca stays stopped. A later PF load
+that moves the anchor behind an earlier quick rule is therefore detected and
+repaired within one gate cycle.
 
 Pairing links are bearer credentials. Use them only in a controlled foreground
 session. Do not put them in source control, shell history, normal service logs,
