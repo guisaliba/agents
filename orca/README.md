@@ -273,8 +273,11 @@ recoverable.
 
 Use one Orca Git worktree for each concurrent task. ai-memory gives each
 worktree an independent managed workstream while all worktrees can read shared
-project memory. Do not add an Orca wrapper, custom lock, or naming workaround.
-Two agents must not own the same ai-memory workstream at the same time.
+project memory. Start each OpenCode terminal with
+`~/.local/bin/opencode-managed`; the launcher enters `ai-memory run` and gives
+ai-memory the resolved native OpenCode executable without recursion. Do not add
+an Orca-specific lock or naming workaround. Two agents must not own the same
+ai-memory workstream at the same time.
 
 ## Upgrade
 

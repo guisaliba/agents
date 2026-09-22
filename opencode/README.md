@@ -26,6 +26,7 @@ Subagents by `DOTFILES_AI_MEMORY_LLM_PROFILE`:
 ~/.config/opencode/themes/
 ~/.config/opencode/commands/
 ~/.agents/skills/
+~/.local/bin/opencode-managed
 ```
 
 The tracked `AGENTS.md` is copied byte-for-byte to the global instruction

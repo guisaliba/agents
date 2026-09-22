@@ -52,6 +52,8 @@ LEARN_OLDER_PLUGIN_BASE="github:guisaliba/opencode-learn"
 LEARN_MIN_OPENCODE_VERSION="${LEARN_MIN_OPENCODE_VERSION:-1.18.22}"
 OPENCODE_TUI_THEME="orng"
 OPENCODE_THEMES_SOURCE_DIR="$REPO_DIR/opencode/themes"
+OPENCODE_MANAGED_LAUNCHER_SOURCE="${OPENCODE_MANAGED_LAUNCHER_SOURCE:-$REPO_DIR/shell/opencode-managed}"
+OPENCODE_MANAGED_LAUNCHER_FILE="${OPENCODE_MANAGED_LAUNCHER_FILE:-$HOME/.local/bin/opencode-managed}"
 BASH_ALIASES_SOURCE="${BASH_ALIASES_SOURCE:-$REPO_DIR/shell/opencode.bash}"
 BASH_ALIASES_FILE="$HOME/.bash_aliases"
 OPENCODE_SHELL_BLOCK_START="# >>> dotfiles OpenCode ai-memory wrapper >>>"
@@ -1291,6 +1293,17 @@ install_opencode() {
   have opencode || die "OpenCode install did not put opencode on PATH"
 }
 
+install_opencode_managed_launcher() {
+  log "Installing the ai-memory managed OpenCode launcher"
+
+  [[ -f "$OPENCODE_MANAGED_LAUNCHER_SOURCE" ]] || \
+    die "Missing managed OpenCode launcher: $OPENCODE_MANAGED_LAUNCHER_SOURCE"
+  mkdir -p "$(dirname "$OPENCODE_MANAGED_LAUNCHER_FILE")"
+  install -m 0755 \
+    "$OPENCODE_MANAGED_LAUNCHER_SOURCE" \
+    "$OPENCODE_MANAGED_LAUNCHER_FILE"
+}
+
 sync_learn_plugin() {
   local actual_remote expected_remote checkout_root required
 
@@ -1857,6 +1870,7 @@ PY
 }
 
 setup_opencode() {
+  install_opencode_managed_launcher
   copy_agents_md
   ensure_github_mcp_token_file
   sync_learn_plugin

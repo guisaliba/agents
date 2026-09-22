@@ -20,11 +20,14 @@ account login shell from zsh.
 | `opencode -c` | Lets OpenCode select its latest native session. |
 | `opencode --session <id>` | Opens and links the selected session. |
 | `opencode-raw ...` | Runs native OpenCode for diagnostics and recovery. |
+| `opencode-managed ...` | Starts native OpenCode through an ai-memory managed workstream from automation or Orca. |
 
 The functions are not exported. This prevents recursion when ai-memory starts
-the native OpenCode executable. Automation should call `ai-memory run opencode`
-explicitly. Use `ai-memory run --fresh opencode` to replace the native session
-while keeping the same workstream.
+the native OpenCode executable. `apply.sh` installs `opencode-managed` as a real
+executable in `~/.local/bin`. It resolves the native OpenCode executable and
+passes it to `ai-memory run --executable`, so automation does not depend on an
+interactive Bash function. Use `ai-memory run --fresh opencode` to replace the
+native session while keeping the same workstream.
 
 Use named workstreams and separate Git worktrees for concurrent OpenCode tasks.
 

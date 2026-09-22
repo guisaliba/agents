@@ -1590,6 +1590,53 @@ test_daily_task_sync() {
   fi
 }
 
+test_opencode_managed_launcher() {
+  local fixture_root fixture_home stub_bin launcher ai_memory_log expected
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  stub_bin="$fixture_root/bin"
+  launcher="$fixture_home/.local/bin/opencode-managed"
+  ai_memory_log="$fixture_root/ai-memory.log"
+  expected="$fixture_root/expected.log"
+  mkdir -p "$fixture_home" "$stub_bin"
+
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf '\''%s\n'\'' "$@" >"$OPENCODE_TEST_AI_MEMORY_LOG"' >"$stub_bin/ai-memory"
+  printf '%s\n' '#!/usr/bin/env bash' 'exit 0' >"$stub_bin/opencode"
+  chmod +x "$stub_bin/ai-memory" "$stub_bin/opencode"
+
+  if (
+    HOME="$fixture_home"
+    OPENCODE_MANAGED_LAUNCHER_FILE="$launcher"
+    source "$REPO_DIR/apply.sh"
+    install_opencode_managed_launcher
+  ) >/dev/null 2>&1; then
+    ok "managed OpenCode launcher fixture installs"
+  else
+    not_ok "managed OpenCode launcher fixture failed"
+  fi
+  require_executable "$launcher"
+
+  if HOME="$fixture_home" \
+    PATH="$stub_bin:/usr/bin:/bin" \
+    OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
+    "$launcher" -c "two words"; then
+    printf '%s\n' \
+      run \
+      --executable \
+      "$stub_bin/opencode" \
+      opencode \
+      -c \
+      'two words' >"$expected"
+    require_same_file "$expected" "$ai_memory_log"
+  else
+    not_ok "managed OpenCode launcher failed to start ai-memory"
+  fi
+
+  rm -rf -- "$fixture_root"
+}
+
 test_opencode_shell_override() {
   local fixture_root fixture_home aliases first_aliases stub_bin
   local ai_memory_log raw_log expected yolo_log managed_rc
@@ -3418,6 +3465,7 @@ require_executable "$REPO_DIR/skills/daily-tasks/scripts/journal-task-sync"
 require_file "$REPO_DIR/lib/agent_stack.py"
 require_file "$REPO_DIR/skills.tsv"
 require_file "$REPO_DIR/shell/opencode.bash"
+require_executable "$REPO_DIR/shell/opencode-managed"
 require_executable "$REPO_DIR/apply.sh"
 require_executable "$REPO_DIR/test.sh"
 if manifest_rows="$(python3 "$AGENT_STACK_HELPER" manifest "$SKILLS_MANIFEST" 2>/dev/null)"; then
@@ -3484,6 +3532,7 @@ test_daily_task_sync
 # Bash command override fixture checks
 printf '\n--- OpenCode Bash Override Fixtures ---\n'
 
+test_opencode_managed_launcher
 test_opencode_shell_override
 
 # Optional ai-jail fixture checks
