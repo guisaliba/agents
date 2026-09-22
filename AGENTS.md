@@ -24,7 +24,7 @@ If user or concurrent-agent changes appear, do not revert or overwrite them. Ask
 
 Before starting a plan, ask about the motivation and the reason for the requested change. Collect context through questions until you understand the complete problem. Do not start code exploration before you understand the problem.
 
-Read the initial problem and ask one round of **4 questions** about the motivation with `AskUserQuestion`. When possible, think first and include a short preview in each option. Keep every question within the context of the request.
+Read the initial problem and ask one round of **4 questions** about the motivation with the `question` tool. When possible, think first and include a short preview in each option. Keep every question within the context of the request.
 
 After you understand the motivation, use read-only exploration before you ask questions that the repo or current context can answer. Search the code for facts. Ask me for decisions.
 
