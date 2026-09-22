@@ -54,6 +54,11 @@ LEARN_LEGACY_PLUGIN_BASE="github:guisaliba/learn"
 LEARN_OLDER_PLUGIN_BASE="github:guisaliba/opencode-learn"
 LEARN_MIN_OPENCODE_VERSION="1.18.22"
 OPENCODE_TUI_THEME_EXPECTED="orng"
+OPENCODE_TUI_SIDEBAR_KEYBIND_ID="session.sidebar.toggle"
+OPENCODE_TUI_SIDEBAR_KEYBIND_EXPECTED="ctrl+b"
+OPENCODE_TUI_BACKGROUND_KEYBIND_ID="session.background"
+OPENCODE_TUI_INPUT_MOVE_LEFT_KEYBIND_ID="input.move.left"
+OPENCODE_TUI_INPUT_MOVE_LEFT_KEYBIND_EXPECTED="left"
 OPENCODE_SHELL_BLOCK_START="# >>> dotfiles OpenCode ai-memory wrapper >>>"
 OPENCODE_SHELL_BLOCK_END="# <<< dotfiles OpenCode ai-memory wrapper <<<"
 
@@ -427,6 +432,31 @@ PY
   fi
 }
 
+require_json_keybind() {
+  local path="$1"
+  local keybind_id="$2"
+  local expected_json="$3"
+  if python3 - "$path" "$keybind_id" "$expected_json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+try:
+    keybinds = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["keybinds"]
+    value = keybinds[sys.argv[2]]
+    expected = json.loads(sys.argv[3])
+except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError):
+    raise SystemExit(1)
+
+raise SystemExit(0 if value == expected else 1)
+PY
+  then
+    ok "json keybind: $keybind_id == $expected_json"
+  else
+    not_ok "json keybind mismatch: $keybind_id != $expected_json in $path"
+  fi
+}
+
 profile_names() {
   (
     source "$REPO_DIR/apply.sh"
@@ -756,6 +786,7 @@ PY
 
 test_opencode_tui_json_merge() {
   local fixture_root fixture_home fixture_config fixture_learn_plugin first_config malformed_home malformed_config malformed_before malformed_log
+  local keybinds_home keybinds_config keybinds_before keybinds_log
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
   fixture_config="$fixture_home/.config/opencode/tui.json"
@@ -770,6 +801,10 @@ from pathlib import Path
 config = {
     "$schema": "https://opencode.ai/tui.json",
     "theme": "user-theme",
+    "keybinds": {
+        "command.palette.show": "ctrl+k",
+        "session.sidebar.toggle": "ctrl+shift+b",
+    },
     "plugin": [
         "user/tui-plugin",
         ["github:guisaliba/opencode-learn#v0.0.1", {"ipcRoot": "/stale"}],
@@ -804,6 +839,23 @@ PY
     '["github:guisaliba/learn#v0.0.1",{"ipcRoot":"/stale"}]' \
     "0"
 
+  require_json_keybind \
+    "$fixture_config" \
+    "$OPENCODE_TUI_SIDEBAR_KEYBIND_ID" \
+    "\"$OPENCODE_TUI_SIDEBAR_KEYBIND_EXPECTED\""
+  require_json_keybind \
+    "$fixture_config" \
+    "$OPENCODE_TUI_BACKGROUND_KEYBIND_ID" \
+    "false"
+  require_json_keybind \
+    "$fixture_config" \
+    "$OPENCODE_TUI_INPUT_MOVE_LEFT_KEYBIND_ID" \
+    "\"$OPENCODE_TUI_INPUT_MOVE_LEFT_KEYBIND_EXPECTED\""
+  require_json_keybind \
+    "$fixture_config" \
+    "command.palette.show" \
+    '"ctrl+k"'
+
   cp "$fixture_config" "$first_config"
   if (
     HOME="$fixture_home"
@@ -835,6 +887,25 @@ PY
   fi
   require_same_file "$malformed_before" "$malformed_config"
   require_contains "$malformed_log" "Expected 'plugin' to be an array or string"
+
+  keybinds_home="$fixture_root/keybinds-home"
+  keybinds_config="$keybinds_home/.config/opencode/tui.json"
+  keybinds_before="$fixture_root/keybinds-before.json"
+  keybinds_log="$fixture_root/keybinds.log"
+  mkdir -p "$(dirname "$keybinds_config")"
+  printf '%s\n' '{"theme":"keep","keybinds":[]}' >"$keybinds_config"
+  cp "$keybinds_config" "$keybinds_before"
+  if (
+    HOME="$keybinds_home"
+    source "$REPO_DIR/apply.sh"
+    merge_opencode_tui_json
+  ) >"$keybinds_log" 2>&1; then
+    not_ok "invalid OpenCode TUI keybinds structure was accepted"
+  else
+    ok "invalid OpenCode TUI keybinds structure fails"
+  fi
+  require_same_file "$keybinds_before" "$keybinds_config"
+  require_contains "$keybinds_log" "Expected 'keybinds' to be an object"
 
   rm -rf -- "$fixture_root"
 }
