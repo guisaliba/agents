@@ -61,7 +61,7 @@ For each decision point, use this order:
 2. **Impact** — state what changes for each outcome and what happens if the choice is wrong.
 3. **Example** — give a specific case from the project that shows the problem.
 4. **Recommendation** — state what you would do and why.
-5. **Question** — then call `AskUserQuestion`. Put the recommendation first and mark it `(Recommended)`. I can choose an option or enter a new question or solution.
+5. **Question** — then call the `question` tool. Put the recommendation first and mark it `(Recommended)`. I can choose an option or enter a new question or solution.
 
 Put steps 1 through 4 in the chat. Put only short options in the tool.
 
