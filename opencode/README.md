@@ -39,6 +39,23 @@ Tracked themes under `opencode/themes/` are copied to the global theme path.
 The pinned asset provenance is recorded by the tracked theme file history.
 Learn and the theme stay in `tui.json`.
 
+## Keybinds
+
+Managed keybinds belong in `keybinds` in `tui.json`. `apply.sh` merges them and
+preserves unrelated user keybinds.
+
+```text
+session.sidebar.toggle -> ctrl+b   Toggle the sidebar
+session.background     -> false    Disabled to free ctrl+b
+input.move.left        -> left     ctrl+b removed to free it
+```
+
+The sidebar command is `session.sidebar.toggle`. Current OpenCode defaults bind
+`ctrl+b` to `session.background` and to `input.move.left`. The merge disables
+`session.background` and reduces `input.move.left` to `left`, so `ctrl+b` has
+one owner only. An invalid `keybinds` structure fails without overwriting the
+file.
+
 ## Integrations
 
 - [Plugins](../plugins/README.md) documents Learn, Plannotator, and RTK.

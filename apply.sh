@@ -960,6 +960,19 @@ if not isinstance(data, dict):
 
 data.setdefault("$schema", "https://opencode.ai/tui.json")
 data["theme"] = theme_name
+
+keybinds = data.get("keybinds", {})
+if not isinstance(keybinds, dict):
+    raise SystemExit(
+        f"ERROR: Expected 'keybinds' to be an object in {path}. "
+        "File was not changed."
+    )
+
+keybinds["session.sidebar.toggle"] = "ctrl+b"
+keybinds["session.background"] = False
+keybinds["input.move.left"] = "left"
+data["keybinds"] = keybinds
+
 plugins = data.get("plugin", [])
 if isinstance(plugins, str):
     plugins = [plugins]
