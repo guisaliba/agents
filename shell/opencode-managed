@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+native_opencode="$(command -v opencode)" || {
+  printf '%s\n' 'OpenCode executable not found on PATH' >&2
+  exit 127
+}
+
+exec ai-memory run --executable "$native_opencode" opencode "$@"
