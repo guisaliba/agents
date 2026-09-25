@@ -61,6 +61,7 @@ file.
 - [Plugins](../plugins/README.md) documents Learn, Plannotator, and RTK.
 - [MCP servers](../mcps/README.md) documents GitHub, Linear, and Cloudflare.
 - [ai-memory](../ai-memory/README.md) provides memory and workstreams.
+- [OpenDesign](../mcps/open-design/README.md) connects the checkout's MCP tools and skills.
 - [Shell entry point](../shell/README.md) manages interactive sessions.
 - [Skills](../skills/README.md) owns global skill installation.
 

@@ -9,6 +9,7 @@
 | Linear | `linear` | OpenCode OAuth | [linear/README.md](linear/README.md) |
 | Cloudflare | `cloudflare-api`, `cloudflare-docs`, `cloudflare-bindings`, `cloudflare-builds`, `cloudflare-observability` | OpenCode OAuth | [cloudflare/README.md](cloudflare/README.md) |
 | ai-memory | `ai-memory` | Local loopback service | [../ai-memory/README.md](../ai-memory/README.md) |
+| OpenDesign | `open-design` | Local checkout daemon | [open-design/README.md](open-design/README.md) |
 
 The GitHub, Linear, and Cloudflare entries are remote servers. The ai-memory
 entry is local and is managed together with its native service and lifecycle

@@ -573,12 +573,17 @@ require_ai_memory_llm_policy() {
 }
 
 test_opencode_json_merge() {
+  local OPEN_DESIGN_CHECKOUT
   local fixture_root fixture_home fixture_config fixture_token fixture_learn_plugin token_before first_config
   local selected_profile profile_home profile_config profile_env
   local malformed_home malformed_config malformed_before malformed_log
   local invalid_home invalid_config invalid_before invalid_log
   local instructions_home instructions_config instructions_before instructions_log
   fixture_root="$(mktemp -d)"
+  OPEN_DESIGN_CHECKOUT="$fixture_root/open-design"
+  export OPEN_DESIGN_CHECKOUT
+  mkdir -p "$OPEN_DESIGN_CHECKOUT/apps/daemon/bin" "$OPEN_DESIGN_CHECKOUT/skills" "$OPEN_DESIGN_CHECKOUT/design-templates"
+  touch "$OPEN_DESIGN_CHECKOUT/package.json" "$OPEN_DESIGN_CHECKOUT/apps/daemon/bin/od.mjs"
   fixture_home="$fixture_root/home"
   fixture_config="$fixture_home/.config/opencode/opencode.json"
   fixture_token="$fixture_home/.config/opencode/secrets/github-mcp-pat"
@@ -629,6 +634,7 @@ config = {
             "headers": {"X-Obsolete": "remove"},
         },
     },
+    "skills": {"paths": ["/user/skills"]},
 }
 Path(sys.argv[1]).write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 PY
@@ -680,6 +686,10 @@ PY
   require_json_value "$fixture_config" "mcp.github.headers.X-MCP-Toolsets" "context,repos,issues,pull_requests,actions"
   require_json_literal "$fixture_config" "mcp.github" "$GITHUB_MCP_EXPECTED_JSON"
   require_json_literal "$fixture_config" "mcp.ai-memory" "$AI_MEMORY_MCP_EXPECTED_JSON"
+  require_json_value "$fixture_config" "mcp.open-design.environment.OPEN_DESIGN_CHECKOUT" "$OPEN_DESIGN_CHECKOUT"
+  require_json_array_count "$fixture_config" "skills.paths" "/user/skills" "1"
+  require_json_array_count "$fixture_config" "skills.paths" "$OPEN_DESIGN_CHECKOUT/skills" "1"
+  require_json_array_count "$fixture_config" "skills.paths" "$OPEN_DESIGN_CHECKOUT/design-templates" "1"
 
   cp "$fixture_config" "$first_config"
   printf '%s\n' 'fixture-only-token' >"$fixture_token"

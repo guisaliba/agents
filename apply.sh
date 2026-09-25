@@ -49,6 +49,8 @@ LEARN_INSTALL_DIR="${LEARN_INSTALL_DIR:-$HOME/.local/share/opencode/learn}"
 LEARN_PLUGIN_SPEC="$LEARN_INSTALL_DIR"
 LEARN_LEGACY_PLUGIN_BASE="github:guisaliba/learn"
 LEARN_OLDER_PLUGIN_BASE="github:guisaliba/opencode-learn"
+OPEN_DESIGN_CHECKOUT="${OPEN_DESIGN_CHECKOUT:-$HOME/open-design}"
+OPEN_DESIGN_REQUIRED="${OPEN_DESIGN_REQUIRED:-false}"
 LEARN_MIN_OPENCODE_VERSION="${LEARN_MIN_OPENCODE_VERSION:-1.18.22}"
 OPENCODE_TUI_THEME="orng"
 OPENCODE_THEMES_SOURCE_DIR="$REPO_DIR/opencode/themes"
@@ -757,7 +759,10 @@ merge_opencode_json() {
     "$AI_MEMORY_INSTRUCTIONS_REFERENCE" \
     "$LEARN_PLUGIN_SPEC" \
     "$LEARN_LEGACY_PLUGIN_BASE" \
-    "$LEARN_OLDER_PLUGIN_BASE" <<'PY'
+    "$LEARN_OLDER_PLUGIN_BASE" \
+    "$OPEN_DESIGN_CHECKOUT" \
+    "$REPO_DIR/mcps/open-design/opencode-mcp.sh" \
+    "$OPEN_DESIGN_REQUIRED" <<'PY'
 import json
 import os
 import sys
@@ -769,6 +774,9 @@ ai_memory_instructions_reference = sys.argv[4]
 learn_plugin_spec = sys.argv[5]
 learn_legacy_plugin_base = sys.argv[6]
 learn_older_plugin_base = sys.argv[7]
+open_design_checkout = sys.argv[8]
+open_design_launcher = sys.argv[9]
+open_design_required = sys.argv[10] == "true"
 data = {}
 
 if os.path.exists(path):
@@ -912,6 +920,35 @@ mcp["github"] = {
     },
 }
 data["mcp"] = mcp
+
+checkout = os.path.realpath(os.path.expanduser(open_design_checkout))
+if os.path.isdir(checkout):
+    for relative in ("package.json", "apps/daemon/bin/od.mjs", "skills", "design-templates"):
+        if not os.path.exists(os.path.join(checkout, relative)):
+            raise SystemExit(f"ERROR: OpenDesign checkout lacks {relative}: {checkout}")
+    if not os.path.isfile(open_design_launcher):
+        raise SystemExit(f"ERROR: OpenDesign MCP launcher is missing: {open_design_launcher}")
+    mcp["open-design"] = {
+        "type": "local",
+        "command": ["/bin/bash", open_design_launcher],
+        "environment": {"OPEN_DESIGN_CHECKOUT": checkout},
+        "enabled": True,
+        "timeout": 120000,
+    }
+    skills = data.get("skills", {})
+    if not isinstance(skills, dict):
+        raise SystemExit(f"ERROR: Expected 'skills' to be an object in {path}. File was not changed.")
+    paths = skills.get("paths", [])
+    if not isinstance(paths, list) or not all(isinstance(item, str) for item in paths):
+        raise SystemExit(f"ERROR: Expected 'skills.paths' to be an array of strings in {path}. File was not changed.")
+    for relative in ("skills", "design-templates"):
+        entry = os.path.join(checkout, relative)
+        if entry not in paths:
+            paths.append(entry)
+    skills["paths"] = paths
+    data["skills"] = skills
+elif open_design_required:
+    raise SystemExit(f"ERROR: OpenDesign checkout is missing: {checkout}")
 
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2)
