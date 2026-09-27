@@ -464,6 +464,13 @@ profile_names() {
   )
 }
 
+subagent_profile_names() {
+  (
+    source "$REPO_DIR/apply.sh"
+    opencode_subagent_profile_list
+  )
+}
+
 profile_field() {
   local name="$1"
   local field="$2"
@@ -723,6 +730,45 @@ PY
     require_json_value "$profile_config" "agent.general.model" "$(profile_field "$selected_profile" subagent)"
     require_json_value "$profile_config" "agent.explore.model" "$(profile_field "$selected_profile" subagent)"
   done
+
+  profile_home="$fixture_root/profile-home-openai-gpt-6-luna"
+  profile_config="$profile_home/.config/opencode/opencode.json"
+  profile_env="$profile_home/.config/ai-memory/env"
+  mkdir -p "$(dirname "$profile_config")" "$(dirname "$profile_env")"
+  printf '%s\n' \
+    'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-deepseek-v4.1-flash' \
+    'DOTFILES_OPENCODE_SUBAGENT_PROFILE=openai-gpt-6-luna' >"$profile_env"
+  if (
+    HOME="$profile_home"
+    LEARN_INSTALL_DIR="$fixture_learn_plugin"
+    source "$REPO_DIR/apply.sh"
+    merge_opencode_json
+  ) >/dev/null 2>&1; then
+    ok "Luna subagent profile applies independently from ai-memory"
+  else
+    not_ok "Luna subagent profile fixture failed"
+  fi
+  require_json_value "$profile_config" "agent.general.model" "openai/gpt-6-luna"
+  require_json_value "$profile_config" "agent.explore.model" "openai/gpt-6-luna"
+
+  profile_home="$fixture_root/profile-home-invalid-subagent"
+  profile_config="$profile_home/.config/opencode/opencode.json"
+  profile_env="$profile_home/.config/ai-memory/env"
+  mkdir -p "$(dirname "$profile_config")" "$(dirname "$profile_env")"
+  printf '%s\n' 'DOTFILES_OPENCODE_SUBAGENT_PROFILE=unknown-model' >"$profile_env"
+  printf '%s\n' '{"model":"keep"}' >"$profile_config"
+  cp "$profile_config" "$fixture_root/invalid-subagent-before"
+  if (
+    HOME="$profile_home"
+    source "$REPO_DIR/apply.sh"
+    merge_opencode_json
+  ) >"$fixture_root/invalid-subagent.log" 2>&1; then
+    not_ok "unsupported subagent profile was accepted"
+  else
+    ok "unsupported subagent profile fails safely"
+  fi
+  require_same_file "$fixture_root/invalid-subagent-before" "$profile_config"
+  require_contains "$fixture_root/invalid-subagent.log" "Unsupported DOTFILES_OPENCODE_SUBAGENT_PROFILE"
 
   malformed_home="$fixture_root/malformed-home"
   malformed_config="$malformed_home/.config/opencode/opencode.json"
@@ -2365,18 +2411,17 @@ require_json_value "$HOME/.config/opencode/opencode.json" "agent.plan.model" "op
 selected_profile_log="$(mktemp)"
 if selected_profile="$(
   source "$REPO_DIR/apply.sh"
-  ai_memory_selected_profile 2>"$selected_profile_log"
+  opencode_selected_subagent_profile 2>"$selected_profile_log"
 )"; then
-  ok "ai-memory profile selection is supported: $selected_profile"
+  ok "subagent profile selection is supported: $selected_profile"
   profile_spec="$(
     source "$REPO_DIR/apply.sh"
-    ai_memory_profile_spec "$selected_profile"
+    opencode_subagent_profile_model "$selected_profile"
   )"
-  IFS='|' read -r expected_provider expected_model credential expected_subagent_model <<<"$profile_spec"
-  require_json_value "$HOME/.config/opencode/opencode.json" "agent.general.model" "$expected_subagent_model"
-  require_json_value "$HOME/.config/opencode/opencode.json" "agent.explore.model" "$expected_subagent_model"
+  require_json_value "$HOME/.config/opencode/opencode.json" "agent.general.model" "$profile_spec"
+  require_json_value "$HOME/.config/opencode/opencode.json" "agent.explore.model" "$profile_spec"
 else
-  not_ok "ai-memory profile selection is unsupported or unreadable"
+  not_ok "subagent profile selection is unsupported or unreadable"
   sed 's/^/  /' "$selected_profile_log" >&2
 fi
 rm -f "$selected_profile_log"
@@ -2384,8 +2429,8 @@ rm -f "$selected_profile_log"
 model_catalog="$(opencode models 2>/dev/null || true)"
 if [[ -n "$model_catalog" ]]; then
   model_catalog_lines=$'\n'"$model_catalog"$'\n'
-  for profile_name in $(profile_names); do
-    catalog_model="$(profile_field "$profile_name" subagent)"
+  for profile_name in $(subagent_profile_names); do
+    catalog_model="$(source "$REPO_DIR/apply.sh"; opencode_subagent_profile_model "$profile_name")"
     if [[ "$model_catalog_lines" == *$'\n'"$catalog_model"$'\n'* ]]; then
       ok "opencode model catalog contains $catalog_model"
     else
