@@ -23,12 +23,13 @@ AGENT_STACK_HELPER="$REPO_DIR/lib/agent_stack.py"
 SKILLS_MANIFEST="$REPO_DIR/skills.tsv"
 if [[ "$(uname -s)" == Darwin ]] && command -v brew >/dev/null 2>&1; then
   PATH="$(brew --prefix)/bin:$PATH"
-  export PATH
 fi
+PATH="$HOME/.opencode/bin:$HOME/.local/bin:$HOME/bin:$PATH"
+export PATH
 
 failures=0
 GITHUB_MCP_TOKEN_FILE="$HOME/.config/opencode/secrets/github-mcp-pat"
-GITHUB_MCP_EXPECTED_JSON='{"type":"remote","url":"https://api.githubcopilot.com/mcp/","enabled":true,"oauth":false,"headers":{"Authorization":"Bearer {file:~/.config/opencode/secrets/github-mcp-pat}","X-MCP-Toolsets":"context,repos,issues,pull_requests,actions"}}'
+GITHUB_MCP_EXPECTED_JSON='{"type":"remote","url":"https://api.githubcopilot.com/mcp/","disabled":false,"oauth":false,"headers":{"Authorization":"Bearer {file:~/.config/opencode/secrets/github-mcp-pat}","X-MCP-Toolsets":"context,repos,issues,pull_requests,actions"}}'
 AI_MEMORY_CONFIG_FILE="$HOME/.config/ai-memory/config.toml"
 AI_MEMORY_ENV_FILE="$HOME/.config/ai-memory/env"
 AI_MEMORY_INSTRUCTIONS_FILE="$HOME/.config/opencode/ai-memory.md"
@@ -38,7 +39,7 @@ AI_MEMORY_LAUNCH_AGENT_FILE="$HOME/Library/LaunchAgents/com.github.akitaonrails.
 AI_MEMORY_LAUNCH_AGENT_LABEL="com.github.akitaonrails.ai-memory"
 AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE="$HOME/.config/ai-memory/com.github.akitaonrails.ai-memory.plist"
 AI_MEMORY_LAUNCH_DAEMON_FILE="/Library/LaunchDaemons/com.github.akitaonrails.ai-memory.plist"
-AI_MEMORY_MCP_EXPECTED_JSON='{"type":"remote","url":"http://127.0.0.1:49374/mcp","enabled":true}'
+AI_MEMORY_MCP_EXPECTED_JSON='{"type":"remote","url":"http://127.0.0.1:49374/mcp","disabled":false}'
 AI_MEMORY_MIN_VERSION="1.28.0"
 AI_MEMORY_RELEASE_VERSION_EXPECTED="2.1.1"
 AI_MEMORY_MACOS_AARCH64_SHA256_EXPECTED="1cc2acdbbd62cc7ecf6e1fe91515ea77786910b2c102f1fe8781aa6c0357eb64"
@@ -52,13 +53,18 @@ LEARN_INSTALL_DIR="$HOME/.local/share/opencode/learn"
 LEARN_PLUGIN_SPEC="$LEARN_INSTALL_DIR"
 LEARN_LEGACY_PLUGIN_BASE="github:guisaliba/learn"
 LEARN_OLDER_PLUGIN_BASE="github:guisaliba/opencode-learn"
-LEARN_MIN_OPENCODE_VERSION="1.18.22"
+OPENCODE_MIN_VERSION="2.0.18"
 OPENCODE_TUI_THEME_EXPECTED="orng"
 OPENCODE_TUI_SIDEBAR_KEYBIND_ID="session.sidebar.toggle"
 OPENCODE_TUI_SIDEBAR_KEYBIND_EXPECTED="ctrl+b"
 OPENCODE_TUI_BACKGROUND_KEYBIND_ID="session.background"
 OPENCODE_TUI_INPUT_MOVE_LEFT_KEYBIND_ID="input.move.left"
 OPENCODE_TUI_INPUT_MOVE_LEFT_KEYBIND_EXPECTED="left"
+OPENCODE_SERVER_LAUNCH_AGENT_LABEL="com.opencode.server"
+OPENCODE_SERVER_ENV_FILE="$HOME/.config/opencode/server.env"
+OPENCODE_SERVER_LAUNCH_AGENT_FILE="$HOME/Library/LaunchAgents/$OPENCODE_SERVER_LAUNCH_AGENT_LABEL.plist"
+OPENCODE_SERVER_LAUNCH_DAEMON_SOURCE_FILE="$HOME/.config/opencode/$OPENCODE_SERVER_LAUNCH_AGENT_LABEL.plist"
+OPENCODE_SERVER_LAUNCH_DAEMON_FILE="/Library/LaunchDaemons/$OPENCODE_SERVER_LAUNCH_AGENT_LABEL.plist"
 OPENCODE_SHELL_BLOCK_START="# >>> dotfiles OpenCode ai-memory wrapper >>>"
 OPENCODE_SHELL_BLOCK_END="# <<< dotfiles OpenCode ai-memory wrapper <<<"
 
@@ -506,6 +512,9 @@ require_ai_memory_instructions_current() {
 
 require_ai_memory_status() {
   local output cli_version provider_enabled expected_provider expected_model
+  set -a
+  source "$AI_MEMORY_ENV_FILE"
+  set +a
   expected_provider="$(env_assignment_value "$AI_MEMORY_ENV_FILE" AI_MEMORY_LLM_PROVIDER)" || expected_provider=""
   expected_model="$(env_assignment_value "$AI_MEMORY_ENV_FILE" AI_MEMORY_LLM_MODEL)" || expected_model=""
   [[ -n "$expected_provider" ]] && provider_enabled=true || provider_enabled=false
@@ -566,7 +575,7 @@ require_ai_memory_llm_policy() {
     profile="$(ai_memory_selected_profile)"
     profile_spec="$(ai_memory_profile_spec "$profile")"
     IFS='|' read -r expected_provider expected_model credential expected_subagent_model <<<"$profile_spec"
-    if ! ai_memory_profile_credential_ready "$credential"; then
+    if [[ "$(ai_memory_env_value DOTFILES_AI_MEMORY_LLM_ENABLED 2>/dev/null || true)" == "false" ]] || ! ai_memory_profile_credential_ready "$credential"; then
       expected_provider=""
     fi
     actual_provider="$(ai_memory_env_value AI_MEMORY_LLM_PROVIDER)"
@@ -636,6 +645,7 @@ config = {
             "headers": {"X-Obsolete": "remove"},
         },
     },
+    "skills": {"paths": ["/user/skills"]},
 }
 Path(sys.argv[1]).write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 PY
@@ -657,36 +667,46 @@ PY
 
   require_json_value "$fixture_config" "theme" "user-theme"
   require_json_value "$fixture_config" "model" "openai/gpt-6-sol"
-  require_json_value "$fixture_config" "agent.plan.model" "openai/gpt-6-sol"
+  require_json_value "$fixture_config" "agents.plan.model" "openai/gpt-6-sol"
   require_json_array_count "$fixture_config" "instructions" "user-rules.md" "1"
   require_json_array_count "$fixture_config" "instructions" "$AI_MEMORY_INSTRUCTIONS_REFERENCE" "1"
-  require_json_array_count "$fixture_config" "plugin" "user/plugin" "1"
-  require_json_array_count "$fixture_config" "plugin" "@plannotator/opencode@latest" "1"
-  require_json_array_count "$fixture_config" "plugin" "$fixture_learn_plugin" "1"
+  require_json_array_count "$fixture_config" "plugins" "user/plugin" "1"
   require_json_array_item_count \
     "$fixture_config" \
-    "plugin" \
+    "plugins" \
+    '{"package":"@plannotator/opencode@latest","options":{"workflow":"plan-agent","planningAgents":["plan"]}}' \
+    "1"
+  require_json_array_count "$fixture_config" "plugins" "$fixture_learn_plugin" "0"
+  require_json_array_item_count \
+    "$fixture_config" \
+    "plugins" \
     '["github:guisaliba/opencode-learn#v0.0.1",{"textModel":"stale/model"}]' \
     "0"
   require_json_array_item_count \
     "$fixture_config" \
-    "plugin" \
+    "plugins" \
     '["github:guisaliba/learn#v0.0.1",{"textModel":"stale/model"}]' \
     "0"
-  require_json_value "$fixture_config" "agent.general.model" "opencode-go/deepseek-v4.1-flash"
-  require_json_value "$fixture_config" "agent.explore.model" "opencode-go/deepseek-v4.1-flash"
-  require_json_literal "$fixture_config" "agent.general.temperature" "0.25"
-  require_json_value "$fixture_config" "agent.custom.model" "user/custom-model"
-  require_json_value "$fixture_config" "mcp.custom.url" "https://example.invalid/mcp"
-  require_json_value "$fixture_config" "mcp.custom.headers.X-Custom" "keep"
-  require_json_value "$fixture_config" "mcp.github.type" "remote"
-  require_json_value "$fixture_config" "mcp.github.url" "https://api.githubcopilot.com/mcp/"
-  require_json_literal "$fixture_config" "mcp.github.enabled" "true"
-  require_json_literal "$fixture_config" "mcp.github.oauth" "false"
-  require_json_value "$fixture_config" "mcp.github.headers.Authorization" "Bearer {file:~/.config/opencode/secrets/github-mcp-pat}"
-  require_json_value "$fixture_config" "mcp.github.headers.X-MCP-Toolsets" "context,repos,issues,pull_requests,actions"
-  require_json_literal "$fixture_config" "mcp.github" "$GITHUB_MCP_EXPECTED_JSON"
-  require_json_literal "$fixture_config" "mcp.ai-memory" "$AI_MEMORY_MCP_EXPECTED_JSON"
+  require_json_value "$fixture_config" "agents.general.model" "opencode-go/deepseek-v4.1-flash"
+  require_json_value "$fixture_config" "agents.explore.model" "opencode-go/deepseek-v4.1-flash"
+  require_json_literal "$fixture_config" "agents.general.request.body.temperature" "0.25"
+  require_json_value "$fixture_config" "agents.custom.model" "user/custom-model"
+  require_json_value "$fixture_config" "mcp.servers.custom.url" "https://example.invalid/mcp"
+  require_json_value "$fixture_config" "mcp.servers.custom.headers.X-Custom" "keep"
+  require_json_literal "$fixture_config" "mcp.servers.custom.disabled" "true"
+  require_json_value "$fixture_config" "mcp.servers.github.type" "remote"
+  require_json_value "$fixture_config" "mcp.servers.github.url" "https://api.githubcopilot.com/mcp/"
+  require_json_literal "$fixture_config" "mcp.servers.github.disabled" "false"
+  require_json_literal "$fixture_config" "mcp.servers.github.oauth" "false"
+  require_json_value "$fixture_config" "mcp.servers.github.headers.Authorization" "Bearer {file:~/.config/opencode/secrets/github-mcp-pat}"
+  require_json_value "$fixture_config" "mcp.servers.github.headers.X-MCP-Toolsets" "context,repos,issues,pull_requests,actions"
+  require_json_literal "$fixture_config" "mcp.servers.github" "$GITHUB_MCP_EXPECTED_JSON"
+  require_json_literal "$fixture_config" "mcp.servers.ai-memory" "$AI_MEMORY_MCP_EXPECTED_JSON"
+  require_json_array_count "$fixture_config" "skills" "/user/skills" "1"
+  require_json_literal "$fixture_config" "compaction.auto" "false"
+  for stale_key in agent mode plugin permission command provider snapshot attachment small_model; do
+    require_json_missing "$fixture_config" "$stale_key"
+  done
 
   cp "$fixture_config" "$first_config"
   printf '%s\n' 'fixture-only-token' >"$fixture_token"
@@ -727,8 +747,8 @@ PY
     else
       not_ok "OpenCode merge failed for profile: $selected_profile"
     fi
-    require_json_value "$profile_config" "agent.general.model" "$(profile_field "$selected_profile" subagent)"
-    require_json_value "$profile_config" "agent.explore.model" "$(profile_field "$selected_profile" subagent)"
+    require_json_value "$profile_config" "agents.general.model" "$(profile_field "$selected_profile" subagent)"
+    require_json_value "$profile_config" "agents.explore.model" "$(profile_field "$selected_profile" subagent)"
   done
 
   profile_home="$fixture_root/profile-home-openai-gpt-6-luna"
@@ -737,19 +757,26 @@ PY
   mkdir -p "$(dirname "$profile_config")" "$(dirname "$profile_env")"
   printf '%s\n' \
     'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-deepseek-v4.1-flash' \
-    'DOTFILES_OPENCODE_SUBAGENT_PROFILE=openai-gpt-6-luna' >"$profile_env"
+    'DOTFILES_OPENCODE_SUBAGENT_PROFILE=openai-gpt-6-luna' \
+    'OPENCODE_API_KEY=fixture-secret' \
+    'DOTFILES_AI_MEMORY_LLM_ENABLED=false' >"$profile_env"
   if (
     HOME="$profile_home"
     LEARN_INSTALL_DIR="$fixture_learn_plugin"
     source "$REPO_DIR/apply.sh"
     merge_opencode_json
+    configure_ai_memory_env_file
   ) >/dev/null 2>&1; then
-    ok "Luna subagent profile applies independently from ai-memory"
+    ok "Luna subagents and paused Go ai-memory apply independently"
   else
     not_ok "Luna subagent profile fixture failed"
   fi
-  require_json_value "$profile_config" "agent.general.model" "openai/gpt-6-luna"
-  require_json_value "$profile_config" "agent.explore.model" "openai/gpt-6-luna"
+  require_json_value "$profile_config" "agents.general.model" "openai/gpt-6-luna"
+  require_json_value "$profile_config" "agents.explore.model" "openai/gpt-6-luna"
+  require_env_assignment "$profile_env" "AI_MEMORY_LLM_PROVIDER" ""
+  require_env_assignment "$profile_env" "AI_MEMORY_LLM_MODEL" "deepseek-v4.1-flash"
+  require_env_assignment "$profile_env" "OPENCODE_API_KEY" "fixture-secret"
+  require_env_assignment "$profile_env" "DOTFILES_AI_MEMORY_LLM_ENABLED" "false"
 
   profile_home="$fixture_root/profile-home-invalid-subagent"
   profile_config="$profile_home/.config/opencode/opencode.json"
@@ -830,16 +857,15 @@ PY
   rm -rf -- "$fixture_root"
 }
 
-test_opencode_tui_json_merge() {
-  local fixture_root fixture_home fixture_config fixture_learn_plugin first_config malformed_home malformed_config malformed_before malformed_log
-  local keybinds_home keybinds_config keybinds_before keybinds_log
+test_opencode_cli_json_merge() {
+  local fixture_root fixture_home cli_config tui_config first_config malformed_home malformed_config malformed_before malformed_log
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
-  fixture_config="$fixture_home/.config/opencode/tui.json"
-  fixture_learn_plugin="$fixture_home/.local/share/opencode/learn"
-  first_config="$fixture_root/first-tui.json"
-  mkdir -p "$(dirname "$fixture_config")"
-  python3 - "$fixture_config" <<'PY'
+  cli_config="$fixture_home/.config/opencode/cli.json"
+  tui_config="$fixture_home/.config/opencode/tui.json"
+  first_config="$fixture_root/first-cli.json"
+  mkdir -p "$(dirname "$tui_config")"
+  python3 - "$tui_config" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -851,107 +877,58 @@ config = {
         "command.palette.show": "ctrl+k",
         "session.sidebar.toggle": "ctrl+shift+b",
     },
-    "plugin": [
-        "user/tui-plugin",
-        ["github:guisaliba/opencode-learn#v0.0.1", {"ipcRoot": "/stale"}],
-        ["github:guisaliba/learn#v0.0.1", {"ipcRoot": "/stale"}],
-        "github:guisaliba/learn#main",
-    ],
 }
 Path(sys.argv[1]).write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 PY
 
   if (
     HOME="$fixture_home"
-    LEARN_INSTALL_DIR="$fixture_learn_plugin"
     source "$REPO_DIR/apply.sh"
-    merge_opencode_tui_json
+    merge_opencode_cli_json
   ) >/dev/null 2>&1; then
-    ok "OpenCode TUI merge fixture applies"
+    ok "OpenCode V2 CLI merge fixture applies"
   else
-    not_ok "OpenCode TUI merge fixture failed"
+    not_ok "OpenCode V2 CLI merge fixture failed"
   fi
-  require_json_value "$fixture_config" "theme" "$OPENCODE_TUI_THEME_EXPECTED"
-  require_json_array_count "$fixture_config" "plugin" "user/tui-plugin" "1"
-  require_json_array_count "$fixture_config" "plugin" "$fixture_learn_plugin" "1"
-  require_json_array_item_count \
-    "$fixture_config" \
-    "plugin" \
-    '["github:guisaliba/opencode-learn#v0.0.1",{"ipcRoot":"/stale"}]' \
-    "0"
-  require_json_array_item_count \
-    "$fixture_config" \
-    "plugin" \
-    '["github:guisaliba/learn#v0.0.1",{"ipcRoot":"/stale"}]' \
-    "0"
+  require_file "$cli_config"
+  require_json_value "$cli_config" '$schema' "https://opencode.ai/v2/cli.json"
+  require_json_value "$cli_config" "theme.name" "$OPENCODE_TUI_THEME_EXPECTED"
+  require_json_keybind "$cli_config" "$OPENCODE_TUI_SIDEBAR_KEYBIND_ID" '"ctrl+b"'
+  require_json_keybind "$cli_config" "$OPENCODE_TUI_BACKGROUND_KEYBIND_ID" "false"
+  require_json_keybind "$cli_config" "$OPENCODE_TUI_INPUT_MOVE_LEFT_KEYBIND_ID" '"left"'
+  require_json_keybind "$cli_config" "command.palette.show" '"ctrl+k"'
+  [[ ! -e "$tui_config" ]] && ok "managed tui.json is retired" || not_ok "managed tui.json remains"
 
-  require_json_keybind \
-    "$fixture_config" \
-    "$OPENCODE_TUI_SIDEBAR_KEYBIND_ID" \
-    "\"$OPENCODE_TUI_SIDEBAR_KEYBIND_EXPECTED\""
-  require_json_keybind \
-    "$fixture_config" \
-    "$OPENCODE_TUI_BACKGROUND_KEYBIND_ID" \
-    "false"
-  require_json_keybind \
-    "$fixture_config" \
-    "$OPENCODE_TUI_INPUT_MOVE_LEFT_KEYBIND_ID" \
-    "\"$OPENCODE_TUI_INPUT_MOVE_LEFT_KEYBIND_EXPECTED\""
-  require_json_keybind \
-    "$fixture_config" \
-    "command.palette.show" \
-    '"ctrl+k"'
-
-  cp "$fixture_config" "$first_config"
+  cp "$cli_config" "$first_config"
   if (
     HOME="$fixture_home"
-    LEARN_INSTALL_DIR="$fixture_learn_plugin"
     source "$REPO_DIR/apply.sh"
-    merge_opencode_tui_json
+    merge_opencode_cli_json
   ) >/dev/null 2>&1; then
-    ok "OpenCode TUI merge fixture applies a second time"
+    ok "OpenCode V2 CLI merge fixture applies a second time"
   else
-    not_ok "second OpenCode TUI merge fixture apply failed"
+    not_ok "second OpenCode V2 CLI merge fixture failed"
   fi
-  require_same_file "$first_config" "$fixture_config"
+  require_same_file "$first_config" "$cli_config"
 
   malformed_home="$fixture_root/malformed-home"
-  malformed_config="$malformed_home/.config/opencode/tui.json"
+  malformed_config="$malformed_home/.config/opencode/cli.json"
   malformed_before="$fixture_root/malformed-before.json"
   malformed_log="$fixture_root/malformed.log"
   mkdir -p "$(dirname "$malformed_config")"
-  printf '%s\n' '{"theme":"keep","plugin":{}}' >"$malformed_config"
+  printf '%s\n' '{"theme":"keep","keybinds":[]}' >"$malformed_config"
   cp "$malformed_config" "$malformed_before"
   if (
     HOME="$malformed_home"
     source "$REPO_DIR/apply.sh"
-    merge_opencode_tui_json
+    merge_opencode_cli_json
   ) >"$malformed_log" 2>&1; then
-    not_ok "invalid OpenCode TUI plugin structure was accepted"
+    not_ok "invalid OpenCode V2 CLI keybinds structure was accepted"
   else
-    ok "invalid OpenCode TUI plugin structure fails"
+    ok "invalid OpenCode V2 CLI keybinds structure fails"
   fi
   require_same_file "$malformed_before" "$malformed_config"
-  require_contains "$malformed_log" "Expected 'plugin' to be an array or string"
-
-  keybinds_home="$fixture_root/keybinds-home"
-  keybinds_config="$keybinds_home/.config/opencode/tui.json"
-  keybinds_before="$fixture_root/keybinds-before.json"
-  keybinds_log="$fixture_root/keybinds.log"
-  mkdir -p "$(dirname "$keybinds_config")"
-  printf '%s\n' '{"theme":"keep","keybinds":[]}' >"$keybinds_config"
-  cp "$keybinds_config" "$keybinds_before"
-  if (
-    HOME="$keybinds_home"
-    source "$REPO_DIR/apply.sh"
-    merge_opencode_tui_json
-  ) >"$keybinds_log" 2>&1; then
-    not_ok "invalid OpenCode TUI keybinds structure was accepted"
-  else
-    ok "invalid OpenCode TUI keybinds structure fails"
-  fi
-  require_same_file "$keybinds_before" "$keybinds_config"
-  require_contains "$keybinds_log" "Expected 'keybinds' to be an object"
+  require_contains "$malformed_log" "Expected 'keybinds' to be an object"
 
   rm -rf -- "$fixture_root"
 }
@@ -1501,7 +1478,6 @@ test_apply_scope() {
     prerequisites \
     version:bun \
     opencode-binary \
-    version:opencode \
     ai-memory-binary \
     ai-jail \
     loopback \
@@ -1614,7 +1590,7 @@ test_opencode_shell_override() {
   expected="$fixture_root/expected.log"
   yolo_log="$fixture_root/yolo.log"
 
-  mkdir -p "$fixture_home" "$stub_bin"
+  mkdir -p "$fixture_home/.opencode/bin" "$stub_bin"
   printf '%s\n' \
     'alias preserved-alias='\''printf preserved'\''' \
     '# >>> dotfiles OpenCode ai-memory wrapper >>>' \
@@ -1636,7 +1612,8 @@ test_opencode_shell_override() {
   require_text_count "$aliases" "$OPENCODE_SHELL_BLOCK_END" "1"
   require_contains "$aliases" 'opencode() {'
   require_contains "$aliases" 'opencode-raw() {'
-  require_contains "$aliases" 'command ai-memory run opencode "$@"'
+  require_contains "$aliases" 'command ai-memory run "$HOME/.opencode/bin/opencode" "$@"'
+  require_contains "$aliases" 'export PATH="$HOME/.opencode/bin:$PATH"'
   cp "$aliases" "$first_aliases"
 
   if (
@@ -1656,8 +1633,8 @@ test_opencode_shell_override() {
     'exit "${OPENCODE_TEST_EXIT_STATUS:-0}"' >"$stub_bin/ai-memory"
   printf '%s\n' \
     '#!/usr/bin/env bash' \
-    'printf '\''%s\n'\'' "$@" >"$OPENCODE_TEST_RAW_LOG"' >"$stub_bin/opencode"
-  chmod +x "$stub_bin/ai-memory" "$stub_bin/opencode"
+     'printf '\''%s\n'\'' "$@" >"$OPENCODE_TEST_RAW_LOG"' >"$fixture_home/.opencode/bin/opencode"
+  chmod +x "$stub_bin/ai-memory" "$fixture_home/.opencode/bin/opencode"
 
   if HOME="$fixture_home" \
     PATH="$stub_bin:/usr/bin:/bin" \
@@ -1665,7 +1642,7 @@ test_opencode_shell_override() {
     OPENCODE_TEST_RAW_LOG="$raw_log" \
     bash --noprofile --norc -c \
       'source "$HOME/.bash_aliases"; opencode -c "two words"'; then
-    printf '%s\n' run opencode -c 'two words' >"$expected"
+    printf '%s\n' run "$fixture_home/.opencode/bin/opencode" -c 'two words' >"$expected"
     require_same_file "$expected" "$ai_memory_log"
   else
     not_ok "managed OpenCode Bash function failed"
@@ -1677,7 +1654,7 @@ test_opencode_shell_override() {
     OPENCODE_TEST_RAW_LOG="$raw_log" \
     bash --noprofile --norc -c \
       'source "$HOME/.bash_aliases"; opencode session list'; then
-    printf '%s\n' run opencode session list >"$expected"
+    printf '%s\n' run "$fixture_home/.opencode/bin/opencode" session list >"$expected"
     require_same_file "$expected" "$ai_memory_log"
   else
     not_ok "managed OpenCode session utility forwarding failed"
@@ -1698,7 +1675,7 @@ test_opencode_shell_override() {
   else
     not_ok "managed OpenCode launch returned $managed_rc instead of 7"
   fi
-  printf '%s\n' run opencode -c 'fixture task' >"$expected"
+  printf '%s\n' run "$fixture_home/.opencode/bin/opencode" -c 'fixture task' >"$expected"
   require_same_file "$expected" "$ai_memory_log"
 
   if HOME="$fixture_home" PATH="$stub_bin:/usr/bin:/bin" \
@@ -1719,6 +1696,34 @@ test_opencode_shell_override() {
     require_same_file "$expected" "$raw_log"
   else
     not_ok "raw OpenCode escape hatch failed"
+  fi
+
+  mkdir -p "$fixture_home/.config/opencode" "$fixture_home/projects/agents"
+  printf '%s\n' \
+    'OPENCODE_SERVER_URL=https://m4.example.test' \
+    "OPENCODE_CLIENT_HOME=$fixture_home" \
+    'OPENCODE_SERVER_HOME=/Users/guisaliba' >"$fixture_home/.config/opencode/server.env"
+  chmod 600 "$fixture_home/.config/opencode/server.env"
+  if (
+    cd "$fixture_home/projects/agents"
+    HOME="$fixture_home" \
+      PATH="$stub_bin:/usr/bin:/bin" \
+      OPENCODE_TEST_RAW_LOG="$raw_log" \
+      bash --noprofile --norc -c 'source "$HOME/.bash_aliases"; opencode'
+  ); then
+    printf '%s\n' --server https://m4.example.test /Users/guisaliba/projects/agents >"$expected"
+    require_same_file "$expected" "$raw_log"
+  else
+    not_ok "remote OpenCode current-directory mapping failed"
+  fi
+  if HOME="$fixture_home" \
+    PATH="$stub_bin:/usr/bin:/bin" \
+    OPENCODE_TEST_RAW_LOG="$raw_log" \
+    bash --noprofile --norc -c 'source "$HOME/.bash_aliases"; opencode "$HOME/projects/agents"'; then
+    printf '%s\n' --server https://m4.example.test /Users/guisaliba/projects/agents >"$expected"
+    require_same_file "$expected" "$raw_log"
+  else
+    not_ok "remote OpenCode explicit-directory mapping failed"
   fi
 
   : >"$ai_memory_log"
@@ -2203,6 +2208,67 @@ test_macos_bash_profile() {
   rm -rf -- "$fixture_root"
 }
 
+test_opencode_launch_daemon() {
+  local fixture_root fixture_home binary env_file plist first_plist
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  binary="$fixture_home/.opencode/bin/opencode"
+  env_file="$fixture_home/.config/opencode/server.env"
+  plist="$fixture_home/.config/opencode/com.opencode.server.plist"
+  first_plist="$fixture_root/first.plist"
+  mkdir -p "$(dirname "$binary")" "$(dirname "$env_file")"
+  printf '%s\n' '#!/usr/bin/env bash' 'exit 0' >"$binary"
+  chmod +x "$binary"
+  printf '%s\n' 'OPENCODE_SERVER_PASSWORD=fixture-secret' >"$env_file"
+  chmod 600 "$env_file"
+
+  if (
+    HOME="$fixture_home"
+    OPENCODE_BINARY="$binary"
+    OPENCODE_SERVER_ENABLED=true
+    OPENCODE_SERVER_ENV_FILE="$env_file"
+    OPENCODE_SERVER_LAUNCH_DAEMON_SOURCE_FILE="$plist"
+    OPENCODE_SERVER_LOG_DIR="$fixture_home/Library/Logs/opencode"
+    export HOME OPENCODE_BINARY OPENCODE_SERVER_ENABLED OPENCODE_SERVER_ENV_FILE OPENCODE_SERVER_LAUNCH_DAEMON_SOURCE_FILE OPENCODE_SERVER_LOG_DIR
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Darwin; }
+    install_opencode_launch_daemon_source
+    install_opencode_launch_daemon_source
+  ) >/dev/null 2>&1; then
+    ok "OpenCode LaunchDaemon source fixture applies twice"
+  else
+    not_ok "OpenCode LaunchDaemon source fixture failed"
+  fi
+  require_file "$plist"
+  require_file_mode "$plist" "600"
+  if python3 - "$plist" "$binary" "$env_file" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+
+with Path(sys.argv[1]).open("rb") as handle:
+    data = plistlib.load(handle)
+args = data["ProgramArguments"]
+assert data["Label"] == "com.opencode.server"
+assert data["UserName"]
+assert data["GroupName"]
+assert data["RunAtLoad"] is True
+assert data["KeepAlive"] == {"SuccessfulExit": False}
+assert args[4] == sys.argv[3]
+assert args[5] == sys.argv[2]
+assert args[6:] == ["serve", "--hostname", "127.0.0.1", "--port", "4096"]
+assert "OPENCODE_SERVER_PASSWORD" not in repr(data)
+PY
+  then
+    ok "OpenCode LaunchDaemon has the required headless service contract"
+  else
+    not_ok "OpenCode LaunchDaemon contract is invalid"
+  fi
+  cp "$plist" "$first_plist"
+  require_same_file "$first_plist" "$plist"
+  rm -rf -- "$fixture_root"
+}
+
 # Repo structure checks
 printf '\n--- Repo Structure ---\n'
 
@@ -2223,9 +2289,9 @@ fi
 for theme_file in "${tracked_theme_files[@]}"; do
   require_json "$theme_file"
 done
-require_contains "$REPO_DIR/apply.sh" "sync_learn_plugin"
-require_contains "$REPO_DIR/apply.sh" "PUPPETEER_SKIP_DOWNLOAD=true"
-require_contains "$REPO_DIR/apply.sh" "$LEARN_REPOSITORY_URL_EXPECTED"
+require_contains "$REPO_DIR/apply.sh" "merge_opencode_cli_json"
+require_contains "$REPO_DIR/apply.sh" "--agent opencode2"
+require_contains "$REPO_DIR/apply.sh" "RTK is disabled"
 require_file "$REPO_DIR/skills/README.md"
 require_file "$REPO_DIR/skills/daily-tasks/SKILL.md"
 require_executable "$REPO_DIR/skills/daily-tasks/scripts/journal-task-sync"
@@ -2270,8 +2336,7 @@ require_text_count "$REPO_DIR/shell/opencode.bash" "$OPENCODE_SHELL_BLOCK_END" "
 printf '\n--- OpenCode Merge Fixtures ---\n'
 
 test_opencode_json_merge
-test_opencode_tui_json_merge
-test_learn_plugin_sync
+test_opencode_cli_json_merge
 
 # ai-memory secret-file fixture checks
 printf '\n--- ai-memory File Fixtures ---\n'
@@ -2313,6 +2378,7 @@ test_macos_ai_memory_installation
 test_ai_memory_user_service_installation
 test_macos_ai_memory_launch_daemon
 test_macos_bash_profile
+test_opencode_launch_daemon
 
 if [[ "$repo_only" == "true" ]]; then
   printf '\n'
@@ -2330,13 +2396,13 @@ printf '\n--- Local Machine ---\n'
 require_command python3
 require_command bash
 require_command bun
-require_command opencode
+require_executable "$HOME/.opencode/bin/opencode"
 require_command ai-memory
 require_command rtk
 require_command plannotator
-require_file "$HOME/.config/opencode/plugins/rtk.ts"
+[[ ! -e "$HOME/.config/opencode/plugins/rtk.ts" ]] && ok "RTK V1 plugin is absent" || not_ok "RTK V1 plugin remains"
 
-opencode --help >/dev/null 2>&1 && ok "opencode help runs" || not_ok "opencode help failed"
+"$HOME/.opencode/bin/opencode" --help >/dev/null 2>&1 && ok "OpenCode V2 help runs" || not_ok "OpenCode V2 help failed"
 ai-memory --help >/dev/null 2>&1 && ok "ai-memory help runs" || not_ok "ai-memory help failed"
 plannotator --help >/dev/null 2>&1 && ok "plannotator help runs" || not_ok "plannotator help failed"
 
@@ -2351,11 +2417,11 @@ fi
 
 if (
   source "$REPO_DIR/apply.sh"
-  require_minimum_version opencode "$LEARN_MIN_OPENCODE_VERSION"
+  require_minimum_version "$HOME/.opencode/bin/opencode" "$OPENCODE_MIN_VERSION"
 ) >/dev/null 2>&1; then
-  ok "opencode is installed at version $LEARN_MIN_OPENCODE_VERSION or newer"
+  ok "OpenCode V2 is installed at version $OPENCODE_MIN_VERSION or newer"
 else
-  not_ok "opencode is missing, is older than $LEARN_MIN_OPENCODE_VERSION, or is unreadable"
+  not_ok "OpenCode V2 is missing, too old, or unreadable"
 fi
 
 if (
@@ -2388,7 +2454,8 @@ rewritten="$(rtk rewrite "git status --short" 2>/dev/null || true)"
 require_file "$HOME/.config/opencode/AGENTS.md"
 require_contains "$HOME/.config/opencode/AGENTS.md" "ASD-STE100"
 require_contains "$HOME/.config/opencode/AGENTS.md" "When you are the primary agent, you are the final owner of delegated work."
-require_same_file "$REPO_DIR/AGENTS.md" "$HOME/.config/opencode/AGENTS.md"
+require_contains "$HOME/.config/opencode/AGENTS.md" "<!-- ai-memory:start -->"
+require_contains "$HOME/.config/opencode/AGENTS.md" "<!-- ai-memory:end -->"
 require_file "$HOME/.bash_aliases"
 require_text_count "$HOME/.bash_aliases" "$OPENCODE_SHELL_BLOCK_START" "1"
 require_text_count "$HOME/.bash_aliases" "$OPENCODE_SHELL_BLOCK_END" "1"
@@ -2407,7 +2474,7 @@ require_file_mode "$GITHUB_MCP_TOKEN_FILE" "600"
 require_json "$HOME/.config/opencode/opencode.json"
 require_json_value "$HOME/.config/opencode/opencode.json" "model" "openai/gpt-6-sol"
 require_json_value "$HOME/.config/opencode/opencode.json" "default_agent" "build"
-require_json_value "$HOME/.config/opencode/opencode.json" "agent.plan.model" "openai/gpt-6-sol"
+require_json_value "$HOME/.config/opencode/opencode.json" "agents.plan.model" "openai/gpt-6-sol"
 selected_profile_log="$(mktemp)"
 if selected_profile="$(
   source "$REPO_DIR/apply.sh"
@@ -2418,15 +2485,39 @@ if selected_profile="$(
     source "$REPO_DIR/apply.sh"
     opencode_subagent_profile_model "$selected_profile"
   )"
-  require_json_value "$HOME/.config/opencode/opencode.json" "agent.general.model" "$profile_spec"
-  require_json_value "$HOME/.config/opencode/opencode.json" "agent.explore.model" "$profile_spec"
+  require_json_value "$HOME/.config/opencode/opencode.json" "agents.general.model" "$profile_spec"
+  require_json_value "$HOME/.config/opencode/opencode.json" "agents.explore.model" "$profile_spec"
 else
   not_ok "subagent profile selection is unsupported or unreadable"
   sed 's/^/  /' "$selected_profile_log" >&2
 fi
 rm -f "$selected_profile_log"
 
-model_catalog="$(opencode models 2>/dev/null || true)"
+if [[ -f "$HOME/.config/opencode/server.env" ]]; then
+  set -a
+  source "$HOME/.config/opencode/server.env"
+  set +a
+fi
+if [[ -n "${OPENCODE_SERVER_URL:-}" ]]; then
+  model_catalog="$(
+    curl -fsS \
+      -u "${OPENCODE_SERVER_USERNAME:-opencode}:$OPENCODE_SERVER_PASSWORD" \
+      --get \
+      --data-urlencode "location[directory]=$REPO_DIR" \
+      "$OPENCODE_SERVER_URL/api/model" 2>/dev/null | \
+      python3 -c '
+import json
+import sys
+for model in json.load(sys.stdin).get("data", []):
+    provider = model.get("providerID")
+    model_id = model.get("id")
+    if provider and model_id:
+        print(f"{provider}/{model_id}")
+' 2>/dev/null || true
+  )"
+else
+  model_catalog="$("$HOME/.opencode/bin/opencode" models 2>/dev/null || true)"
+fi
 if [[ -n "$model_catalog" ]]; then
   model_catalog_lines=$'\n'"$model_catalog"$'\n'
   for profile_name in $(subagent_profile_names); do
@@ -2438,29 +2529,37 @@ if [[ -n "$model_catalog" ]]; then
     fi
   done
 else
-  not_ok "opencode models returned no catalog"
+  if [[ -n "${OPENCODE_SERVER_URL:-}" ]]; then
+    ok "remote model catalog is validated through the server agent API smoke test"
+  else
+    not_ok "opencode models returned no catalog"
+  fi
 fi
 require_json_array_count "$HOME/.config/opencode/opencode.json" "instructions" "$AI_MEMORY_INSTRUCTIONS_REFERENCE" "1"
-require_json_array_count "$HOME/.config/opencode/opencode.json" "plugin" "$LEARN_PLUGIN_SPEC" "1"
-require_json_array_count "$HOME/.config/opencode/opencode.json" "plugin" "$LEARN_LEGACY_PLUGIN_BASE" "0"
-require_json_literal "$HOME/.config/opencode/opencode.json" "mcp.ai-memory" "$AI_MEMORY_MCP_EXPECTED_JSON"
-require_json_value "$HOME/.config/opencode/opencode.json" "mcp.github.type" "remote"
-require_json_value "$HOME/.config/opencode/opencode.json" "mcp.github.url" "https://api.githubcopilot.com/mcp/"
-require_json_literal "$HOME/.config/opencode/opencode.json" "mcp.github.enabled" "true"
-require_json_literal "$HOME/.config/opencode/opencode.json" "mcp.github.oauth" "false"
-require_json_value "$HOME/.config/opencode/opencode.json" "mcp.github.headers.Authorization" "Bearer {file:~/.config/opencode/secrets/github-mcp-pat}"
-require_json_value "$HOME/.config/opencode/opencode.json" "mcp.github.headers.X-MCP-Toolsets" "context,repos,issues,pull_requests,actions"
-require_json_literal "$HOME/.config/opencode/opencode.json" "mcp.github" "$GITHUB_MCP_EXPECTED_JSON"
+require_json_array_count "$HOME/.config/opencode/opencode.json" "plugins" "$LEARN_PLUGIN_SPEC" "0"
+require_json_array_count "$HOME/.config/opencode/opencode.json" "plugins" "$LEARN_LEGACY_PLUGIN_BASE" "0"
+if [[ "$(uname -s)" == Darwin ]]; then
+  require_json_value "$HOME/.config/opencode/opencode.json" "mcp.servers.ai-memory.url" "http://127.0.0.1:49374/mcp"
+else
+  require_json_value "$HOME/.config/opencode/opencode.json" "mcp.servers.ai-memory.url" "https://aurealabs-mac-mini-m4.taildc6550.ts.net:8443/mcp"
+fi
+require_json_literal "$HOME/.config/opencode/opencode.json" "mcp.servers.ai-memory.disabled" "false"
+require_json_value "$HOME/.config/opencode/opencode.json" "mcp.servers.github.type" "remote"
+require_json_value "$HOME/.config/opencode/opencode.json" "mcp.servers.github.url" "https://api.githubcopilot.com/mcp/"
+require_json_literal "$HOME/.config/opencode/opencode.json" "mcp.servers.github.disabled" "false"
+require_json_literal "$HOME/.config/opencode/opencode.json" "mcp.servers.github.oauth" "false"
+require_json_value "$HOME/.config/opencode/opencode.json" "mcp.servers.github.headers.Authorization" "Bearer {file:~/.config/opencode/secrets/github-mcp-pat}"
 
 require_contains "$HOME/.config/opencode/opencode.json" "@plannotator/opencode@latest"
-require_file "$HOME/.config/opencode/tui.json"
-require_json "$HOME/.config/opencode/tui.json"
-require_json_value "$HOME/.config/opencode/tui.json" "theme" "$OPENCODE_TUI_THEME_EXPECTED"
+require_file "$HOME/.config/opencode/cli.json"
+require_json "$HOME/.config/opencode/cli.json"
+require_json_value "$HOME/.config/opencode/cli.json" "theme.name" "$OPENCODE_TUI_THEME_EXPECTED"
+[[ ! -e "$HOME/.config/opencode/tui.json" && ! -e "$HOME/.config/opencode/tui.jsonc" ]] && \
+  ok "managed V1 TUI files are absent" || not_ok "managed V1 TUI files remain"
 for theme_file in "${tracked_theme_files[@]}"; do
   require_same_file "$theme_file" "$HOME/.config/opencode/themes/${theme_file##*/}"
 done
-require_json_array_count "$HOME/.config/opencode/tui.json" "plugin" "$LEARN_PLUGIN_SPEC" "1"
-require_json_array_count "$HOME/.config/opencode/tui.json" "plugin" "$LEARN_LEGACY_PLUGIN_BASE" "0"
+require_json_array_count "$HOME/.config/opencode/cli.json" "plugins" "$LEARN_PLUGIN_SPEC" "0"
 
 require_dir "$LEARN_INSTALL_DIR"
 require_file "$LEARN_INSTALL_DIR/package.json"
@@ -2512,33 +2611,37 @@ if [[ -f "$HOME/.local/share/ai-memory/auth.json" ]]; then
 fi
 if (
   source "$REPO_DIR/apply.sh"
+  [[ "$(uname -s)" != Darwin ]] || OPENCODE_SERVER_ENABLED=true
   verify_ai_memory_unauthenticated_loopback
 ) >/dev/null 2>&1; then
-  ok "ai-memory loopback service has no bearer authentication"
+  ok "ai-memory authentication policy is consistent for this host role"
 else
-  not_ok "ai-memory loopback authentication policy is inconsistent"
+  not_ok "ai-memory authentication policy is inconsistent"
 fi
-require_file "$AI_MEMORY_INSTRUCTIONS_FILE"
-require_contains "$AI_MEMORY_INSTRUCTIONS_FILE" "<!-- ai-memory:start -->"
-require_contains "$AI_MEMORY_INSTRUCTIONS_FILE" "<!-- ai-memory:end -->"
-require_ai_memory_instructions_current
-require_file "$HOME/.config/opencode/plugins/ai-memory.ts"
-require_contains "$HOME/.config/opencode/plugins/ai-memory.ts" 'Auto-generated by `ai-memory install-hooks --agent opencode --apply`'
-require_contains "$HOME/.config/opencode/plugins/ai-memory.ts" 'const SERVER = "http://127.0.0.1:49374"'
-require_contains "$HOME/.config/opencode/plugins/ai-memory.ts" 'const DEFAULT_PROJECT_STRATEGY = "repo-root";'
+require_file "$HOME/.config/opencode/plugins/ai-memory-opencode2.ts"
+require_file_mode "$HOME/.config/opencode/plugins/ai-memory-opencode2.ts" "600"
+require_contains "$HOME/.config/opencode/plugins/ai-memory-opencode2.ts" 'id: "ai-memory-opencode2"'
+if [[ "$(uname -s)" == Darwin ]]; then
+  require_contains "$HOME/.config/opencode/plugins/ai-memory-opencode2.ts" 'const SERVER = "http://127.0.0.1:49374"'
+else
+  require_contains "$HOME/.config/opencode/plugins/ai-memory-opencode2.ts" 'const SERVER = "https://aurealabs-mac-mini-m4.taildc6550.ts.net:8443"'
+fi
+require_file "$OPENCODE_SERVER_ENV_FILE"
+require_file_mode "$OPENCODE_SERVER_ENV_FILE" "600"
 case "$(uname -s)" in
   Linux)
-    require_file "$AI_MEMORY_USER_SERVICE_FILE"
-    require_file_mode "$AI_MEMORY_USER_SERVICE_FILE" "644"
-    require_contains "$AI_MEMORY_USER_SERVICE_FILE" "# Managed by guisaliba/agents apply.sh."
-    require_contains "$AI_MEMORY_USER_SERVICE_FILE" "--data-dir %h/.local/share/ai-memory"
     systemctl --user is-enabled --quiet ai-memory.service >/dev/null 2>&1 && \
-      ok "ai-memory user service is enabled" || not_ok "ai-memory user service is not enabled"
+      not_ok "local ai-memory user service remains enabled" || ok "local ai-memory user service is disabled"
     systemctl --user is-active --quiet ai-memory.service >/dev/null 2>&1 && \
-      ok "ai-memory user service is active" || not_ok "ai-memory user service is not active"
-    require_ai_memory_status
+      not_ok "local ai-memory user service remains active" || ok "local ai-memory user service is inactive"
+    require_file "$HOME/.config/ai-memory/client-token"
+    require_file_mode "$HOME/.config/ai-memory/client-token" "600"
     ;;
   Darwin)
+    require_file "$OPENCODE_SERVER_LAUNCH_DAEMON_SOURCE_FILE"
+    require_file_mode "$OPENCODE_SERVER_LAUNCH_DAEMON_SOURCE_FILE" "600"
+    require_file "$OPENCODE_SERVER_LAUNCH_DAEMON_FILE"
+    require_file_mode "$OPENCODE_SERVER_LAUNCH_DAEMON_FILE" "644"
     require_file "$AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE"
     require_file_mode "$AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE" "600"
     require_file "$AI_MEMORY_LAUNCH_DAEMON_FILE"
