@@ -1,10 +1,10 @@
 # ai-memory
 
-`apply.sh` manages ai-memory as a native service and connects it to OpenCode
-through the loopback MCP endpoint:
+The M4 owns the primary ai-memory store. It remains bound to loopback and is
+published to the tailnet by Tailscale Serve with bearer authentication.
 
 ```text
-http://127.0.0.1:49374/mcp
+https://aurealabs-mac-mini-m4.taildc6550.ts.net:8443/mcp
 ```
 
 ## Ownership
@@ -61,12 +61,20 @@ Set `DOTFILES_AI_MEMORY_LLM_PROFILE` in `~/.config/ai-memory/env` to select
 a profile. Apply preserves an explicit valid selection; remove the assignment
 to use the default.
 
+Set `DOTFILES_AI_MEMORY_LLM_ENABLED=false` in the same file to pause LLM jobs
+without removing `OPENCODE_API_KEY`. After usage is restored, remove that
+assignment, run `source ./apply.sh && configure_ai_memory_env_file`, and
+restart the service with `systemctl --user restart ai-memory` on Linux.
+Subagent selection is independent; see
+[`../opencode/README.md`](../opencode/README.md).
+
 ## Boundary
 
-This setup uses unauthenticated loopback access. Apply rejects bearer-token
-settings in the environment, service configuration, and `config.toml`.
-Do not expose this endpoint beyond the local machine without designing
-matching authentication and client wiring.
+The M4 backend remains on `127.0.0.1:49374`. Remote clients set
+`AI_MEMORY_SERVER_URL` to the Tailscale HTTPS origin and keep the bearer token
+in `~/.config/ai-memory/client-token`, mode `0600`. Apply stops the Linux local
+service while a remote URL is active. The local data directory is retained as
+an emergency fallback; automatic bidirectional store merge is out of scope.
 
 Captured content can be sent to the selected provider during explicit
 consolidation, review, or reranking. Keep credentials, memory data, and the

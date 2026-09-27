@@ -1,6 +1,6 @@
 # OpenCode
 
-`apply.sh` is the deployment source of truth for the global OpenCode runtime.
+`apply.sh` is the deployment source of truth for the global OpenCode V2 runtime.
 It preserves unrelated valid configuration and fails without overwriting an
 invalid JSON file or an invalid managed structure.
 
@@ -27,8 +27,7 @@ it does not change the separate ai-memory LLM provider.
 ```text
 ~/.config/opencode/AGENTS.md
 ~/.config/opencode/opencode.json
-~/.config/opencode/tui.json
-~/.config/opencode/tui.jsonc
+~/.config/opencode/cli.json
 ~/.config/opencode/themes/
 ~/.config/opencode/commands/
 ~/.agents/skills/
@@ -40,14 +39,14 @@ path. Global model, agent, plugin, MCP, and instruction entries are merged by
 
 ## Theme
 
-The TUI theme key belongs in `tui.json`.
+The terminal theme belongs in `cli.json` at `theme.name`.
 Tracked themes under `opencode/themes/` are copied to the global theme path.
 The pinned asset provenance is recorded by the tracked theme file history.
-Learn and the theme stay in `tui.json`.
+Learn is disabled until its server and terminal plugins have a verified V2 port.
 
 ## Keybinds
 
-Managed keybinds belong in `keybinds` in `tui.json`. `apply.sh` merges them and
+Managed keybinds belong in `keybinds` in `cli.json`. `apply.sh` merges them and
 preserves unrelated user keybinds.
 
 ```text
@@ -79,3 +78,14 @@ opencode mcp list
 ```
 
 Restart OpenCode after a configuration or theme change.
+
+## Central Server
+
+On the M4, set `OPENCODE_SERVER_ENABLED=true` and put a non-empty
+`OPENCODE_SERVER_PASSWORD` in `~/.config/opencode/server.env`. Apply installs a
+root-owned LaunchDaemon that runs as the normal user and publishes its loopback
+endpoint with Tailscale Serve. No GUI login is required after macOS boots.
+Clients use `OPENCODE_SERVER_URL` in their private `server.env`; the shell
+wrapper passes it to OpenCode V2 with `--server`.
+
+See [V2-MIGRATION.md](V2-MIGRATION.md) for security, rollback, and acceptance.

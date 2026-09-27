@@ -1,13 +1,14 @@
 # RTK
 
-RTK is the command-output compaction layer for the agent harness. Apply
-installs its OpenCode integration with:
+RTK remains available as a command-output compaction CLI, but its OpenCode
+plugin is disabled. No released RTK version currently provides the complete,
+verified V2 `execute.before` contract.
 
 ```sh
-rtk init -g --opencode
+rtk rewrite "git status --short"
 ```
 
-The OpenCode plugin is installed at:
+Do not install the current V1 plugin at:
 
 ```text
 ~/.config/opencode/plugins/rtk.ts
@@ -21,5 +22,6 @@ rtk gain
 rtk <command>
 ```
 
-RTK is installed live at the version pinned by `RTK_VERSION` in `apply.sh`.
-Its payload is not vendored in this repository.
+Re-enable it only after a stable RTK release proves the V2 default export,
+shell filtering, exit-code 3 handling, timeout rejection, missing-binary
+fail-open behavior, macOS/Linux lookup, and a real stable V2 loader test.

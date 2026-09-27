@@ -5,9 +5,9 @@ not vendored here unless the component explicitly owns a tracked exception.
 
 | Plugin | Runtime location | Documentation |
 | --- | --- | --- |
-| Learn | `~/.local/share/opencode/learn` | [learn/README.md](learn/README.md) |
+| Learn | Disabled pending a full V2 port | [learn/README.md](learn/README.md) |
 | Plannotator | `~/.config/opencode/opencode.json` | [plannotator/README.md](plannotator/README.md) |
-| RTK | `~/.config/opencode/plugins/rtk.ts` | [rtk/README.md](rtk/README.md) |
+| RTK | Disabled pending a released V2 hook | [rtk/README.md](rtk/README.md) |
 
 ai-memory also generates an OpenCode lifecycle plugin. It remains documented
 at [`../ai-memory/README.md`](../ai-memory/README.md) because it owns a native

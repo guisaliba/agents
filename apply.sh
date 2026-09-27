@@ -18,6 +18,18 @@ REPO_DIR="$SCRIPT_DIR"
 AGENT_STACK_HELPER="$REPO_DIR/lib/agent_stack.py"
 SKILLS_MANIFEST="$REPO_DIR/skills.tsv"
 RTK_VERSION="${RTK_VERSION:-v0.38.0}"
+OPENCODE_MIN_VERSION="${OPENCODE_MIN_VERSION:-2.0.18}"
+OPENCODE_INSTALL_URL="https://opencode.ai/v2/install"
+OPENCODE_BINARY="${OPENCODE_BINARY:-$HOME/.opencode/bin/opencode}"
+OPENCODE_V1_BACKUP_DIR="${OPENCODE_V1_BACKUP_DIR:-$HOME/.local/share/opencode-v1-backup}"
+OPENCODE_SERVER_PORT="${OPENCODE_SERVER_PORT:-4096}"
+OPENCODE_SERVER_ENABLED="${OPENCODE_SERVER_ENABLED:-false}"
+OPENCODE_SERVER_ENV_FILE="${OPENCODE_SERVER_ENV_FILE:-$HOME/.config/opencode/server.env}"
+OPENCODE_SERVER_LABEL="com.opencode.server"
+OPENCODE_SERVER_LAUNCH_AGENT_FILE="${OPENCODE_SERVER_LAUNCH_AGENT_FILE:-$HOME/Library/LaunchAgents/$OPENCODE_SERVER_LABEL.plist}"
+OPENCODE_SERVER_LAUNCH_DAEMON_SOURCE_FILE="${OPENCODE_SERVER_LAUNCH_DAEMON_SOURCE_FILE:-$HOME/.config/opencode/$OPENCODE_SERVER_LABEL.plist}"
+OPENCODE_SERVER_LAUNCH_DAEMON_FILE="${OPENCODE_SERVER_LAUNCH_DAEMON_FILE:-/Library/LaunchDaemons/$OPENCODE_SERVER_LABEL.plist}"
+OPENCODE_SERVER_LOG_DIR="${OPENCODE_SERVER_LOG_DIR:-$HOME/Library/Logs/opencode}"
 GITHUB_MCP_TOKEN_FILE="$HOME/.config/opencode/secrets/github-mcp-pat"
 GITHUB_MCP_TOKEN_REFERENCE="~/.config/opencode/secrets/github-mcp-pat"
 AI_MEMORY_AUR_PACKAGE="${AI_MEMORY_AUR_PACKAGE:-ai-memory-bin}"
@@ -32,6 +44,9 @@ AI_MEMORY_DATA_DIR="$HOME/.local/share/ai-memory"
 AI_MEMORY_CONFIG_FILE="$HOME/.config/ai-memory/config.toml"
 AI_MEMORY_ENV_FILE="$HOME/.config/ai-memory/env"
 AI_MEMORY_LOOPBACK_SERVER_URL="http://127.0.0.1:49374"
+AI_MEMORY_SERVER_URL="${AI_MEMORY_SERVER_URL:-$AI_MEMORY_LOOPBACK_SERVER_URL}"
+AI_MEMORY_AUTH_TOKEN_FILE="${AI_MEMORY_AUTH_TOKEN_FILE:-$HOME/.config/ai-memory/client-token}"
+AI_MEMORY_AUTH_TOKEN_REFERENCE="~/.config/ai-memory/client-token"
 AI_MEMORY_INSTRUCTIONS_FILE="$HOME/.config/opencode/ai-memory.md"
 AI_MEMORY_INSTRUCTIONS_REFERENCE="~/.config/opencode/ai-memory.md"
 AI_MEMORY_USER_SERVICE_FILE="$HOME/.config/systemd/user/ai-memory.service"
@@ -49,7 +64,7 @@ LEARN_INSTALL_DIR="${LEARN_INSTALL_DIR:-$HOME/.local/share/opencode/learn}"
 LEARN_PLUGIN_SPEC="$LEARN_INSTALL_DIR"
 LEARN_LEGACY_PLUGIN_BASE="github:guisaliba/learn"
 LEARN_OLDER_PLUGIN_BASE="github:guisaliba/opencode-learn"
-LEARN_MIN_OPENCODE_VERSION="${LEARN_MIN_OPENCODE_VERSION:-1.18.22}"
+PLANNOTATOR_PLUGIN_SPEC="@plannotator/opencode@latest"
 OPENCODE_TUI_THEME="orng"
 OPENCODE_THEMES_SOURCE_DIR="$REPO_DIR/opencode/themes"
 BASH_ALIASES_SOURCE="${BASH_ALIASES_SOURCE:-$REPO_DIR/shell/opencode.bash}"
@@ -406,6 +421,12 @@ PY
 
 verify_ai_memory_unauthenticated_loopback() {
   local auth_variable
+  if [[ "$OPENCODE_SERVER_ENABLED" == true ]]; then
+    ensure_ai_memory_env_file
+    [[ -n "$(ai_memory_env_value AI_MEMORY_AUTH_TOKEN 2>/dev/null || true)" ]] || \
+      die "The M4 ai-memory service requires AI_MEMORY_AUTH_TOKEN in $AI_MEMORY_ENV_FILE"
+    return 0
+  fi
   log "Verifying the unauthenticated ai-memory loopback policy"
 
   for auth_variable in \
@@ -441,19 +462,82 @@ for line in sys.stdin:
   fi
 }
 
+opencode_major_version() {
+  local executable="$1" output
+  output="$("$executable" --version 2>/dev/null)" || return 1
+  python3 - "$output" <<'PY'
+import re
+import sys
+
+match = re.search(r"(?:^|\s)v?(\d+)\.(\d+)\.(\d+)(?:\s|$)", sys.argv[1])
+if not match:
+    raise SystemExit(1)
+print(match.group(1))
+PY
+}
+
+backup_opencode_v1_state() {
+  local active_binary="${1:-}" marker="$OPENCODE_V1_BACKUP_DIR/manifest.txt"
+  [[ -e "$marker" ]] && return 0
+
+  log "Backing up the OpenCode V1 runtime before conversion"
+  mkdir -p "$OPENCODE_V1_BACKUP_DIR"
+  if [[ -n "$active_binary" && -x "$active_binary" ]]; then
+    cp "$active_binary" "$OPENCODE_V1_BACKUP_DIR/opencode"
+    chmod 700 "$OPENCODE_V1_BACKUP_DIR/opencode"
+  fi
+  for path in \
+    "$HOME/.config/opencode/opencode.json" \
+    "$HOME/.config/opencode/opencode.jsonc" \
+    "$HOME/.config/opencode/tui.json" \
+    "$HOME/.config/opencode/tui.jsonc"
+  do
+    [[ -f "$path" ]] && cp "$path" "$OPENCODE_V1_BACKUP_DIR/$(basename "$path")"
+  done
+  [[ -d "$HOME/.config/opencode/plugins" ]] && \
+    cp -a "$HOME/.config/opencode/plugins" "$OPENCODE_V1_BACKUP_DIR/plugins"
+  if [[ -f "$HOME/.local/share/opencode/opencode.db" ]] && have sqlite3; then
+    sqlite3 "$HOME/.local/share/opencode/opencode.db" \
+      ".backup '$OPENCODE_V1_BACKUP_DIR/opencode.db'"
+    chmod 600 "$OPENCODE_V1_BACKUP_DIR/opencode.db"
+  fi
+  [[ ! -f "$HOME/.local/share/opencode/auth.json" ]] || \
+    cp "$HOME/.local/share/opencode/auth.json" "$OPENCODE_V1_BACKUP_DIR/auth.json"
+  {
+    printf 'version='
+    [[ -n "$active_binary" && -x "$active_binary" ]] && "$active_binary" --version || printf 'not-installed\n'
+    printf 'binary=%s\n' "$active_binary"
+  } >"$marker"
+  chmod -R go-rwx "$OPENCODE_V1_BACKUP_DIR"
+}
+
 install_opencode() {
-  if have opencode; then
-    log "OpenCode already installed, skipping"
-    return
+  local active_binary="" active_major="" managed_major=""
+  active_binary="$(type -P opencode 2>/dev/null || true)"
+  [[ -z "$active_binary" ]] || active_major="$(opencode_major_version "$active_binary" || true)"
+  [[ ! -x "$OPENCODE_BINARY" ]] || managed_major="$(opencode_major_version "$OPENCODE_BINARY" || true)"
+
+  if [[ "$active_major" == "1" ]]; then
+    backup_opencode_v1_state "$active_binary"
+  elif [[ "$managed_major" == "1" ]]; then
+    backup_opencode_v1_state "$OPENCODE_BINARY"
   fi
 
-  log "Installing OpenCode"
-  curl -fsSL https://opencode.ai/install | bash || die "OpenCode install failed"
+  if [[ "$managed_major" == "2" ]]; then
+    prepend_path "$(dirname "$OPENCODE_BINARY")"
+  else
+    log "Installing OpenCode V2 with the official installer"
+    curl -fsSL "$OPENCODE_INSTALL_URL" | bash -s -- --no-modify-path || \
+      die "OpenCode V2 installation failed"
+    prepend_path "$(dirname "$OPENCODE_BINARY")"
+  fi
 
-  prepend_path "$HOME/bin"
-  prepend_path "$HOME/.local/bin"
-  prepend_path "$HOME/.opencode/bin"
-  have opencode || die "OpenCode install did not put opencode on PATH"
+  [[ -x "$OPENCODE_BINARY" ]] || die "OpenCode V2 installer did not create $OPENCODE_BINARY"
+  [[ "$(opencode_major_version "$OPENCODE_BINARY" || true)" == "2" ]] || \
+    die "$OPENCODE_BINARY is not OpenCode V2"
+  [[ "$(type -P opencode)" == "$OPENCODE_BINARY" ]] || \
+    die "OpenCode V2 is installed but another opencode binary still has PATH precedence"
+  require_minimum_version opencode "$OPENCODE_MIN_VERSION"
 }
 
 sync_learn_plugin() {
@@ -699,6 +783,130 @@ atomic_write_text(path, content, mode, ".bash_profile.")
 PY
 }
 
+ensure_opencode_server_env_file() {
+  log "Preparing the machine-local OpenCode server environment file"
+  python3 "$AGENT_STACK_HELPER" \
+    ensure-private-file \
+    "$OPENCODE_SERVER_ENV_FILE" \
+    "OpenCode server environment path"
+}
+
+opencode_server_env_value() {
+  python3 "$AGENT_STACK_HELPER" env-value "$OPENCODE_SERVER_ENV_FILE" "$1"
+}
+
+install_opencode_launch_daemon_source() {
+  [[ "$OPENCODE_SERVER_ENABLED" == true ]] || return 0
+  [[ "$(agent_stack_platform)" == Darwin ]] || \
+    die "The centralized OpenCode server currently requires macOS"
+
+  ensure_opencode_server_env_file
+  [[ -n "$(opencode_server_env_value OPENCODE_SERVER_PASSWORD 2>/dev/null || true)" ]] || \
+    die "Set OPENCODE_SERVER_PASSWORD in $OPENCODE_SERVER_ENV_FILE before enabling the server"
+
+  local username group
+  username="$(id -un)"
+  group="$(id -gn)"
+  log "Generating the OpenCode V2 LaunchDaemon source"
+  mkdir -p "$(dirname "$OPENCODE_SERVER_LAUNCH_DAEMON_SOURCE_FILE")" "$OPENCODE_SERVER_LOG_DIR"
+  chmod 700 "$OPENCODE_SERVER_LOG_DIR"
+  touch "$OPENCODE_SERVER_LOG_DIR/stdout.log" "$OPENCODE_SERVER_LOG_DIR/stderr.log"
+  chmod 600 "$OPENCODE_SERVER_LOG_DIR/stdout.log" "$OPENCODE_SERVER_LOG_DIR/stderr.log"
+
+  python3 - \
+    "$OPENCODE_SERVER_LAUNCH_DAEMON_SOURCE_FILE" \
+    "$OPENCODE_BINARY" \
+    "$OPENCODE_SERVER_ENV_FILE" \
+    "$OPENCODE_SERVER_LABEL" \
+    "$OPENCODE_SERVER_PORT" \
+    "$OPENCODE_SERVER_LOG_DIR" \
+    "$HOME" \
+    "$username" \
+    "$group" \
+    "$AGENT_STACK_HELPER" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+binary = str(Path(sys.argv[2]).absolute())
+env_file = str(Path(sys.argv[3]).absolute())
+label = sys.argv[4]
+port = sys.argv[5]
+log_dir = sys.argv[6]
+home = sys.argv[7]
+username = sys.argv[8]
+group = sys.argv[9]
+helper_path = Path(sys.argv[10])
+sys.path.insert(0, str(helper_path.parent))
+sys.dont_write_bytecode = True
+
+from agent_stack import atomic_write_text
+
+config = {
+    "Label": label,
+    "UserName": username,
+    "GroupName": group,
+    "ProgramArguments": [
+        "/bin/bash",
+        "-c",
+        'set -a; source "$1"; shift; exec "$@"',
+        "opencode-server",
+        env_file,
+        binary,
+        "serve",
+        "--hostname",
+        "127.0.0.1",
+        "--port",
+        port,
+    ],
+    "RunAtLoad": True,
+    "KeepAlive": {"SuccessfulExit": False},
+    "WorkingDirectory": home,
+    "EnvironmentVariables": {
+        "HOME": home,
+        "PATH": f"{home}/.opencode/bin:{home}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+    },
+    "StandardOutPath": f"{log_dir}/stdout.log",
+    "StandardErrorPath": f"{log_dir}/stderr.log",
+}
+content = plistlib.dumps(config, fmt=plistlib.FMT_XML, sort_keys=False).decode("utf-8")
+try:
+    if path.read_text(encoding="utf-8") == content:
+        raise SystemExit(0)
+except FileNotFoundError:
+    pass
+
+atomic_write_text(path, content, 0o600, ".opencode-launch-daemon.")
+PY
+  chmod 600 "$OPENCODE_SERVER_LAUNCH_DAEMON_SOURCE_FILE"
+}
+
+start_opencode_server() {
+  [[ "$OPENCODE_SERVER_ENABLED" == true ]] || return 0
+  local target="system/$OPENCODE_SERVER_LABEL" contract
+
+  install_opencode_launch_daemon_source
+  contract="$(stat -f '%Su:%Sg:%Lp' "$OPENCODE_SERVER_LAUNCH_DAEMON_FILE" 2>/dev/null || true)"
+  if [[ "$contract" != "root:wheel:644" ]]; then
+    die "OpenCode LaunchDaemon requires one privileged installation. Run:
+sudo launchctl bootout '$target' >/dev/null 2>&1 || true
+sudo install -o root -g wheel -m 0644 '$OPENCODE_SERVER_LAUNCH_DAEMON_SOURCE_FILE' '$OPENCODE_SERVER_LAUNCH_DAEMON_FILE'
+sudo launchctl bootstrap system '$OPENCODE_SERVER_LAUNCH_DAEMON_FILE'
+sudo launchctl kickstart -k '$target'"
+  fi
+  if ! launchctl print "$target" >/dev/null 2>&1; then
+    die "OpenCode LaunchDaemon is installed but inactive. Run:
+sudo launchctl bootstrap system '$OPENCODE_SERVER_LAUNCH_DAEMON_FILE'
+sudo launchctl kickstart -k '$target'"
+  fi
+  rm -f "$OPENCODE_SERVER_LAUNCH_AGENT_FILE"
+
+  have tailscale || die "Tailscale is required for the centralized OpenCode server"
+  tailscale serve --bg --yes "http://127.0.0.1:$OPENCODE_SERVER_PORT" || \
+    die "Tailscale Serve configuration failed"
+}
+
 copy_agents_md() {
   log "Copying canonical AGENTS.md to OpenCode global config"
 
@@ -753,10 +961,12 @@ merge_opencode_json() {
     "$config" \
     "$subagent_model" \
     "$GITHUB_MCP_TOKEN_REFERENCE" \
-    "$AI_MEMORY_INSTRUCTIONS_REFERENCE" \
+    "$AI_MEMORY_SERVER_URL" \
+    "$AI_MEMORY_AUTH_TOKEN_REFERENCE" \
     "$LEARN_PLUGIN_SPEC" \
     "$LEARN_LEGACY_PLUGIN_BASE" \
-    "$LEARN_OLDER_PLUGIN_BASE" <<'PY'
+    "$LEARN_OLDER_PLUGIN_BASE" \
+    "$PLANNOTATOR_PLUGIN_SPEC" <<'PY'
 import json
 import os
 import sys
@@ -764,10 +974,12 @@ import sys
 path = sys.argv[1]
 subagent_model = sys.argv[2]
 github_mcp_token_reference = sys.argv[3]
-ai_memory_instructions_reference = sys.argv[4]
-learn_plugin_spec = sys.argv[5]
-learn_legacy_plugin_base = sys.argv[6]
-learn_older_plugin_base = sys.argv[7]
+ai_memory_server_url = sys.argv[4].rstrip("/")
+ai_memory_auth_token_reference = sys.argv[5]
+learn_plugin_spec = sys.argv[6]
+learn_legacy_plugin_base = sys.argv[7]
+learn_older_plugin_base = sys.argv[8]
+plannotator_plugin_spec = sys.argv[9]
 data = {}
 
 if os.path.exists(path):
@@ -788,15 +1000,112 @@ if not isinstance(data, dict):
 
 data.setdefault("$schema", "https://opencode.ai/config.json")
 
+
+def convert_permissions(value, location):
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        return [{"action": "*", "resource": "*", "effect": value}]
+    if not isinstance(value, dict):
+        raise SystemExit(f"ERROR: Expected '{location}' to be an object, array, or string in {path}. File was not changed.")
+    action_names = {"bash": "shell", "task": "subagent", "write": "edit", "patch": "edit"}
+    result = []
+    for action, rule in value.items():
+        action = action_names.get(action, action)
+        if isinstance(rule, str):
+            result.append({"action": action, "resource": "*", "effect": rule})
+        elif isinstance(rule, dict):
+            for resource, effect in rule.items():
+                result.append({"action": action, "resource": resource, "effect": effect})
+        else:
+            raise SystemExit(f"ERROR: Invalid permission rule at '{location}.{action}' in {path}. File was not changed.")
+    return result
+
+
+def convert_agent(config, location):
+    if not isinstance(config, dict):
+        raise SystemExit(f"ERROR: Expected '{location}' to be an object in {path}. File was not changed.")
+    config = dict(config)
+    if "system" not in config and "prompt" in config:
+        config["system"] = config.pop("prompt")
+    else:
+        config.pop("prompt", None)
+    if "disabled" not in config and "disable" in config:
+        config["disabled"] = config.pop("disable")
+    else:
+        config.pop("disable", None)
+    if "permissions" not in config and "permission" in config:
+        config["permissions"] = convert_permissions(config.pop("permission"), f"{location}.permission")
+    else:
+        config.pop("permission", None)
+    variant = config.pop("variant", None)
+    if variant and isinstance(config.get("model"), str) and "#" not in config["model"]:
+        config["model"] = f'{config["model"]}#{variant}'
+    body = {}
+    request = config.get("request")
+    if request is not None and not isinstance(request, dict):
+        raise SystemExit(f"ERROR: Expected '{location}.request' to be an object in {path}. File was not changed.")
+    request = dict(request or {})
+    if isinstance(request.get("body"), dict):
+        body.update(request["body"])
+    for key in ("temperature", "top_p"):
+        if key in config:
+            body.setdefault(key, config.pop(key))
+    options = config.pop("options", None)
+    if isinstance(options, dict):
+        for key, value in options.items():
+            body.setdefault(key, value)
+    if body:
+        request["body"] = body
+    if request:
+        config["request"] = request
+    return config
+
+
+def convert_plugin(item):
+    if isinstance(item, str):
+        return item
+    if isinstance(item, list) and len(item) == 2 and isinstance(item[0], str) and isinstance(item[1], dict):
+        return {"package": item[0], "options": item[1]}
+    if isinstance(item, dict) and isinstance(item.get("package"), str):
+        return item
+    raise SystemExit(f"ERROR: Invalid plugin entry in {path}. File was not changed.")
+
+
+def plugin_spec(item):
+    return item if isinstance(item, str) else item["package"]
+
+
+if "update" not in data and "autoupdate" in data:
+    legacy_update = data.pop("autoupdate")
+    data["update"] = "notify" if legacy_update == "notify" else "auto" if legacy_update is True else "disable"
+else:
+    data.pop("autoupdate", None)
+
+for old, new in (("snapshot", "snapshots"), ("attachment", "media"), ("command", "commands"), ("provider", "providers")):
+    if new not in data and old in data:
+        data[new] = data.pop(old)
+    else:
+        data.pop(old, None)
+
+if "permissions" not in data and "permission" in data:
+    data["permissions"] = convert_permissions(data.pop("permission"), "permission")
+else:
+    data.pop("permission", None)
+
+legacy_agents = data.pop("agent", {})
+legacy_modes = data.pop("mode", {})
+native_agents = data.get("agents", {})
+for value, name in ((legacy_agents, "agent"), (legacy_modes, "mode"), (native_agents, "agents")):
+    if not isinstance(value, dict):
+        raise SystemExit(f"ERROR: Expected '{name}' to be an object in {path}. File was not changed.")
+agents = {}
+for name, config in {**legacy_modes, **legacy_agents, **native_agents}.items():
+    agents[name] = convert_agent(config, f"agents.{name}")
+
 primary_model = "openai/gpt-6-sol"
 data["model"] = primary_model
 data["default_agent"] = "build"
-
-agents = data.get("agent", {})
-if not isinstance(agents, dict):
-    raise SystemExit(
-        f"ERROR: Expected 'agent' to be an object in {path}. File was not changed."
-    )
 
 managed_models = {
     "plan": primary_model,
@@ -808,13 +1117,19 @@ for name, model in managed_models.items():
     config = agents.get(name, {})
     if not isinstance(config, dict):
         raise SystemExit(
-            f"ERROR: Expected 'agent.{name}' to be an object in {path}. "
+            f"ERROR: Expected 'agents.{name}' to be an object in {path}. "
             "File was not changed."
         )
     config["model"] = model
     agents[name] = config
 
-data["agent"] = agents
+legacy_small_model = data.pop("small_model", None)
+if isinstance(legacy_small_model, str):
+    title = agents.get("title", {})
+    if isinstance(title, dict):
+        title.setdefault("model", legacy_small_model)
+        agents["title"] = title
+data["agents"] = agents
 
 instructions = data.get("instructions", [])
 if not isinstance(instructions, list):
@@ -822,57 +1137,38 @@ if not isinstance(instructions, list):
         f"ERROR: Expected 'instructions' to be an array in {path}. "
         "File was not changed."
     )
-instructions = [
-    item for item in instructions if item != ai_memory_instructions_reference
-]
-instructions.append(ai_memory_instructions_reference)
-data["instructions"] = instructions
+data["instructions"] = list(dict.fromkeys(instructions))
 
-plugin = "@plannotator/opencode@latest"
-plugins = data.get("plugin", [])
-if isinstance(plugins, str):
-    plugins = [plugins]
-elif isinstance(plugins, list):
-    plugins = list(plugins)
-else:
-    raise SystemExit(
-        f"ERROR: Expected 'plugin' to be an array or string in {path}. "
-        "File was not changed."
-    )
-
-
-def plugin_spec(item):
-    if isinstance(item, str):
-        return item
-    if (
-        isinstance(item, list)
-        and len(item) == 2
-        and isinstance(item[0], str)
-        and isinstance(item[1], dict)
-    ):
-        return item[0]
-    raise SystemExit(
-        f"ERROR: Expected each 'plugin' entry in {path} to be a string or "
-        "[string, object] tuple. File was not changed."
-    )
-
-
+legacy_plugins = data.pop("plugin", [])
+native_plugins = data.get("plugins", [])
+if isinstance(legacy_plugins, str):
+    legacy_plugins = [legacy_plugins]
+if not isinstance(legacy_plugins, list) or not isinstance(native_plugins, list):
+    raise SystemExit(f"ERROR: Expected plugin declarations to be arrays in {path}. File was not changed.")
+plugins = [convert_plugin(item) for item in [*legacy_plugins, *native_plugins]]
 plugins = [
-    item
-    for item in plugins
+    item for item in plugins
     if not (
         plugin_spec(item) == learn_plugin_spec
         or plugin_spec(item) == learn_legacy_plugin_base
         or plugin_spec(item).startswith(f"{learn_legacy_plugin_base}#")
         or plugin_spec(item) == learn_older_plugin_base
         or plugin_spec(item).startswith(f"{learn_older_plugin_base}#")
+        or plugin_spec(item) == plannotator_plugin_spec
     )
 ]
-if not any(plugin_spec(item) == plugin for item in plugins):
-    plugins.append(plugin)
-# No model options: the Learn plugin runs on the defaults shipped by its own repository.
-plugins.append(learn_plugin_spec)
-data["plugin"] = plugins
+plugins.append({
+    "package": plannotator_plugin_spec,
+    "options": {"workflow": "plan-agent", "planningAgents": ["plan"]},
+})
+deduplicated = []
+seen = set()
+for item in plugins:
+    spec = plugin_spec(item)
+    if spec not in seen:
+        seen.add(spec)
+        deduplicated.append(item)
+data["plugins"] = deduplicated
 
 cloudflare_mcps = {
     "cloudflare-api": "https://mcp.cloudflare.com/mcp",
@@ -890,27 +1186,74 @@ if not isinstance(mcp, dict):
     raise SystemExit(
         f"ERROR: Expected 'mcp' to be an object in {path}. File was not changed."
     )
-for name, url in remote_mcps.items():
-    existing = mcp.get(name)
-    if isinstance(existing, dict) and existing.get("url") == url:
+native_servers = mcp.get("servers", {})
+if not isinstance(native_servers, dict):
+    raise SystemExit(f"ERROR: Expected 'mcp.servers' to be an object in {path}. File was not changed.")
+servers = {}
+for name, config in mcp.items():
+    if name in {"servers", "timeout"}:
         continue
-    mcp[name] = {"type": "remote", "url": url, "enabled": True}
-mcp["ai-memory"] = {
+    if not isinstance(config, dict):
+        raise SystemExit(f"ERROR: Expected 'mcp.{name}' to be an object in {path}. File was not changed.")
+    config = dict(config)
+    if "disabled" not in config and "enabled" in config:
+        config["disabled"] = not bool(config.pop("enabled"))
+    else:
+        config.pop("enabled", None)
+    if isinstance(config.get("timeout"), int):
+        timeout = config["timeout"]
+        config["timeout"] = {"catalog": timeout, "execution": timeout}
+    servers[name] = config
+for name, config in native_servers.items():
+    if not isinstance(config, dict):
+        raise SystemExit(f"ERROR: Expected 'mcp.servers.{name}' to be an object in {path}. File was not changed.")
+    servers[name] = dict(config)
+for name, url in remote_mcps.items():
+    servers[name] = {"type": "remote", "url": url, "disabled": False}
+ai_memory = {
     "type": "remote",
-    "url": "http://127.0.0.1:49374/mcp",
-    "enabled": True,
+    "url": f"{ai_memory_server_url}/mcp",
+    "disabled": False,
 }
-mcp["github"] = {
+token_path = os.path.expanduser(ai_memory_auth_token_reference.replace("~", "~", 1))
+if ai_memory_server_url != "http://127.0.0.1:49374" or (os.path.isfile(token_path) and os.path.getsize(token_path) > 0):
+    ai_memory["headers"] = {"Authorization": f"Bearer {{file:{ai_memory_auth_token_reference}}}"}
+servers["ai-memory"] = ai_memory
+servers["github"] = {
     "type": "remote",
     "url": "https://api.githubcopilot.com/mcp/",
-    "enabled": True,
+    "disabled": False,
     "oauth": False,
     "headers": {
         "Authorization": f"Bearer {{file:{github_mcp_token_reference}}}",
         "X-MCP-Toolsets": "context,repos,issues,pull_requests,actions",
     },
 }
-data["mcp"] = mcp
+data["mcp"] = {"servers": servers}
+
+compaction = data.get("compaction", {})
+if not isinstance(compaction, dict):
+    raise SystemExit(f"ERROR: Expected 'compaction' to be an object in {path}. File was not changed.")
+if "keep" not in compaction and "preserve_recent_tokens" in compaction:
+    compaction["keep"] = {"tokens": compaction.pop("preserve_recent_tokens")}
+else:
+    compaction.pop("preserve_recent_tokens", None)
+if "buffer" not in compaction and "reserved" in compaction:
+    compaction["buffer"] = compaction.pop("reserved")
+else:
+    compaction.pop("reserved", None)
+compaction.pop("tail_turns", None)
+compaction.pop("prune", None)
+compaction["auto"] = False
+data["compaction"] = compaction
+
+skills = data.get("skills", [])
+if isinstance(skills, dict):
+    skills = [*skills.get("paths", []), *skills.get("urls", [])]
+if not isinstance(skills, list) or not all(isinstance(item, str) for item in skills):
+    raise SystemExit(f"ERROR: Expected 'skills' to be an array in {path}. File was not changed.")
+
+data["skills"] = list(dict.fromkeys(skills))
 
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2)
@@ -918,27 +1261,24 @@ with open(path, "w", encoding="utf-8") as f:
 PY
 }
 
-merge_opencode_tui_json() {
-  log "Merging OpenCode tui.json"
+merge_opencode_cli_json() {
+  log "Merging OpenCode V2 cli.json"
 
-  local config="$HOME/.config/opencode/tui.json"
+  local config="$HOME/.config/opencode/cli.json"
   mkdir -p "$(dirname "$config")"
 
   python3 - \
     "$config" \
-    "$LEARN_PLUGIN_SPEC" \
-    "$LEARN_LEGACY_PLUGIN_BASE" \
-    "$LEARN_OLDER_PLUGIN_BASE" \
-    "$OPENCODE_TUI_THEME" <<'PY'
+    "$HOME/.config/opencode/tui.json" \
+    "$HOME/.config/opencode/tui.jsonc" \
+    "$OPENCODE_TUI_THEME" <<'PY' || return 1
 import json
 import os
 import sys
 
 path = sys.argv[1]
-learn_plugin_spec = sys.argv[2]
-learn_legacy_plugin_base = sys.argv[3]
-learn_older_plugin_base = sys.argv[4]
-theme_name = sys.argv[5]
+tui_paths = sys.argv[2:4]
+theme_name = sys.argv[4]
 data = {}
 
 if os.path.exists(path):
@@ -957,8 +1297,31 @@ if not isinstance(data, dict):
         f"{type(data).__name__}. File was not changed."
     )
 
-data.setdefault("$schema", "https://opencode.ai/tui.json")
-data["theme"] = theme_name
+if not data:
+    for tui_path in tui_paths:
+        if not os.path.exists(tui_path):
+            continue
+        try:
+            with open(tui_path, "r", encoding="utf-8") as f:
+                legacy = json.load(f)
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"ERROR: Invalid JSON in {tui_path}: {exc}. File was not changed.")
+        if not isinstance(legacy, dict):
+            raise SystemExit(f"ERROR: Expected an object in {tui_path}. File was not changed.")
+        if isinstance(legacy.get("theme"), str):
+            data.setdefault("theme", {"name": legacy["theme"]})
+        if isinstance(legacy.get("keybinds"), dict):
+            data.setdefault("keybinds", {}).update(legacy["keybinds"])
+        break
+
+data["$schema"] = "https://opencode.ai/v2/cli.json"
+theme = data.get("theme", {})
+if isinstance(theme, str):
+    theme = {"name": theme}
+if not isinstance(theme, dict):
+    raise SystemExit(f"ERROR: Expected 'theme' to be an object in {path}. File was not changed.")
+theme["name"] = theme_name
+data["theme"] = theme
 
 keybinds = data.get("keybinds", {})
 if not isinstance(keybinds, dict):
@@ -972,61 +1335,40 @@ keybinds["session.background"] = False
 keybinds["input.move.left"] = "left"
 data["keybinds"] = keybinds
 
-plugins = data.get("plugin", [])
-if isinstance(plugins, str):
-    plugins = [plugins]
-elif isinstance(plugins, list):
-    plugins = list(plugins)
-else:
-    raise SystemExit(
-        f"ERROR: Expected 'plugin' to be an array or string in {path}. "
-        "File was not changed."
-    )
-
-
-def plugin_spec(item):
-    if isinstance(item, str):
-        return item
-    if (
-        isinstance(item, list)
-        and len(item) == 2
-        and isinstance(item[0], str)
-        and isinstance(item[1], dict)
-    ):
-        return item[0]
-    raise SystemExit(
-        f"ERROR: Expected each 'plugin' entry in {path} to be a string or "
-        "[string, object] tuple. File was not changed."
-    )
-
-
-plugins = [
-    item
-    for item in plugins
-    if not (
-        plugin_spec(item) == learn_plugin_spec
-        or plugin_spec(item) == learn_legacy_plugin_base
-        or plugin_spec(item).startswith(f"{learn_legacy_plugin_base}#")
-        or plugin_spec(item) == learn_older_plugin_base
-        or plugin_spec(item).startswith(f"{learn_older_plugin_base}#")
-    )
-]
-plugins.append(learn_plugin_spec)
-data["plugin"] = plugins
+data.pop("plugin", None)
+plugins = data.get("plugins", [])
+if not isinstance(plugins, list):
+    raise SystemExit(f"ERROR: Expected 'plugins' to be an array in {path}. File was not changed.")
+data["plugins"] = plugins
 
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2)
     f.write("\n")
 PY
+
+  rm -f "$HOME/.config/opencode/tui.json" "$HOME/.config/opencode/tui.jsonc"
+}
+
+remove_v1_opencode_plugins() {
+  local plugin
+  log "Removing V1-only generated OpenCode plugins"
+  for plugin in \
+    "$HOME/.config/opencode/plugins/ai-memory.ts" \
+    "$HOME/.config/opencode/plugins/rtk.ts" \
+    "$HOME/.config/opencode/plugins/herdr-agent-state.js"
+  do
+    [[ ! -e "$plugin" && ! -L "$plugin" ]] || rm -f "$plugin"
+  done
 }
 
 setup_opencode() {
   copy_agents_md
   ensure_github_mcp_token_file
-  sync_learn_plugin
+  python3 "$AGENT_STACK_HELPER" ensure-private-file "$AI_MEMORY_AUTH_TOKEN_FILE" "ai-memory client token path"
   merge_opencode_json
   install_opencode_themes
-  merge_opencode_tui_json
+  merge_opencode_cli_json
+  remove_v1_opencode_plugins
 }
 
 ensure_ai_memory_env_file() {
@@ -1129,7 +1471,7 @@ configure_ai_memory_env_file() {
   IFS='|' read -r provider model credential subagent_model <<<"$profile_spec"
 
   provider_state="zero-llm"
-  if ai_memory_profile_credential_ready "$credential"; then
+  if [[ "$(ai_memory_env_value DOTFILES_AI_MEMORY_LLM_ENABLED 2>/dev/null || true)" != "false" ]] && ai_memory_profile_credential_ready "$credential"; then
     provider_state="enabled"
   else
     provider=""
@@ -1205,6 +1547,8 @@ PY
 
   if [[ "$provider_state" == "enabled" ]]; then
     log "ai-memory LLM enabled by $profile"
+  elif [[ "$(ai_memory_env_value DOTFILES_AI_MEMORY_LLM_ENABLED 2>/dev/null || true)" == "false" ]]; then
+    log "ai-memory LLM paused by DOTFILES_AI_MEMORY_LLM_ENABLED=false"
   elif [[ "$credential" == "opencode-api-key" ]]; then
     log "ai-memory remains in zero-LLM mode. Add OPENCODE_API_KEY to $AI_MEMORY_ENV_FILE, then rerun apply."
   fi
@@ -1447,19 +1791,34 @@ start_ai_memory_service() {
 }
 
 wire_ai_memory_to_opencode() {
-  log "Installing the ai-memory OpenCode lifecycle plugin"
-  ai-memory \
-    --data-dir "$AI_MEMORY_DATA_DIR" \
-    --config "$AI_MEMORY_CONFIG_FILE" \
-    install-hooks \
-    --agent opencode \
-    --server-url "$AI_MEMORY_LOOPBACK_SERVER_URL" \
-    --project-strategy repo-root \
-    --apply || die "ai-memory OpenCode hook installation failed"
+  log "Installing the ai-memory OpenCode V2 lifecycle plugin"
+  if [[ "$AI_MEMORY_SERVER_URL" != "$AI_MEMORY_LOOPBACK_SERVER_URL" ]]; then
+    [[ -s "$AI_MEMORY_AUTH_TOKEN_FILE" ]] || \
+      die "Remote ai-memory requires a token in $AI_MEMORY_AUTH_TOKEN_FILE"
+    ai-memory \
+      --data-dir "$AI_MEMORY_DATA_DIR" \
+      --config "$AI_MEMORY_CONFIG_FILE" \
+      install-hooks \
+      --agent opencode2 \
+      --server-url "$AI_MEMORY_SERVER_URL" \
+      --project-strategy repo-root \
+      --auth-token "$(<"$AI_MEMORY_AUTH_TOKEN_FILE")" \
+      --apply || die "ai-memory OpenCode V2 hook installation failed"
+  else
+    ai-memory \
+      --data-dir "$AI_MEMORY_DATA_DIR" \
+      --config "$AI_MEMORY_CONFIG_FILE" \
+      install-hooks \
+      --agent opencode2 \
+      --server-url "$AI_MEMORY_SERVER_URL" \
+      --project-strategy repo-root \
+      --apply || die "ai-memory OpenCode V2 hook installation failed"
+  fi
+  chmod 600 "$HOME/.config/opencode/plugins/ai-memory-opencode2.ts"
 
   log "Generating current ai-memory routing instructions"
   ai-memory install-instructions \
-    --target "$AI_MEMORY_INSTRUCTIONS_FILE" \
+    --target "$HOME/.config/opencode/AGENTS.md" \
     --no-skills || die "ai-memory instruction installation failed"
 
   log "Installing current ai-memory Agent Skills"
@@ -1469,8 +1828,15 @@ wire_ai_memory_to_opencode() {
 }
 
 setup_ai_memory() {
-  initialize_ai_memory
-  start_ai_memory_service
+  if [[ "$AI_MEMORY_SERVER_URL" == "$AI_MEMORY_LOOPBACK_SERVER_URL" ]]; then
+    initialize_ai_memory
+    start_ai_memory_service
+  else
+    log "Using centralized ai-memory at $AI_MEMORY_SERVER_URL"
+    if [[ "$(agent_stack_platform)" == Linux ]]; then
+      systemctl --user disable --now ai-memory.service >/dev/null 2>&1 || true
+    fi
+  fi
   wire_ai_memory_to_opencode
 }
 
@@ -1564,8 +1930,8 @@ PY
 }
 
 install_plugins() {
-  log "Installing plugins"
-  install_rtk
+  log "Installing V2-compatible plugins"
+  log "RTK is disabled: no released RTK version has verified OpenCode V2 support"
   install_plannotator
 }
 
@@ -1666,12 +2032,12 @@ main() {
   check_prerequisites
   require_minimum_version bun "$BUN_MIN_VERSION"
   install_opencode
-  require_minimum_version opencode "$LEARN_MIN_OPENCODE_VERSION"
   install_ai_memory
   report_optional_ai_jail
   verify_ai_memory_unauthenticated_loopback
   setup_opencode
   setup_ai_memory
+  start_opencode_server
   merge_opencode_shell_override
   configure_macos_bash_profile
   install_plugins
