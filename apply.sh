@@ -424,7 +424,7 @@ verify_ai_memory_unauthenticated_loopback() {
   if [[ "$OPENCODE_SERVER_ENABLED" == true ]]; then
     ensure_ai_memory_env_file
     [[ -n "$(ai_memory_env_value AI_MEMORY_AUTH_TOKEN 2>/dev/null || true)" ]] || \
-      die "The M4 ai-memory service requires AI_MEMORY_AUTH_TOKEN in $AI_MEMORY_ENV_FILE"
+      die "The ai-memory service on this server host requires AI_MEMORY_AUTH_TOKEN in $AI_MEMORY_ENV_FILE"
     return 0
   fi
   log "Verifying the unauthenticated ai-memory loopback policy"
