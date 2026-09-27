@@ -1127,6 +1127,7 @@ test_ai_memory_token_delivery() {
     PATH="$stub_bin:/usr/bin:/bin"
     export HOME PATH
     source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Darwin; }
     configure_macos_bash_profile
   ) >/dev/null 2>&1; then
     require_contains "$profile" 'source "$HOME/.config/ai-memory/env"'
