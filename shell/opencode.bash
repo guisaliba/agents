@@ -1,22 +1,18 @@
 # >>> dotfiles OpenCode ai-memory wrapper >>>
 # Keep this function local to the interactive Bash process. ai-memory then
 # resolves the native OpenCode executable without recursing into this wrapper.
-unalias opencode opencode-local opencode-raw 2>/dev/null || true
-unset -f opencode opencode-local opencode-raw 2>/dev/null || true
+unalias opencode opencode-raw 2>/dev/null || true
+unset -f opencode opencode-raw 2>/dev/null || true
 export PATH="$HOME/.opencode/bin:$PATH"
-_opencode_remote_path() {
-  local path="$1"
-  local client_home="${OPENCODE_CLIENT_HOME:-$HOME}"
-  local server_home="${OPENCODE_SERVER_HOME:-$HOME}"
-  case "$path" in
-    "$client_home") printf '%s\n' "$server_home" ;;
-    "$client_home"/*) printf '%s%s\n' "$server_home" "${path#$client_home}" ;;
-    *) printf '%s\n' "$path" ;;
-  esac
-}
+# One behavior only: a local, always-managed ai-memory workstream. The session
+# runs in the current directory on the machine you typed the command on, so a
+# session started on a client workstation is a client session. To work on the
+# M4, run this command on the M4. The OpenCode server and its web UI remain
+# available for a browser or phone, but the shell never drives it with --server,
+# so no client path is ever translated into a server path.
 opencode() {
-  local argument mapped_path
-  local remote_arguments=()
+  local argument new_worktree=false
+  local forwarded=()
   for argument in "$@"; do
     if [[ "$argument" == "--yolo" || "$argument" == "--auto" ]]; then
       printf '%s\n' \
@@ -24,28 +20,40 @@ opencode() {
         >&2
       return 2
     fi
-  done
-  if [[ -f "$HOME/.config/opencode/server.env" ]]; then
-    set -a
-    source "$HOME/.config/opencode/server.env"
-    set +a
-  fi
-  if [[ -n "${OPENCODE_SERVER_URL:-}" ]]; then
-    if [[ $# -eq 0 ]]; then
-      remote_arguments+=("$(_opencode_remote_path "$PWD")")
-    else
-      for argument in "$@"; do
-        mapped_path="$(_opencode_remote_path "$argument")"
-        remote_arguments+=("$mapped_path")
-      done
+    if [[ "$argument" == "--new" ]]; then
+      new_worktree=true
+      continue
     fi
-    "$HOME/.opencode/bin/opencode" --server "$OPENCODE_SERVER_URL" "${remote_arguments[@]}"
+    forwarded+=("$argument")
+  done
+
+  if [[ "$new_worktree" == true ]]; then
+    local common_dir repository_root worktree_root slug worktree_dir
+    if ! common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
+      printf '%s\n' \
+        'opencode --new needs a Git repository. Start a session without --new to use this directory.' \
+        >&2
+      return 2
+    fi
+    repository_root="$(dirname "$common_dir")"
+    slug="$(date -u +%Y%m%d-%H%M%S)-$$"
+    worktree_root="$repository_root-worktrees"
+    worktree_dir="$worktree_root/$slug"
+    if ! mkdir -p "$worktree_root" ||
+      ! git worktree add -b "opencode/$slug" "$worktree_dir" HEAD >&2; then
+      printf '%s\n' 'opencode --new could not create the worktree. No session was started.' >&2
+      return 1
+    fi
+    printf 'worktree: %s\n' "$worktree_dir"
+    printf 'branch:   opencode/%s\n' "$slug"
+    (
+      cd "$worktree_dir" || exit 1
+      command ai-memory run opencode2 --executable "$HOME/.opencode/bin/opencode" "${forwarded[@]}"
+    )
     return
   fi
-  command ai-memory run "$HOME/.opencode/bin/opencode" "$@"
-}
-opencode-local() {
-  command ai-memory run "$HOME/.opencode/bin/opencode" "$@"
+
+  command ai-memory run opencode2 --executable "$HOME/.opencode/bin/opencode" "${forwarded[@]}"
 }
 opencode-raw() {
   "$HOME/.opencode/bin/opencode" "$@"

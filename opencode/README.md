@@ -85,7 +85,12 @@ On the M4, set `OPENCODE_SERVER_ENABLED=true` and put a non-empty
 `OPENCODE_SERVER_PASSWORD` in `~/.config/opencode/server.env`. Apply installs a
 root-owned LaunchDaemon that runs as the normal user and publishes its loopback
 endpoint with Tailscale Serve. No GUI login is required after macOS boots.
-Clients use `OPENCODE_SERVER_URL` in their private `server.env`; the shell
-wrapper passes it to OpenCode V2 with `--server`.
+Tailscale Serve publishes it at
+`https://aurealabs-mac-mini-m4.taildc6550.ts.net`, which a browser or a phone on
+the tailnet uses to reach the web UI and the API.
+
+The shell wrapper does not use the server. `opencode` always starts a local
+ai-memory workstream, so a session never leaves the machine where you typed the
+command. To work on the M4, run `opencode` on the M4.
 
 See [V2-MIGRATION.md](V2-MIGRATION.md) for security, rollback, and acceptance.

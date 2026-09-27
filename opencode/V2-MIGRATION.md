@@ -20,7 +20,7 @@
 | Plannotator V1 tuple | V2 plugin object | `apply.sh` | `submit_plan` behavior | Ready upstream |
 | Learn V1 server and TUI plugins | V2 server and CLI plugins | Learn repository | Full quiz and UI E2E | Blocked; disabled |
 | RTK V1 hook | Released V2 `execute.before` hook | RTK upstream | Real V2 command rewrite | Blocked; disabled |
-| Local TUI/server process | M4 `opencode serve` plus remote `--server` | `apply.sh`, `shell/` | Web and remote TUI | Ready for E2E |
+| Local TUI/server process | M4 `opencode serve` for the web UI only | `apply.sh` | Web UI on a tailnet device | Ready; the remote TUI path is dropped |
 
 ## M4 Service
 
@@ -30,7 +30,9 @@ OpenCode V2 `2.0.18` has one `serve` command that supplies the API and web UI. I
 opencode serve --hostname 127.0.0.1 --port 4096
 ```
 
-Tailscale Serve publishes that loopback endpoint to the tailnet. The backend remains unavailable on LAN interfaces. `OPENCODE_SERVER_PASSWORD` is mandatory and is read from `~/.config/opencode/server.env`, mode `0600`. Clients set `OPENCODE_SERVER_URL` and the same Basic Auth variables in their own private `server.env`.
+Tailscale Serve publishes that loopback endpoint to the tailnet. The backend remains unavailable on LAN interfaces. `OPENCODE_SERVER_PASSWORD` is mandatory and is read from `~/.config/opencode/server.env`, mode `0600`.
+
+The shell wrapper does not connect to that server. There is no client-to-server path translation, because a session is never relocated to another machine. `opencode` starts a local ai-memory workstream. A browser or a phone reaches the web UI over Tailscale Serve; that session is captured by the M4 plugin but has no workstream. To get a managed session on the M4, run `opencode` on the M4.
 
 No GUI login is required. FileVault is a separate boot boundary: after an unexpected reboot, macOS, Tailscale, and all LaunchDaemons remain unavailable until the disk is unlocked at the preboot screen. A planned authenticated restart can use `fdesetup authrestart`; unattended recovery after power loss requires disabling FileVault or using remote preboot keyboard/video hardware.
 
