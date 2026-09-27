@@ -644,8 +644,13 @@ config = {
             "enabled": False,
             "headers": {"X-Obsolete": "remove"},
         },
+        "open-design": {
+            "type": "local",
+            "command": ["obsolete-open-design"],
+            "enabled": True,
+        },
     },
-    "skills": {"paths": ["/user/skills"]},
+    "skills": {"paths": ["/user/skills", "/home/user/open-design/skills"]},
 }
 Path(sys.argv[1]).write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 PY
@@ -702,7 +707,9 @@ PY
   require_json_value "$fixture_config" "mcp.servers.github.headers.X-MCP-Toolsets" "context,repos,issues,pull_requests,actions"
   require_json_literal "$fixture_config" "mcp.servers.github" "$GITHUB_MCP_EXPECTED_JSON"
   require_json_literal "$fixture_config" "mcp.servers.ai-memory" "$AI_MEMORY_MCP_EXPECTED_JSON"
+  require_json_missing "$fixture_config" "mcp.servers.open-design"
   require_json_array_count "$fixture_config" "skills" "/user/skills" "1"
+  require_json_array_count "$fixture_config" "skills" "/home/user/open-design/skills" "0"
   require_json_literal "$fixture_config" "compaction.auto" "false"
   for stale_key in agent mode plugin permission command provider snapshot attachment small_model; do
     require_json_missing "$fixture_config" "$stale_key"
