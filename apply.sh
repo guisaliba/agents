@@ -743,12 +743,11 @@ merge_opencode_json() {
   log "Merging OpenCode opencode.json"
 
   local config="$HOME/.config/opencode/opencode.json"
-  local profile profile_spec provider model credential subagent_model
+  local profile subagent_model
   mkdir -p "$(dirname "$config")"
 
-  profile="$(ai_memory_selected_profile)" || return 1
-  profile_spec="$(ai_memory_profile_spec "$profile")"
-  IFS='|' read -r provider model credential subagent_model <<<"$profile_spec"
+  profile="$(opencode_selected_subagent_profile)" || return 1
+  subagent_model="$(opencode_subagent_profile_model "$profile")"
 
   python3 - \
     "$config" \
@@ -1071,6 +1070,30 @@ ai_memory_profile_spec() {
       return 1
       ;;
   esac
+}
+
+opencode_subagent_profile_list() {
+  ai_memory_profile_list
+  printf '%s\n' openai-gpt-6-luna
+}
+
+opencode_subagent_profile_model() {
+  case "$1" in
+    openai-gpt-6-luna) printf '%s\n' 'openai/gpt-6-luna' ;;
+    *) ai_memory_profile_spec "$1" | cut -d'|' -f4 ;;
+  esac
+}
+
+opencode_selected_subagent_profile() {
+  local profile supported
+
+  profile="$(ai_memory_env_value DOTFILES_OPENCODE_SUBAGENT_PROFILE 2>/dev/null || true)"
+  profile="${profile:-$(ai_memory_selected_profile)}"
+  if ! opencode_subagent_profile_model "$profile" >/dev/null; then
+    supported="$(opencode_subagent_profile_list | paste -sd, - | sed 's/,/, /g')"
+    die "Unsupported DOTFILES_OPENCODE_SUBAGENT_PROFILE '$profile'. Supported profiles: $supported."
+  fi
+  printf '%s\n' "$profile"
 }
 
 ai_memory_selected_profile() {

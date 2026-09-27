@@ -11,10 +11,16 @@ Primary:
   build -> openai/gpt-6-sol
   plan  -> openai/gpt-6-sol
 
-Subagents by `DOTFILES_AI_MEMORY_LLM_PROFILE`:
+Subagents by `DOTFILES_OPENCODE_SUBAGENT_PROFILE`:
   opencode-go-deepseek-v4.1-flash (default) -> opencode-go/deepseek-v4.1-flash
   opencode-go-muse-spark-1.3-contributor    -> opencode-go/muse-spark-1.3-contributor
+  openai-gpt-6-luna                         -> openai/gpt-6-luna
 ```
+
+Set `DOTFILES_OPENCODE_SUBAGENT_PROFILE` in `~/.config/ai-memory/env` to
+select a subagent model. Without it, subagents follow the ai-memory profile
+for backward compatibility. The OpenAI profile uses OpenCode authentication;
+it does not change the separate ai-memory LLM provider.
 
 ## Managed Paths
 
