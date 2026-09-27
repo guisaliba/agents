@@ -772,6 +772,14 @@ kept.extend(
         'if [[ -f "$HOME/.bash_aliases" ]]; then',
         '  source "$HOME/.bash_aliases"',
         "fi",
+        'if [[ -f "$HOME/.profile" ]]; then',
+        '  source "$HOME/.profile"',
+        "fi",
+        'if [[ -f "$HOME/.config/ai-memory/env" ]]; then',
+        '  set -a',
+        '  source "$HOME/.config/ai-memory/env"',
+        '  set +a',
+        "fi",
         end_marker,
     ]
 )
@@ -1794,28 +1802,22 @@ start_ai_memory_service() {
 
 wire_ai_memory_to_opencode() {
   log "Installing the ai-memory OpenCode V2 lifecycle plugin"
-  if [[ "$AI_MEMORY_SERVER_URL" != "$AI_MEMORY_LOOPBACK_SERVER_URL" ]]; then
-    [[ -s "$AI_MEMORY_AUTH_TOKEN_FILE" ]] || \
-      die "Remote ai-memory requires a token in $AI_MEMORY_AUTH_TOKEN_FILE"
-    ai-memory \
-      --data-dir "$AI_MEMORY_DATA_DIR" \
-      --config "$AI_MEMORY_CONFIG_FILE" \
-      install-hooks \
-      --agent opencode2 \
-      --server-url "$AI_MEMORY_SERVER_URL" \
-      --project-strategy repo-root \
-      --auth-token "$(<"$AI_MEMORY_AUTH_TOKEN_FILE")" \
-      --apply || die "ai-memory OpenCode V2 hook installation failed"
-  else
-    ai-memory \
-      --data-dir "$AI_MEMORY_DATA_DIR" \
-      --config "$AI_MEMORY_CONFIG_FILE" \
-      install-hooks \
-      --agent opencode2 \
-      --server-url "$AI_MEMORY_SERVER_URL" \
-      --project-strategy repo-root \
-      --apply || die "ai-memory OpenCode V2 hook installation failed"
+  # The token is required whenever the server enforces bearer authentication,
+  # which includes a loopback host that also runs the OpenCode server. Key the
+  # decision off the token file, not off the server URL, so the two agree.
+  local auth_token_arguments=()
+  if [[ -s "$AI_MEMORY_AUTH_TOKEN_FILE" ]]; then
+    auth_token_arguments=(--auth-token "$(<"$AI_MEMORY_AUTH_TOKEN_FILE")")
   fi
+  ai-memory \
+    --data-dir "$AI_MEMORY_DATA_DIR" \
+    --config "$AI_MEMORY_CONFIG_FILE" \
+    install-hooks \
+    --agent opencode2 \
+    --server-url "$AI_MEMORY_SERVER_URL" \
+    --project-strategy repo-root \
+    "${auth_token_arguments[@]}" \
+    --apply || die "ai-memory OpenCode V2 hook installation failed"
   chmod 600 "$HOME/.config/opencode/plugins/ai-memory-opencode2.ts"
 
   log "Generating current ai-memory routing instructions"

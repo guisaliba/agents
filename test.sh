@@ -1085,6 +1085,59 @@ test_learn_plugin_sync() {
   rm -rf -- "$fixture_root"
 }
 
+test_ai_memory_token_delivery() {
+  local fixture_root fixture_home stub_bin token_file env_file call_log profile
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  stub_bin="$fixture_root/bin"
+  token_file="$fixture_home/.config/ai-memory/client-token"
+  env_file="$fixture_home/.config/ai-memory/env"
+  call_log="$fixture_root/calls.log"
+  profile="$fixture_home/.bash_profile"
+  mkdir -p "$(dirname "$token_file")" "$stub_bin" "$fixture_home/.config/opencode"
+  printf '%s\n' 'fixture-token-value' >"$token_file"
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf '\''%s\n'\'' "$*" >>"$OPENCODE_TEST_CALL_LOG"' >"$stub_bin/ai-memory"
+  chmod +x "$stub_bin/ai-memory"
+
+  # The M4 is a loopback server host that still requires a bearer token, so the
+  # hook configuration must receive it even though there is no remote URL.
+  : >"$call_log"
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    OPENCODE_TEST_CALL_LOG="$call_log"
+    export HOME PATH OPENCODE_TEST_CALL_LOG
+    source "$REPO_DIR/apply.sh"
+    AI_MEMORY_SERVER_URL="$AI_MEMORY_LOOPBACK_SERVER_URL"
+    wire_ai_memory_to_opencode
+  ) >/dev/null 2>&1; then
+    if grep -q -- "--auth-token fixture-token-value" "$call_log"; then
+      ok "loopback ai-memory hook installation receives the bearer token"
+    else
+      not_ok "loopback ai-memory hook installation omitted the bearer token"
+    fi
+  else
+    not_ok "loopback ai-memory hook installation failed"
+  fi
+
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    export HOME PATH
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Darwin; }
+    configure_macos_bash_profile
+  ) >/dev/null 2>&1; then
+    require_contains "$profile" 'source "$HOME/.config/ai-memory/env"'
+  else
+    not_ok "macOS Bash profile setup failed for the ai-memory environment"
+  fi
+
+  rm -rf -- "$fixture_root"
+}
+
 test_ai_memory_env_file() {
   local fixture_root fixture_home fixture_env fixture_config env_before first_env
   local no_key_home no_key_env
@@ -1619,7 +1672,7 @@ test_opencode_shell_override() {
   require_text_count "$aliases" "$OPENCODE_SHELL_BLOCK_END" "1"
   require_contains "$aliases" 'opencode() {'
   require_contains "$aliases" 'opencode-raw() {'
-  require_contains "$aliases" 'command ai-memory run "$HOME/.opencode/bin/opencode" "$@"'
+  require_contains "$aliases" 'command ai-memory run opencode2 --executable "$HOME/.opencode/bin/opencode" "${forwarded[@]}"'
   require_contains "$aliases" 'export PATH="$HOME/.opencode/bin:$PATH"'
   cp "$aliases" "$first_aliases"
 
@@ -1636,6 +1689,12 @@ test_opencode_shell_override() {
 
   printf '%s\n' \
     '#!/usr/bin/env bash' \
+    'if [[ "${1:-}" == "run" ]]; then' \
+    '  case "${2:-}" in' \
+    '    claude|codex|opencode|opencode2|pi|crush|omp|kimi|command-code|kiro|grok|antigravity) ;;' \
+    '    *) printf '\''error: invalid value %s for [HARNESS]\n'\'' "${2:-}" >&2; exit 2 ;;' \
+    '  esac' \
+    'fi' \
     'printf '\''%s\n'\'' "$@" >"$OPENCODE_TEST_AI_MEMORY_LOG"' \
     'exit "${OPENCODE_TEST_EXIT_STATUS:-0}"' >"$stub_bin/ai-memory"
   printf '%s\n' \
@@ -1649,7 +1708,7 @@ test_opencode_shell_override() {
     OPENCODE_TEST_RAW_LOG="$raw_log" \
     bash --noprofile --norc -c \
       'source "$HOME/.bash_aliases"; opencode -c "two words"'; then
-    printf '%s\n' run "$fixture_home/.opencode/bin/opencode" -c 'two words' >"$expected"
+    printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" -c 'two words' >"$expected"
     require_same_file "$expected" "$ai_memory_log"
   else
     not_ok "managed OpenCode Bash function failed"
@@ -1661,7 +1720,7 @@ test_opencode_shell_override() {
     OPENCODE_TEST_RAW_LOG="$raw_log" \
     bash --noprofile --norc -c \
       'source "$HOME/.bash_aliases"; opencode session list'; then
-    printf '%s\n' run "$fixture_home/.opencode/bin/opencode" session list >"$expected"
+    printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" session list >"$expected"
     require_same_file "$expected" "$ai_memory_log"
   else
     not_ok "managed OpenCode session utility forwarding failed"
@@ -1682,7 +1741,7 @@ test_opencode_shell_override() {
   else
     not_ok "managed OpenCode launch returned $managed_rc instead of 7"
   fi
-  printf '%s\n' run "$fixture_home/.opencode/bin/opencode" -c 'fixture task' >"$expected"
+  printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" -c 'fixture task' >"$expected"
   require_same_file "$expected" "$ai_memory_log"
 
   if HOME="$fixture_home" PATH="$stub_bin:/usr/bin:/bin" \
@@ -1705,32 +1764,119 @@ test_opencode_shell_override() {
     not_ok "raw OpenCode escape hatch failed"
   fi
 
+  # The wrapper has one behavior: a local, always-managed ai-memory workstream.
+  # A client machine cannot ask for a server-side session through the shell, so
+  # no OPENCODE_SERVER_URL value may change what the wrapper does.
   mkdir -p "$fixture_home/.config/opencode" "$fixture_home/projects/agents"
   printf '%s\n' \
     'OPENCODE_SERVER_URL=https://m4.example.test' \
     "OPENCODE_CLIENT_HOME=$fixture_home" \
     'OPENCODE_SERVER_HOME=/Users/guisaliba' >"$fixture_home/.config/opencode/server.env"
   chmod 600 "$fixture_home/.config/opencode/server.env"
+  : >"$ai_memory_log"
   if (
     cd "$fixture_home/projects/agents"
     HOME="$fixture_home" \
       PATH="$stub_bin:/usr/bin:/bin" \
-      OPENCODE_TEST_RAW_LOG="$raw_log" \
+      OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
       bash --noprofile --norc -c 'source "$HOME/.bash_aliases"; opencode'
   ); then
-    printf '%s\n' --server https://m4.example.test /Users/guisaliba/projects/agents >"$expected"
-    require_same_file "$expected" "$raw_log"
+    printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" >"$expected"
+    require_same_file "$expected" "$ai_memory_log"
   else
-    not_ok "remote OpenCode current-directory mapping failed"
+    not_ok "managed OpenCode launch ignored a configured server URL"
   fi
+  : >"$ai_memory_log"
   if HOME="$fixture_home" \
     PATH="$stub_bin:/usr/bin:/bin" \
-    OPENCODE_TEST_RAW_LOG="$raw_log" \
-    bash --noprofile --norc -c 'source "$HOME/.bash_aliases"; opencode "$HOME/projects/agents"'; then
-    printf '%s\n' --server https://m4.example.test /Users/guisaliba/projects/agents >"$expected"
-    require_same_file "$expected" "$raw_log"
+    OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
+    bash --noprofile --norc -c \
+      'source "$HOME/.bash_aliases"; opencode "$HOME/projects/agents"'; then
+    printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" \
+      "$fixture_home/projects/agents" >"$expected"
+    require_same_file "$expected" "$ai_memory_log"
   else
-    not_ok "remote OpenCode explicit-directory mapping failed"
+    not_ok "managed OpenCode explicit-directory forwarding failed"
+  fi
+  : >"$ai_memory_log"
+  if (
+    cd "$fixture_home/projects/agents"
+    HOME="$fixture_home" \
+      PATH="$stub_bin:/usr/bin:/bin" \
+      OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
+      bash --noprofile --norc -c 'source "$HOME/.bash_aliases"; opencode -c'
+  ); then
+    printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" -c >"$expected"
+    require_same_file "$expected" "$ai_memory_log"
+  else
+    not_ok "managed OpenCode continue-flag forwarding failed"
+  fi
+  : >"$ai_memory_log"
+  if (
+    cd "$fixture_home/projects/agents"
+    HOME="$fixture_home" \
+      PATH="$stub_bin:/usr/bin:/bin" \
+      OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
+      bash --noprofile --norc -c 'source "$HOME/.bash_aliases"; opencode --fresh'
+  ); then
+    printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" --fresh >"$expected"
+    require_same_file "$expected" "$ai_memory_log"
+  else
+    not_ok "managed OpenCode fresh-flag forwarding failed"
+  fi
+  require_text_count "$aliases" "OPENCODE_SERVER_URL" "0"
+  require_text_count "$aliases" "OPENCODE_CLIENT_HOME" "0"
+  require_text_count "$aliases" "OPENCODE_SERVER_HOME" "0"
+  require_text_count "$aliases" '"$HOME/.opencode/bin/opencode" --server' "0"
+
+  # opencode --new gives the session its own checkout, so concurrent sessions in
+  # one repository never share a working tree. Each checkout is its own
+  # workstream, and all of them resolve to the same ai-memory project.
+  new_repo="$fixture_home/projects/widget"
+  new_log="$fixture_root/new-ai-memory.log"
+  new_out="$fixture_root/new-out.log"
+  mkdir -p "$new_repo"
+  printf '%s\n' 'stub' >"$new_repo/tracked.txt"
+  if (
+    cd "$new_repo"
+    git init --quiet >/dev/null 2>&1
+    git -c user.email=fixture@example.test -c user.name=fixture \
+      add tracked.txt >/dev/null 2>&1
+    git -c user.email=fixture@example.test -c user.name=fixture \
+      commit --quiet -m initial >/dev/null 2>&1
+  ); then
+    ok "opencode --new fixture repository is initialized"
+  else
+    not_ok "opencode --new fixture repository could not be initialized"
+  fi
+  if (
+    cd "$new_repo"
+    HOME="$fixture_home" \
+      PATH="$stub_bin:/usr/bin:/bin" \
+      OPENCODE_TEST_AI_MEMORY_LOG="$new_log" \
+      bash --noprofile --norc -c 'source "$HOME/.bash_aliases"; opencode --new'
+  ) >"$new_out" 2>&1; then
+    new_worktree="$(sed -n 's/^worktree: //p' "$new_out" | head -1)"
+    if [[ -n "$new_worktree" && -d "$new_worktree" ]] && \
+      git -C "$new_worktree" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      ok "opencode --new creates a usable Git worktree"
+    else
+      not_ok "opencode --new did not report a usable Git worktree"
+    fi
+    printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" >"$expected"
+    require_same_file "$expected" "$new_log"
+    if grep -q -- "--new" "$new_log"; then
+      not_ok "opencode --new leaked its own flag to ai-memory"
+    else
+      ok "opencode --new consumes its own flag before calling ai-memory"
+    fi
+    if git -C "$new_repo" worktree list | grep -qF "$new_worktree"; then
+      ok "opencode --new registers the worktree with the repository"
+    else
+      not_ok "opencode --new left the worktree unregistered"
+    fi
+  else
+    not_ok "opencode --new failed"
   fi
 
   : >"$ai_memory_log"
@@ -2197,6 +2343,7 @@ test_macos_bash_profile() {
   require_text_count "$profile" "# >>> guisaliba/agents Bash aliases >>>" "1"
   require_text_count "$profile" "# <<< guisaliba/agents Bash aliases <<<" "1"
   require_contains "$profile" 'source "$HOME/.bash_aliases"'
+  require_contains "$profile" 'source "$HOME/.profile"'
   cp "$profile" "$first_profile"
 
   if (
@@ -2348,6 +2495,7 @@ test_opencode_cli_json_merge
 # ai-memory secret-file fixture checks
 printf '\n--- ai-memory File Fixtures ---\n'
 
+test_ai_memory_token_delivery
 test_ai_memory_env_file
 
 # Shared helper fixture checks
