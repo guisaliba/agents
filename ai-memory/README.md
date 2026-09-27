@@ -1,11 +1,18 @@
 # ai-memory
 
-The M4 owns the primary ai-memory store. It remains bound to loopback and is
+The server owns the primary ai-memory store. It remains bound to loopback and is
 published to the tailnet by Tailscale Serve with bearer authentication.
 
-```text
-https://aurealabs-mac-mini-m4.taildc6550.ts.net:8443/mcp
+The published origin is a per-deployment value. It is never written into this
+repository. Read it from the environment file on the host that serves it:
+
+```sh
+grep '^AI_MEMORY_SERVER_URL=' ~/.config/ai-memory/env
 ```
+
+It has the shape `https://<server-host>:<port>`, and the MCP endpoint is that
+origin plus `/mcp`. A server host leaves the variable unset and answers on
+`http://127.0.0.1:49374`.
 
 ## Ownership
 
@@ -70,7 +77,7 @@ Subagent selection is independent; see
 
 ## Boundary
 
-The M4 backend remains on `127.0.0.1:49374`. Remote clients set
+The server backend remains on `127.0.0.1:49374`. Remote clients set
 `AI_MEMORY_SERVER_URL` to the Tailscale HTTPS origin and keep the bearer token
 in `~/.config/ai-memory/client-token`, mode `0600`. Apply stops the Linux local
 service while a remote URL is active. The local data directory is retained as

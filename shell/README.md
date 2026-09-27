@@ -35,8 +35,8 @@ and it never translates a path from one machine into a path for another. The
 session runs in the current directory on the machine where you typed the
 command.
 
-A session started on a client workstation is therefore a client session. To work
-on the M4, run `opencode` on the M4, over SSH for example. The OpenCode server
+A session started on a client is therefore a client session. To work on the
+server, run `opencode` on the server, over SSH for example. The OpenCode server
 and its web UI stay available for a browser or a phone through Tailscale Serve,
 but the shell does not drive it.
 

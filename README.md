@@ -1,6 +1,6 @@
 # Agents
 
-OpenCode V2 agent stack with one primary M4 server and Linux/macOS clients.
+OpenCode V2 agent stack with one primary server and clients on any platform.
 
 The dotfiles installer clones this repository into
 `~/.local/share/dotfiles/agents`. This repository owns the agent setup; it does
@@ -20,7 +20,7 @@ Python, and Google Chrome when they are absent.
 
 `apply.sh` installs OpenCode V2, converts the global configuration to the native
 V2 schema, installs compatible plugins and skills, and manages ai-memory.
-Set `OPENCODE_SERVER_ENABLED=true` only on the M4. Read
+Set `OPENCODE_SERVER_ENABLED=true` only on the server host. Read
 [`opencode/V2-MIGRATION.md`](opencode/V2-MIGRATION.md) before cutover.
 
 ## Components

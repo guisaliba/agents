@@ -40,6 +40,22 @@ AI_MEMORY_LAUNCH_AGENT_LABEL="com.github.akitaonrails.ai-memory"
 AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE="$HOME/.config/ai-memory/com.github.akitaonrails.ai-memory.plist"
 AI_MEMORY_LAUNCH_DAEMON_FILE="/Library/LaunchDaemons/com.github.akitaonrails.ai-memory.plist"
 AI_MEMORY_MCP_EXPECTED_JSON='{"type":"remote","url":"http://127.0.0.1:49374/mcp","disabled":false}'
+# The published ai-memory endpoint is a property of this host's declared role,
+# not of its operating system and not of a hostname baked into this file. A
+# server host leaves AI_MEMORY_SERVER_URL unset and answers on loopback; a
+# client host sets it to the published origin. Deriving the expectation means a
+# fork can point at its own server and the assertions still mean something.
+# Read in a subshell so the environment file cannot alter the rest of the run.
+AI_MEMORY_EXPECTED_SERVER_URL="$(
+  if [[ -f "$AI_MEMORY_ENV_FILE" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$AI_MEMORY_ENV_FILE"
+    set +a
+  fi
+  printf '%s' "${AI_MEMORY_SERVER_URL:-}"
+)"
+AI_MEMORY_EXPECTED_SERVER_URL="${AI_MEMORY_EXPECTED_SERVER_URL:-http://127.0.0.1:49374}"
 AI_MEMORY_MIN_VERSION="1.28.0"
 AI_MEMORY_RELEASE_VERSION_EXPECTED="2.1.1"
 AI_MEMORY_MACOS_AARCH64_SHA256_EXPECTED="1cc2acdbbd62cc7ecf6e1fe91515ea77786910b2c102f1fe8781aa6c0357eb64"
@@ -1101,7 +1117,7 @@ test_ai_memory_token_delivery() {
     'printf '\''%s\n'\'' "$*" >>"$OPENCODE_TEST_CALL_LOG"' >"$stub_bin/ai-memory"
   chmod +x "$stub_bin/ai-memory"
 
-  # The M4 is a loopback server host that still requires a bearer token, so the
+  # A loopback server host still requires a bearer token, so the
   # hook configuration must receive it even though there is no remote URL.
   : >"$call_log"
   if (
@@ -1769,7 +1785,7 @@ test_opencode_shell_override() {
   # no OPENCODE_SERVER_URL value may change what the wrapper does.
   mkdir -p "$fixture_home/.config/opencode" "$fixture_home/projects/agents"
   printf '%s\n' \
-    'OPENCODE_SERVER_URL=https://m4.example.test' \
+    'OPENCODE_SERVER_URL=https://server.example.test' \
     "OPENCODE_CLIENT_HOME=$fixture_home" \
     'OPENCODE_SERVER_HOME=/Users/guisaliba' >"$fixture_home/.config/opencode/server.env"
   chmod 600 "$fixture_home/.config/opencode/server.env"
@@ -2693,11 +2709,7 @@ fi
 require_json_array_count "$HOME/.config/opencode/opencode.json" "instructions" "$AI_MEMORY_INSTRUCTIONS_REFERENCE" "1"
 require_json_array_count "$HOME/.config/opencode/opencode.json" "plugins" "$LEARN_PLUGIN_SPEC" "0"
 require_json_array_count "$HOME/.config/opencode/opencode.json" "plugins" "$LEARN_LEGACY_PLUGIN_BASE" "0"
-if [[ "$(uname -s)" == Darwin ]]; then
-  require_json_value "$HOME/.config/opencode/opencode.json" "mcp.servers.ai-memory.url" "http://127.0.0.1:49374/mcp"
-else
-  require_json_value "$HOME/.config/opencode/opencode.json" "mcp.servers.ai-memory.url" "https://aurealabs-mac-mini-m4.taildc6550.ts.net:8443/mcp"
-fi
+require_json_value "$HOME/.config/opencode/opencode.json" "mcp.servers.ai-memory.url" "$AI_MEMORY_EXPECTED_SERVER_URL/mcp"
 require_json_literal "$HOME/.config/opencode/opencode.json" "mcp.servers.ai-memory.disabled" "false"
 require_json_value "$HOME/.config/opencode/opencode.json" "mcp.servers.github.type" "remote"
 require_json_value "$HOME/.config/opencode/opencode.json" "mcp.servers.github.url" "https://api.githubcopilot.com/mcp/"
@@ -2776,11 +2788,7 @@ fi
 require_file "$HOME/.config/opencode/plugins/ai-memory-opencode2.ts"
 require_file_mode "$HOME/.config/opencode/plugins/ai-memory-opencode2.ts" "600"
 require_contains "$HOME/.config/opencode/plugins/ai-memory-opencode2.ts" 'id: "ai-memory-opencode2"'
-if [[ "$(uname -s)" == Darwin ]]; then
-  require_contains "$HOME/.config/opencode/plugins/ai-memory-opencode2.ts" 'const SERVER = "http://127.0.0.1:49374"'
-else
-  require_contains "$HOME/.config/opencode/plugins/ai-memory-opencode2.ts" 'const SERVER = "https://aurealabs-mac-mini-m4.taildc6550.ts.net:8443"'
-fi
+require_contains "$HOME/.config/opencode/plugins/ai-memory-opencode2.ts" "const SERVER = \"$AI_MEMORY_EXPECTED_SERVER_URL\""
 require_file "$OPENCODE_SERVER_ENV_FILE"
 require_file_mode "$OPENCODE_SERVER_ENV_FILE" "600"
 case "$(uname -s)" in
