@@ -1208,6 +1208,7 @@ for name, config in native_servers.items():
     if not isinstance(config, dict):
         raise SystemExit(f"ERROR: Expected 'mcp.servers.{name}' to be an object in {path}. File was not changed.")
     servers[name] = dict(config)
+servers.pop("open-design", None)
 for name, url in remote_mcps.items():
     servers[name] = {"type": "remote", "url": url, "disabled": False}
 ai_memory = {
@@ -1252,6 +1253,7 @@ if isinstance(skills, dict):
     skills = [*skills.get("paths", []), *skills.get("urls", [])]
 if not isinstance(skills, list) or not all(isinstance(item, str) for item in skills):
     raise SystemExit(f"ERROR: Expected 'skills' to be an array in {path}. File was not changed.")
+skills = [item for item in skills if "/open-design/" not in item]
 
 data["skills"] = list(dict.fromkeys(skills))
 
