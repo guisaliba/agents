@@ -2696,3 +2696,57 @@ if [[ "$failures" -gt 0 ]]; then
 fi
 
 printf 'agent stack tests passed\n'
+test_ai_memory_token_delivery() {
+  local fixture_root fixture_home stub_bin token_file env_file call_log profile
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  stub_bin="$fixture_root/bin"
+  token_file="$fixture_home/.config/ai-memory/client-token"
+  env_file="$fixture_home/.config/ai-memory/env"
+  call_log="$fixture_root/calls.log"
+  profile="$fixture_home/.bash_profile"
+  mkdir -p "$(dirname "$token_file")" "$stub_bin" "$fixture_home/.config/opencode"
+  printf '%s\n' 'fixture-token-value' >"$token_file"
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf '\''%s\n'\'' "$*" >>"$OPENCODE_TEST_CALL_LOG"' >"$stub_bin/ai-memory"
+  chmod +x "$stub_bin/ai-memory"
+
+  # The M4 is a loopback server host that still requires a bearer token, so the
+  # hook configuration must receive it even though there is no remote URL.
+  : >"$call_log"
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    OPENCODE_TEST_CALL_LOG="$call_log"
+    export HOME PATH OPENCODE_TEST_CALL_LOG
+    source "$REPO_DIR/apply.sh"
+    AI_MEMORY_SERVER_URL="$AI_MEMORY_LOOPBACK_SERVER_URL"
+    wire_ai_memory_to_opencode
+  ) >/dev/null 2>&1; then
+    if grep -q -- "--auth-token fixture-token-value" "$call_log"; then
+      ok "loopback ai-memory hook installation receives the bearer token"
+    else
+      not_ok "loopback ai-memory hook installation omitted the bearer token"
+    fi
+  else
+    not_ok "loopback ai-memory hook installation failed"
+  fi
+
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    export HOME PATH
+    source "$REPO_DIR/apply.sh"
+    configure_macos_bash_profile
+  ) >/dev/null 2>&1; then
+    require_contains "$profile" 'source "$HOME/.config/ai-memory/env"'
+  else
+    not_ok "macOS Bash profile setup failed for the ai-memory environment"
+  fi
+
+  rm -rf -- "$fixture_root"
+}
+
+  require_contains "$profile" 'source "$HOME/.profile"'
+test_ai_memory_token_delivery
