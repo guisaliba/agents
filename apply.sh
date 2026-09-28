@@ -801,6 +801,14 @@ kept.extend(
         '  source "$HOME/.config/ai-memory/env"',
         '  set +a',
         "fi",
+        '# The ai-memory CLI reads its bearer from the environment, never from the',
+        '# token file, so a client host needs the token exported for `ai-memory run`.',
+        '# Read it here instead of asking the operator to paste a secret into this',
+        '# file, and strip the trailing newline the 0600 token file carries.',
+        'if [[ -f "$HOME/.config/ai-memory/client-token" ]]; then',
+        '  AI_MEMORY_AUTH_TOKEN="$(tr -d \' \\r\\n\' < "$HOME/.config/ai-memory/client-token")"',
+        '  export AI_MEMORY_AUTH_TOKEN',
+        "fi",
         end_marker,
     ]
 )
