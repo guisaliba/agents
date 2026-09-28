@@ -1101,6 +1101,105 @@ test_learn_plugin_sync() {
   rm -rf -- "$fixture_root"
 }
 
+test_ai_memory_service_staleness() {
+  local fixture_root fixture_home stub_bin env_file warn_log
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  stub_bin="$fixture_root/bin"
+  env_file="$fixture_home/.config/ai-memory/env"
+  warn_log="$fixture_root/warn.log"
+  mkdir -p "$(dirname "$env_file")" "$stub_bin"
+
+  # The env file the operator and the script own.
+  printf '%s\n' \
+    'AI_MEMORY_LLM_PROVIDER=opencode' \
+    'AI_MEMORY_LLM_MODEL=muse-spark-1.3-contributor' >"$env_file"
+  chmod 600 "$env_file"
+
+  # launchctl supplies the pid, ps supplies the environment the process actually
+  # runs with. The service execs through a shell that sources the env file, so
+  # the file-injected variables are visible in the process environment only.
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf '\''    path = /Library/LaunchDaemons/ai-memory.plist\n    state = running\n    pid = 4242\n'\''' \
+    >"$stub_bin/launchctl"
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf '\'' 4242 /usr/local/bin/ai-memory --data-dir /data AI_MEMORY_LLM_PROVIDER=%s AI_MEMORY_LLM_MODEL=muse-spark-1.3-contributor\n'\'' "${STALE_PROVIDER:-opencode}"' \
+    >"$stub_bin/ps"
+  chmod +x "$stub_bin/launchctl" "$stub_bin/ps"
+
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    export HOME PATH
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Darwin; }
+    warn_on_stale_ai_memory_service
+  ) >"$warn_log" 2>&1; then
+    if grep -q "stale\|restart" "$warn_log"; then
+      not_ok "a service matching the environment file was reported as stale"
+    else
+      ok "a service matching the environment file is not reported as stale"
+    fi
+  else
+    not_ok "staleness check failed on a matching service"
+  fi
+
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    STALE_PROVIDER=zero-llm
+    export HOME PATH STALE_PROVIDER
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Darwin; }
+    warn_on_stale_ai_memory_service
+  ) >"$warn_log" 2>&1; then
+    ok "a stale service is reported without failing apply"
+    require_contains "$warn_log" "AI_MEMORY_LLM_PROVIDER"
+    require_contains "$warn_log" "launchctl kickstart -k"
+  else
+    not_ok "a stale service failed apply instead of warning"
+  fi
+
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    export HOME PATH
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Linux; }
+    warn_on_stale_ai_memory_service
+  ) >"$warn_log" 2>&1; then
+    if [[ -s "$warn_log" ]]; then
+      not_ok "the Linux host warned about a stale service"
+    else
+      ok "the Linux host skips the check, because it restarts unconditionally"
+    fi
+  else
+    not_ok "the Linux staleness check failed"
+  fi
+
+  printf '%s\n' '#!/usr/bin/env bash' 'printf '\''    state = not running\n'\''' >"$stub_bin/launchctl"
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    export HOME PATH
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Darwin; }
+    warn_on_stale_ai_memory_service
+  ) >"$warn_log" 2>&1; then
+    if grep -q "stale" "$warn_log"; then
+      not_ok "a stopped service was reported as stale rather than stopped"
+    else
+      ok "a stopped service is not misreported as stale"
+    fi
+  else
+    not_ok "the stopped-service check failed"
+  fi
+
+  rm -rf -- "$fixture_root"
+}
+
 test_ai_memory_token_delivery() {
   local fixture_root fixture_home stub_bin token_file env_file call_log profile
   fixture_root="$(mktemp -d)"
@@ -2595,6 +2694,7 @@ test_opencode_cli_json_merge
 # ai-memory secret-file fixture checks
 printf '\n--- ai-memory File Fixtures ---\n'
 
+test_ai_memory_service_staleness
 test_ai_memory_token_delivery
 test_ai_memory_env_file
 
