@@ -1520,6 +1520,70 @@ configure_ai_memory_env_file() {
   ensure_ai_memory_env_file
   log "Converging the ai-memory provider and paid-job policy"
 
+  # A client runs no ai-memory service and its sessions execute on the server, so
+  # the server owns the profile. Strip the values a client inherits rather than
+  # leave inert ones behind: a value that governs nothing still reads as live.
+  if agent_stack_is_client_host; then
+    provider_state="$(python3 - \
+      "$AI_MEMORY_ENV_FILE" \
+      "$AGENT_STACK_HELPER" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+helper_path = Path(sys.argv[2])
+sys.path.insert(0, str(helper_path.parent))
+sys.dont_write_bytecode = True
+
+from agent_stack import atomic_write_text, parse_env_assignment
+
+# Owned by the server host. Never written on a client.
+server_owned = {
+    "DOTFILES_AI_MEMORY_LLM_PROFILE",
+    "AI_MEMORY_LLM_PROVIDER",
+    "AI_MEMORY_LLM_MODEL",
+}
+# Retired selectors, removed on every host so no dead variable lingers.
+retired = {"DOTFILES_OPENCODE_SUBAGENT_PROFILE"}
+managed_comment = "# Managed by guisaliba/agents apply.sh."
+
+try:
+    original_lines = path.read_text(encoding="utf-8").splitlines()
+except OSError as exc:
+    raise SystemExit(f"ERROR: Cannot read ai-memory environment file at {path}: {exc}")
+
+kept_lines = []
+for line in original_lines:
+    if line == managed_comment:
+        continue
+    parsed = parse_env_assignment(line)
+    if parsed is not None and parsed[0] in server_owned:
+        continue
+    if parsed is not None and parsed[0] in retired:
+        continue
+    kept_lines.append(line)
+
+while kept_lines and not kept_lines[-1].strip():
+    kept_lines.pop()
+if kept_lines:
+    kept_lines.append("")
+
+kept_lines.extend(
+    [
+        managed_comment,
+        "AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL=true",
+    ]
+)
+
+content = "\n".join(kept_lines) + "\n"
+atomic_write_text(path, content, 0o600, ".env.")
+print("client")
+PY
+)" || die "Could not clear the server-owned ai-memory policy for a client host"
+    agent_stack_profile_owner_note
+    return 0
+  fi
+
   profile="$(ai_memory_selected_profile)" || return 1
   profile_spec="$(ai_memory_profile_spec "$profile")"
   IFS='|' read -r provider model credential subagent_model <<<"$profile_spec"
