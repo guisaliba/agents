@@ -421,12 +421,30 @@ PY
 
 verify_ai_memory_unauthenticated_loopback() {
   local auth_variable
+
+  # A host that runs the OpenCode server and the ai-memory store is the server
+  # host. It requires a token, and it keeps one in its environment file.
   if [[ "$OPENCODE_SERVER_ENABLED" == true ]]; then
     ensure_ai_memory_env_file
     [[ -n "$(ai_memory_env_value AI_MEMORY_AUTH_TOKEN 2>/dev/null || true)" ]] || \
       die "The ai-memory service on this server host requires AI_MEMORY_AUTH_TOKEN in $AI_MEMORY_ENV_FILE"
     return 0
   fi
+
+  # A host pointed at a remote ai-memory server is a client host. It is not
+  # loopback, so the unauthenticated policy does not apply. The ai-memory CLI
+  # reads its bearer from the environment, so a client must be allowed to carry
+  # one; forbidding it made a client unable to reach the server at all.
+  if [[ "$AI_MEMORY_SERVER_URL" != "$AI_MEMORY_LOOPBACK_SERVER_URL" ]]; then
+    log "Verifying the authenticated ai-memory client policy for $AI_MEMORY_SERVER_URL"
+    if [[ -z "${AI_MEMORY_AUTH_TOKEN:-}" ]] && \
+      ! ai_memory_env_has_nonempty_value AI_MEMORY_AUTH_TOKEN && \
+      [[ ! -s "$AI_MEMORY_AUTH_TOKEN_FILE" ]]; then
+      die "This client host requires an ai-memory bearer token to reach $AI_MEMORY_SERVER_URL. Put one in $AI_MEMORY_AUTH_TOKEN_FILE, or export AI_MEMORY_AUTH_TOKEN, then re-run apply."
+    fi
+    return 0
+  fi
+
   log "Verifying the unauthenticated ai-memory loopback policy"
 
   for auth_variable in \
