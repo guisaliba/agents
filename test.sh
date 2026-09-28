@@ -1259,6 +1259,9 @@ test_ai_memory_env_file() {
   local selected_profile profile_home profile_env
   local invalid_profile invalid_index invalid_home invalid_env invalid_before invalid_log
   local auth_name auth_index env_auth_home config_auth_home
+  local scheduler_line marker_line
+  local scheduler_default_home scheduler_default_env
+  local scheduler_migrate_home scheduler_migrate_env migrated_line migrated_marker
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
   fixture_env="$fixture_home/.config/ai-memory/env"
@@ -1323,7 +1326,67 @@ test_ai_memory_env_file() {
   require_env_assignment "$fixture_env" "AI_MEMORY_LLM_PROVIDER" "$AI_MEMORY_LLM_PROVIDER_EXPECTED"
   require_env_assignment "$fixture_env" "AI_MEMORY_LLM_MODEL" "$AI_MEMORY_LLM_MODEL_EXPECTED"
   require_env_assignment "$fixture_env" "AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL" "true"
-  require_env_assignment "$fixture_env" "AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED" "false"
+
+  # The scheduler flag is operator-owned. The fixture above sets it to true, and
+  # the script must not silently rewrite it to false, because a value that looks
+  # editable but is not is the same defect class as the ones already fixed.
+  require_env_assignment "$fixture_env" "AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED" "true"
+  scheduler_line="$(grep -n 'AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED' "$fixture_env" | head -1 | cut -d: -f1)"
+  marker_line="$(grep -n '^# Managed by guisaliba/agents apply.sh\.$' "$fixture_env" | head -1 | cut -d: -f1)"
+  if [[ -n "$scheduler_line" && -n "$marker_line" && "$scheduler_line" -lt "$marker_line" ]]; then
+    ok "the operator-owned scheduler flag sits above the managed block"
+  else
+    not_ok "the operator-owned scheduler flag is inside the managed block"
+  fi
+  if [[ "$(grep -c 'AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED' "$fixture_env")" -eq 1 ]]; then
+    ok "the scheduler flag appears exactly once"
+  else
+    not_ok "the scheduler flag is duplicated"
+  fi
+
+  # Absent means the tool's own default, which is to schedule. That is not a safe
+  # default for a paid model, so the script seeds a disabled value and then
+  # respects whatever the operator changes it to.
+  scheduler_default_home="$fixture_root/scheduler-default-home"
+  scheduler_default_env="$scheduler_default_home/.config/ai-memory/env"
+  mkdir -p "$(dirname "$scheduler_default_env")"
+  printf '%s\n' 'UNRELATED_SETTING=keep' >"$scheduler_default_env"
+  if (
+    HOME="$scheduler_default_home"
+    source "$REPO_DIR/apply.sh"
+    configure_ai_memory_env_file
+  ) >/dev/null 2>&1; then
+    require_env_assignment "$scheduler_default_env" "AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED" "false"
+  else
+    not_ok "seeding a disabled scheduler default failed"
+  fi
+
+  # A value the operator wrote below the managed marker is preserved and moved up,
+  # so a flag written by an older apply.sh is not lost on the next run.
+  scheduler_migrate_home="$fixture_root/scheduler-migrate-home"
+  scheduler_migrate_env="$scheduler_migrate_home/.config/ai-memory/env"
+  mkdir -p "$(dirname "$scheduler_migrate_env")"
+  printf '%s\n' \
+    'UNRELATED_SETTING=keep' \
+    '# Managed by guisalibaba/agents apply.sh.' \
+    'AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED=true' \
+    'AI_MEMORY_LLM_PROVIDER=stale' >"$scheduler_migrate_env"
+  if (
+    HOME="$scheduler_migrate_home"
+    source "$REPO_DIR/apply.sh"
+    configure_ai_memory_env_file
+  ) >/dev/null 2>&1; then
+    require_env_assignment "$scheduler_migrate_env" "AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED" "true"
+    migrated_line="$(grep -n 'AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED' "$scheduler_migrate_env" | head -1 | cut -d: -f1)"
+    migrated_marker="$(grep -n '^# Managed by guisaliba/agents apply.sh\.$' "$scheduler_migrate_env" | head -1 | cut -d: -f1)"
+    if [[ -n "$migrated_line" && -n "$migrated_marker" && "$migrated_line" -lt "$migrated_marker" ]]; then
+      ok "a scheduler flag below the marker is relocated above it"
+    else
+      not_ok "a scheduler flag below the marker was not relocated"
+    fi
+  else
+    not_ok "migrating a scheduler flag from the managed block failed"
+  fi
 
   no_key_home="$fixture_root/no-key-home"
   no_key_env="$no_key_home/.config/ai-memory/env"
