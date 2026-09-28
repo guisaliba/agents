@@ -1402,7 +1402,8 @@ test_ai_memory_env_file() {
     'DOTFILES_OPENCODE_SUBAGENT_PROFILE=openai-gpt-6-luna' \
     'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-muse-spark-1.3-contributor' \
     'AI_MEMORY_LLM_PROVIDER=opencode' \
-    'AI_MEMORY_LLM_MODEL=muse-spark-1.3-contributor' >"$client_env_file"
+    'AI_MEMORY_LLM_MODEL=muse-spark-1.3-contributor' \
+    'AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL=true' >"$client_env_file"
   if (
     HOME="$client_env_home"
     export HOME
@@ -1443,6 +1444,12 @@ test_ai_memory_env_file() {
       fi
     done
     require_env_assignment "$client_env_file" "OPENCODE_API_KEY" "fixture-secret"
+    # Exactly one copy, not a duplicate above the marker plus one below it.
+    if [[ "$(grep -c '^AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL=' "$client_env_file")" -eq 1 ]]; then
+      ok "the client approval flag appears exactly once"
+    else
+      not_ok "the client approval flag is duplicated"
+    fi
   else
     not_ok "client environment fixture failed"
   fi
