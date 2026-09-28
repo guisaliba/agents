@@ -991,8 +991,15 @@ merge_opencode_json() {
   local profile subagent_model
   mkdir -p "$(dirname "$config")"
 
-  profile="$(opencode_selected_subagent_profile)" || return 1
-  subagent_model="$(opencode_subagent_profile_model "$profile")"
+  # On a client the model is the server's decision, so nothing is written here.
+  # An empty subagent_model makes the python step leave every agent model alone.
+  if agent_stack_is_client_host; then
+    agent_stack_profile_owner_note
+    subagent_model=""
+  else
+    profile="$(ai_memory_selected_profile)" || return 1
+    subagent_model="$(opencode_subagent_profile_model "$profile")"
+  fi
 
   python3 - \
     "$config" \
@@ -1148,24 +1155,31 @@ managed_models = {
     "plan": primary_model,
     "general": subagent_model,
     "explore": subagent_model,
+    "title": subagent_model,
 }
 
 for name, model in managed_models.items():
     config = agents.get(name, {})
     if not isinstance(config, dict):
-        raise SystemExit(
-            f"ERROR: Expected 'agents.{name}' to be an object in {path}. "
-            "File was not changed."
-        )
-    config["model"] = model
+        if model:
+            raise SystemExit(
+                f"ERROR: Expected 'agents.{name}' to be an object in {path}. "
+                "File was not changed."
+            )
+        continue
+    if not model:
+        # A client host writes no agent model: the server owns it. Drop any model
+        # already there rather than leaving a stale one that looks authoritative,
+        # and keep every other key in the entry.
+        config.pop("model", None)
+    else:
+        config["model"] = model
     agents[name] = config
 
-legacy_small_model = data.pop("small_model", None)
-if isinstance(legacy_small_model, str):
-    title = agents.get("title", {})
-    if isinstance(title, dict):
-        title.setdefault("model", legacy_small_model)
-        agents["title"] = title
+# small_model was a V1 title agent, and it was migrated with setdefault, so a
+# wrong id written once was never corrected. The title agent now follows the
+# selected profile with the rest.
+data.pop("small_model", None)
 data["agents"] = agents
 
 instructions = data.get("instructions", [])
@@ -1455,26 +1469,27 @@ ai_memory_profile_spec() {
 
 opencode_subagent_profile_list() {
   ai_memory_profile_list
-  printf '%s\n' openai-gpt-6-luna
+}
+
+# The one profile the whole stack follows: the ai-memory LLM, the OpenCode
+# subagents, and the title agent all resolve from this single value. Three
+# separate selectors let them drift apart, which is how agents.title ended up
+# holding a model id that no profile has ever produced.
+agent_stack_is_client_host() {
+  [[ "$AI_MEMORY_SERVER_URL" != "$AI_MEMORY_LOOPBACK_SERVER_URL" ]]
+}
+
+# A client host runs no services and holds no store, so its sessions execute on
+# the server and the server owns the profile. The client deliberately does not
+# carry a copy: a stale copy is worse than none, because it looks authoritative.
+agent_stack_profile_owner_note() {
+  log "Profile selection is owned by the server host. This host carries no profile."
+  log "  A session here runs on the server, so the server's opencode.json and"
+  log "  ai-memory environment decide the model. Change it there, not here."
 }
 
 opencode_subagent_profile_model() {
-  case "$1" in
-    openai-gpt-6-luna) printf '%s\n' 'openai/gpt-6-luna' ;;
-    *) ai_memory_profile_spec "$1" | cut -d'|' -f4 ;;
-  esac
-}
-
-opencode_selected_subagent_profile() {
-  local profile supported
-
-  profile="$(ai_memory_env_value DOTFILES_OPENCODE_SUBAGENT_PROFILE 2>/dev/null || true)"
-  profile="${profile:-$(ai_memory_selected_profile)}"
-  if ! opencode_subagent_profile_model "$profile" >/dev/null; then
-    supported="$(opencode_subagent_profile_list | paste -sd, - | sed 's/,/, /g')"
-    die "Unsupported DOTFILES_OPENCODE_SUBAGENT_PROFILE '$profile'. Supported profiles: $supported."
-  fi
-  printf '%s\n' "$profile"
+  ai_memory_profile_spec "$1" | cut -d'|' -f4
 }
 
 ai_memory_selected_profile() {

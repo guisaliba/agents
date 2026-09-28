@@ -55,8 +55,15 @@ LaunchAgent from `~/Library/LaunchAgents/`. Linux continues to use the systemd
 user service.
 
 The ai-memory binary owns the generated OpenCode plugin, instructions, and
-five ai-memory skills. Do not edit generated files by hand. The service LLM
-is independent of the OpenCode session model.
+five ai-memory skills. Do not edit generated files by hand.
+
+`DOTFILES_AI_MEMORY_LLM_PROFILE` is the single profile for the whole stack. It
+sets the service LLM provider and model **and** the `general`, `explore` and
+`title` OpenCode agents, so the two can no longer drift apart. Set it on the
+**server** host only. A client runs no ai-memory service, and its sessions
+execute on the server, so the server owns the value and the client deliberately
+carries no copy. See [../opencode/README.md](../opencode/README.md) for the
+full ownership rule and the change procedure.
 
 The default profile is `opencode-go-deepseek-v4.1-flash`, which uses
 `opencode-go/deepseek-v4.1-flash`. The alternative profile is

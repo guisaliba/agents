@@ -7,20 +7,67 @@ invalid JSON file or an invalid managed structure.
 ## Routing
 
 ```text
-Primary:
+Primary, fixed by apply.sh:
   build -> openai/gpt-6-sol
   plan  -> openai/gpt-6-sol
 
-Subagents by `DOTFILES_OPENCODE_SUBAGENT_PROFILE`:
-  opencode-go-deepseek-v4.1-flash (default) -> opencode-go/deepseek-v4.1-flash
-  opencode-go-muse-spark-1.3-contributor    -> opencode-go/muse-spark-1.3-contributor
-  openai-gpt-6-luna                         -> openai/gpt-6-luna
+Everything else, from one profile:
+  general -> <profile>
+  explore -> <profile>
+  title   -> <profile>
+
+  opencode-go-deepseek-v4.1-flash          -> opencode-go/deepseek-v4.1-flash
+  opencode-go-muse-spark-1.3-contributor   -> opencode-go/muse-spark-1.3-contributor
 ```
 
-Set `DOTFILES_OPENCODE_SUBAGENT_PROFILE` in `~/.config/ai-memory/env` to
-select a subagent model. Without it, subagents follow the ai-memory profile
-for backward compatibility. The OpenAI profile uses OpenCode authentication;
-it does not change the separate ai-memory LLM provider.
+## One Profile, and Who Owns It
+
+`DOTFILES_AI_MEMORY_LLM_PROFILE` in `~/.config/ai-memory/env` is the **single**
+selector. It decides, in one move:
+
+- the ai-memory LLM provider and model
+- the `general`, `explore` and `title` OpenCode agents
+- nothing else. The primary `build` and `plan` models are fixed.
+
+Set it **on the server host**. A client host must not set it.
+
+```sh
+# on the server, in ~/.config/ai-memory/env
+DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-deepseek-v4.1-flash
+```
+
+Then run `./apply.sh` and restart the ai-memory service, because the running
+service does not re-read the file on its own. `apply.sh` warns when the file and
+the running process disagree.
+
+### Why a client must not set it
+
+A managed workstream is created by an `ai-memory run` process, and that process
+runs wherever the command was typed. On a client, `opencode` forwards over SSH,
+so the session executes on the **server**, and the server's `opencode.json` and
+environment file decide the model. A profile on the client would be a copy that
+governs nothing, and a stale copy is worse than none because it looks
+authoritative. That is exactly how `agents.title` ended up holding a model id
+no profile has ever produced.
+
+So on a client, `apply.sh` writes **no** agent model and removes any model
+already there, then tells you where the real value lives.
+
+### Changing it
+
+Change it on the server only:
+
+```sh
+# 1. edit DOTFILES_AI_MEMORY_LLM_PROFILE on the server
+# 2. re-apply
+./apply.sh
+# 3. restart the service, or apply.sh warns that it is stale
+sudo launchctl kickstart -k system/com.github.akitaonrails.ai-memory
+```
+
+All four values move together. There is no separate subagent selector any more.
+`DOTFILES_OPENCODE_SUBAGENT_PROFILE` was removed for exactly that reason: three
+selectors drifted apart, and the drift was silent.
 
 ## Managed Paths
 
