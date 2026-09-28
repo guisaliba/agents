@@ -1301,6 +1301,58 @@ test_ai_memory_env_file() {
     not_ok "ai-memory default auth files were rejected"
   fi
 
+  # A client host is not loopback. It talks to a remote server and therefore
+  # needs a bearer token, but the old client branch demanded an unauthenticated
+  # policy and forbade the token the CLI requires. Branch on the server URL so
+  # each host role is checked against the policy that role actually has.
+  client_auth_home="$fixture_root/client-auth-home"
+  mkdir -p "$client_auth_home/.config/ai-memory"
+  if (
+    HOME="$client_auth_home"
+    AI_MEMORY_SERVER_URL="https://server.example.test:8443"
+    AI_MEMORY_AUTH_TOKEN="fixture-token"
+    export AI_MEMORY_SERVER_URL AI_MEMORY_AUTH_TOKEN
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Linux; }
+    verify_ai_memory_unauthenticated_loopback
+  ) >/dev/null 2>&1; then
+    ok "client host accepts a bearer token in the shell"
+  else
+    not_ok "client host rejected a bearer token in the shell"
+  fi
+
+  client_env_home="$fixture_root/client-env-home"
+  mkdir -p "$client_env_home/.config/ai-memory"
+  printf '%s\n' 'AI_MEMORY_AUTH_TOKEN=fixture-token' >"$client_env_home/.config/ai-memory/env"
+  if (
+    HOME="$client_env_home"
+    AI_MEMORY_SERVER_URL="https://server.example.test:8443"
+    export AI_MEMORY_SERVER_URL
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Linux; }
+    verify_ai_memory_unauthenticated_loopback
+  ) >/dev/null 2>&1; then
+    ok "client host accepts a bearer token in the environment file"
+  else
+    not_ok "client host rejected a bearer token in the environment file"
+  fi
+
+  client_notoken_home="$fixture_root/client-notoken-home"
+  mkdir -p "$client_notoken_home/.config/ai-memory"
+  if (
+    HOME="$client_notoken_home"
+    AI_MEMORY_SERVER_URL="https://server.example.test:8443"
+    export AI_MEMORY_SERVER_URL
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Linux; }
+    verify_ai_memory_unauthenticated_loopback
+  ) >"$fixture_root/client-notoken.log" 2>&1; then
+    not_ok "client host without any token was accepted"
+  else
+    ok "client host without any token is rejected"
+  fi
+  require_contains "$fixture_root/client-notoken.log" "client"
+
   auth_index=0
   for auth_name in \
     AI_MEMORY_AUTH_TOKEN \
