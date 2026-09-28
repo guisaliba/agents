@@ -774,15 +774,19 @@ PY
     require_json_value "$profile_config" "agents.explore.model" "$(profile_field "$selected_profile" subagent)"
   done
 
-  profile_home="$fixture_root/profile-home-openai-gpt-6-luna"
+  # One profile drives the ai-memory LLM, the subagents, and the title agent.
+  # The three used to be separate, and that let a stale title model survive
+  # because small_model was migrated with setdefault and never corrected.
+  profile_home="$fixture_root/profile-home-unified"
   profile_config="$profile_home/.config/opencode/opencode.json"
   profile_env="$profile_home/.config/ai-memory/env"
   mkdir -p "$(dirname "$profile_config")" "$(dirname "$profile_env")"
   printf '%s\n' \
     'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-deepseek-v4.1-flash' \
-    'DOTFILES_OPENCODE_SUBAGENT_PROFILE=openai-gpt-6-luna' \
     'OPENCODE_API_KEY=fixture-secret' \
     'DOTFILES_AI_MEMORY_LLM_ENABLED=false' >"$profile_env"
+  printf '%s\n' \
+    '{"model":"keep","small_model":"opencode-go/deepseek-v4-flash"}' >"$profile_config"
   if (
     HOME="$profile_home"
     LEARN_INSTALL_DIR="$fixture_learn_plugin"
@@ -790,35 +794,94 @@ PY
     merge_opencode_json
     configure_ai_memory_env_file
   ) >/dev/null 2>&1; then
-    ok "Luna subagents and paused Go ai-memory apply independently"
+    ok "one profile drives the LLM, the subagents and the title agent"
   else
-    not_ok "Luna subagent profile fixture failed"
+    not_ok "unified profile fixture failed"
   fi
-  require_json_value "$profile_config" "agents.general.model" "openai/gpt-6-luna"
-  require_json_value "$profile_config" "agents.explore.model" "openai/gpt-6-luna"
+  require_json_value "$profile_config" "agents.general.model" "opencode-go/deepseek-v4.1-flash"
+  require_json_value "$profile_config" "agents.explore.model" "opencode-go/deepseek-v4.1-flash"
+  # The stale small_model id must not survive into agents.title.
+  require_json_value "$profile_config" "agents.title.model" "opencode-go/deepseek-v4.1-flash"
   require_env_assignment "$profile_env" "AI_MEMORY_LLM_PROVIDER" ""
   require_env_assignment "$profile_env" "AI_MEMORY_LLM_MODEL" "deepseek-v4.1-flash"
-  require_env_assignment "$profile_env" "OPENCODE_API_KEY" "fixture-secret"
-  require_env_assignment "$profile_env" "DOTFILES_AI_MEMORY_LLM_ENABLED" "false"
 
-  profile_home="$fixture_root/profile-home-invalid-subagent"
+  # A second profile must move all three together, not just some of them.
+  profile_home="$fixture_root/profile-home-unified-muse"
   profile_config="$profile_home/.config/opencode/opencode.json"
   profile_env="$profile_home/.config/ai-memory/env"
   mkdir -p "$(dirname "$profile_config")" "$(dirname "$profile_env")"
-  printf '%s\n' 'DOTFILES_OPENCODE_SUBAGENT_PROFILE=unknown-model' >"$profile_env"
+  printf '%s\n' \
+    'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-muse-spark-1.3-contributor' >"$profile_env"
+  if (
+    HOME="$profile_home"
+    LEARN_INSTALL_DIR="$fixture_learn_plugin"
+    source "$REPO_DIR/apply.sh"
+    merge_opencode_json
+    configure_ai_memory_env_file
+  ) >/dev/null 2>&1; then
+    require_json_value "$profile_config" "agents.general.model" "opencode-go/muse-spark-1.3-contributor"
+    require_json_value "$profile_config" "agents.title.model" "opencode-go/muse-spark-1.3-contributor"
+    require_env_assignment "$profile_env" "AI_MEMORY_LLM_MODEL" "muse-spark-1.3-contributor"
+  else
+    not_ok "muse unified profile fixture failed"
+  fi
+
+  # A client must not be able to select a profile. Its sessions execute on the
+  # server, so the server owns the value and the client is told where it comes
+  # from instead of carrying a stale copy.
+  client_profile_home="$fixture_root/client-profile-home"
+  client_profile_config="$client_profile_home/.config/opencode/opencode.json"
+  client_profile_env="$client_profile_home/.config/ai-memory/env"
+  mkdir -p "$(dirname "$client_profile_config")" "$(dirname "$client_profile_env")"
+  printf '%s\n' \
+    'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-muse-spark-1.3-contributor' >"$client_profile_env"
+  printf '%s\n' '{"model":"keep","agents":{"title":{"model":"opencode-go/stale"}}}' >"$client_profile_config"
+  if (
+    HOME="$client_profile_home"
+    LEARN_INSTALL_DIR="$fixture_learn_plugin"
+    AI_MEMORY_SERVER_URL="https://server.example.test:8443"
+    AI_MEMORY_LOOPBACK_SERVER_URL="http://127.0.0.1:49374"
+    AI_MEMORY_AUTH_TOKEN_FILE="$client_profile_home/.config/ai-memory/client-token"
+    export AI_MEMORY_SERVER_URL AI_MEMORY_LOOPBACK_SERVER_URL AI_MEMORY_AUTH_TOKEN_FILE
+    source "$REPO_DIR/apply.sh"
+    merge_opencode_json
+  ) >"$fixture_root/client-profile.log" 2>&1; then
+    ok "a client host does not select a profile"
+    require_json_value "$client_profile_config" "model" "openai/gpt-6-sol"
+    if python3 -c "
+import json, sys
+data = json.load(open(sys.argv[1]))
+agents = data.get('agents') or {}
+bad = [n for n, c in agents.items() if isinstance(c, dict) and c.get('model') == 'opencode-go/stale']
+raise SystemExit(1 if bad else 0)
+" "$client_profile_config"; then
+      ok "a client does not carry a stale agent model"
+    else
+      not_ok "a client kept a stale agent model"
+    fi
+    require_contains "$fixture_root/client-profile.log" "server"
+  else
+    not_ok "client profile fixture failed"
+  fi
+
+  profile_home="$fixture_root/profile-home-invalid"
+  profile_config="$profile_home/.config/opencode/opencode.json"
+  profile_env="$profile_home/.config/ai-memory/env"
+  mkdir -p "$(dirname "$profile_config")" "$(dirname "$profile_env")"
+  printf '%s\n' 'DOTFILES_AI_MEMORY_LLM_PROFILE=unknown-model' >"$profile_env"
   printf '%s\n' '{"model":"keep"}' >"$profile_config"
-  cp "$profile_config" "$fixture_root/invalid-subagent-before"
+  cp "$profile_config" "$fixture_root/invalid-profile-json-before"
   if (
     HOME="$profile_home"
     source "$REPO_DIR/apply.sh"
     merge_opencode_json
-  ) >"$fixture_root/invalid-subagent.log" 2>&1; then
-    not_ok "unsupported subagent profile was accepted"
+  ) >"$fixture_root/invalid-profile-json.log" 2>&1; then
+    not_ok "an unsupported profile was accepted"
   else
-    ok "unsupported subagent profile fails safely"
+    ok "an unsupported profile fails safely"
   fi
-  require_same_file "$fixture_root/invalid-subagent-before" "$profile_config"
-  require_contains "$fixture_root/invalid-subagent.log" "Unsupported DOTFILES_OPENCODE_SUBAGENT_PROFILE"
+  require_same_file "$fixture_root/invalid-profile-json-before" "$profile_config"
+  require_contains "$fixture_root/invalid-profile-json.log" "Unsupported DOTFILES_AI_MEMORY_LLM_PROFILE"
 
   malformed_home="$fixture_root/malformed-home"
   malformed_config="$malformed_home/.config/opencode/opencode.json"
