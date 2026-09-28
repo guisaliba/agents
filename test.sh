@@ -1405,6 +1405,16 @@ test_ai_memory_env_file() {
     'AI_MEMORY_LLM_MODEL=muse-spark-1.3-contributor' >"$client_env_file"
   if (
     HOME="$client_env_home"
+    export HOME
+    agent_stack_platform() { printf '%s\n' Linux; }
+    agent_stack_is_client_host() { return 0; }
+    install_ai_memory_systemd_user_service() { :; }
+    start_ai_memory_systemd_user_service() { :; }
+    wire_ai_memory_to_opencode() { :; }
+    source "$REPO_DIR/apply.sh"
+    # apply.sh derives AI_MEMORY_SERVER_URL at source time from the
+    # environment, so the override has to be set here, after sourcing. Setting
+    # it before is silently overwritten by the loopback default.
     AI_MEMORY_SERVER_URL="https://server.example.test:8443"
     AI_MEMORY_LOOPBACK_SERVER_URL="http://127.0.0.1:49374"
     AI_MEMORY_AUTH_TOKEN_FILE="$client_env_home/.config/ai-memory/client-token"
@@ -1415,12 +1425,6 @@ test_ai_memory_env_file() {
     export AI_MEMORY_SERVER_URL AI_MEMORY_LOOPBACK_SERVER_URL
     export AI_MEMORY_AUTH_TOKEN_FILE AI_MEMORY_AUTH_TOKEN
     export AI_MEMORY_CONFIG_FILE AI_MEMORY_DATA_DIR OPENCODE_TEST_CALL_LOG
-    agent_stack_platform() { printf '%s\n' Linux; }
-    agent_stack_is_client_host() { return 0; }
-    install_ai_memory_systemd_user_service() { :; }
-    start_ai_memory_systemd_user_service() { :; }
-    wire_ai_memory_to_opencode() { :; }
-    source "$REPO_DIR/apply.sh"
     setup_ai_memory
   ) >/dev/null 2>&1; then
     if grep -q 'DOTFILES_OPENCODE_SUBAGENT_PROFILE' "$client_env_file"; then
