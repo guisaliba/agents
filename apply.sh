@@ -1542,8 +1542,15 @@ managed_names = {
     "AI_MEMORY_LLM_PROVIDER",
     "AI_MEMORY_LLM_MODEL",
     "AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL",
-    "AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED",
 }
+# The scheduler flag is the operator's, not the script's. It is written as a
+# literal "false" here today, which makes a value in the environment file look
+# editable while every apply.sh run silently reverts it. That is the same defect
+# class as the path translation and the client token: a setting that appears to
+# be configured but is actually owned elsewhere. Read it instead, so an explicit
+# operator value survives.
+operator_owned_names = {"AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED"}
+scheduler_default = "false"
 managed_comment = "# Managed by guisaliba/agents apply.sh."
 
 
@@ -1552,12 +1559,27 @@ try:
 except OSError as exc:
     raise SystemExit(f"ERROR: Cannot read ai-memory environment file at {path}: {exc}")
 
+# Last assignment wins, matching the shared parser, so read the operator's value
+# before removing every copy of the name.
+scheduler_value = None
+for line in original_lines:
+    parsed = parse_env_assignment(line)
+    if parsed is None:
+        continue
+    name, value = parsed
+    if name in operator_owned_names:
+        scheduler_value = value
+if scheduler_value is None:
+    scheduler_value = scheduler_default
+
 kept_lines = []
 for line in original_lines:
     if line == managed_comment:
         continue
     parsed = parse_env_assignment(line)
     if parsed is not None and parsed[0] in managed_names:
+        continue
+    if parsed is not None and parsed[0] in operator_owned_names:
         continue
     kept_lines.append(line)
 
@@ -1566,12 +1588,15 @@ while kept_lines and not kept_lines[-1].strip():
 if kept_lines:
     kept_lines.append("")
 
+# The operator's own value goes above the managed block, so the ownership split
+# stays visible: everything above the marker is theirs, everything below is ours.
+kept_lines.append(f"AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED={scheduler_value}")
+kept_lines.append("")
 kept_lines.extend(
     [
         managed_comment,
         f"DOTFILES_AI_MEMORY_LLM_PROFILE={profile}",
         "AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL=true",
-        "AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED=false",
         f"AI_MEMORY_LLM_PROVIDER={provider}",
         f"AI_MEMORY_LLM_MODEL={model}",
     ]
