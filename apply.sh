@@ -1829,6 +1829,113 @@ start_ai_memory_service() {
   esac
 }
 
+warn_on_stale_ai_memory_service() {
+  # The macOS LaunchDaemon is only bootstrapped when it is absent or inactive,
+  # so a healthy service is never restarted and never re-reads
+  # ~/.config/ai-memory/env. A configuration change can therefore sit in the
+  # file for ever while the process keeps running the old values, and nothing
+  # reports the divergence. Linux restarts unconditionally, so it cannot drift.
+  [[ "$(agent_stack_platform)" == "Darwin" ]] || return 0
+  [[ -f "$AI_MEMORY_ENV_FILE" ]] || return 0
+
+  python3 - \
+    "$AI_MEMORY_ENV_FILE" \
+    "$AI_MEMORY_LAUNCH_DAEMON_LABEL" \
+    "$AGENT_STACK_HELPER" <<'PY'
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+env_path = Path(sys.argv[1])
+label = sys.argv[2]
+helper_path = Path(sys.argv[3])
+sys.path.insert(0, str(helper_path.parent))
+sys.dont_write_bytecode = True
+
+from agent_stack import parse_env_assignment
+
+
+def launchctl(*arguments):
+    try:
+        result = subprocess.run(
+            ["launchctl", *arguments],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout
+
+
+# A stopped service is not a stale one. Report the difference honestly instead
+# of implying the running configuration is out of date.
+printed = launchctl("print", f"system/{label}")
+if printed is None:
+    sys.exit(0)
+pid = None
+for line in printed.splitlines():
+    stripped = line.strip()
+    if stripped.startswith("pid ="):
+        pid = stripped.split("=", 1)[1].strip()
+        break
+if not pid:
+    sys.exit(0)
+
+try:
+    environment_output = subprocess.run(
+        ["ps", "eww", "-p", pid],
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+except (OSError, subprocess.SubprocessError):
+    sys.exit(0)
+if environment_output.returncode != 0:
+    sys.exit(0)
+
+# The service execs through a shell that sources the environment file, so the
+# file-injected variables are present in the process environment. Read it as
+# flat assignments rather than as a launchd plist, which shows only what
+# launchd itself supplied.
+running = {}
+for token in environment_output.stdout.split():
+    name, separator, value = token.partition("=")
+    if separator and name:
+        running.setdefault(name, value)
+
+stale = []
+for line in env_path.read_text(encoding="utf-8").splitlines():
+    parsed = parse_env_assignment(line)
+    if parsed is None:
+        continue
+    name, value = parsed
+    if name not in running:
+        # Not exported into the process, so there is nothing to compare.
+        continue
+    if running[name] != value:
+        stale.append(name)
+
+if not stale:
+    sys.exit(0)
+
+print()
+print("WARNING: the running ai-memory service is stale.")
+print(f"    Service : system/{label} (pid {pid})")
+print(f"    Env file: {env_path}")
+print("    Changed : " + ", ".join(sorted(stale)))
+print("    The service execs through a shell that sourced the environment file")
+print("    once at start, so it is still running the previous values. Restart it:")
+print(f"      sudo launchctl kickstart -k system/{label}")
+print("    This is a warning on purpose. apply.sh did not restart the service,")
+print("    because that needs an interactive sudo.")
+print()
+PY
+}
+
 wire_ai_memory_to_opencode() {
   log "Installing the ai-memory OpenCode V2 lifecycle plugin"
   # The token is required whenever the server enforces bearer authentication,
@@ -2070,6 +2177,7 @@ main() {
   verify_ai_memory_unauthenticated_loopback
   setup_opencode
   setup_ai_memory
+  warn_on_stale_ai_memory_service
   start_opencode_server
   merge_opencode_shell_override
   configure_bash_login_env
