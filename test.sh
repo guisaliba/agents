@@ -1390,6 +1390,42 @@ test_ai_memory_env_file() {
   require_env_assignment "$fixture_env" "AI_MEMORY_LLM_MODEL" "$AI_MEMORY_LLM_MODEL_EXPECTED"
   require_env_assignment "$fixture_env" "AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL" "true"
 
+  # A client must not carry a profile it does not own, and the retired subagent
+  # selector must not linger anywhere, because a dead variable reads as live.
+  client_env_home="$fixture_root/client-env-home"
+  client_env_file="$client_env_home/.config/ai-memory/env"
+  mkdir -p "$(dirname "$client_env_file")"
+  printf '%s\n' \
+    'OPENCODE_API_KEY=fixture-secret' \
+    'DOTFILES_OPENCODE_SUBAGENT_PROFILE=openai-gpt-6-luna' \
+    'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-muse-spark-1.3-contributor' \
+    'AI_MEMORY_LLM_PROVIDER=opencode' \
+    'AI_MEMORY_LLM_MODEL=muse-spark-1.3-contributor' >"$client_env_file"
+  if (
+    HOME="$client_env_home"
+    AI_MEMORY_SERVER_URL="https://server.example.test:8443"
+    AI_MEMORY_LOOPBACK_SERVER_URL="http://127.0.0.1:49374"
+    export AI_MEMORY_SERVER_URL AI_MEMORY_LOOPBACK_SERVER_URL
+    source "$REPO_DIR/apply.sh"
+    configure_ai_memory_env_file
+  ) >/dev/null 2>&1; then
+    if grep -q 'DOTFILES_OPENCODE_SUBAGENT_PROFILE' "$client_env_file"; then
+      not_ok "the retired subagent selector survived on a client"
+    else
+      ok "the retired subagent selector is removed everywhere"
+    fi
+    for governed in DOTFILES_AI_MEMORY_LLM_PROFILE AI_MEMORY_LLM_PROVIDER AI_MEMORY_LLM_MODEL; do
+      if grep -q "^$governed=" "$client_env_file"; then
+        not_ok "a client still carries $governed"
+      else
+        ok "a client carries no $governed"
+      fi
+    done
+    require_env_assignment "$client_env_file" "OPENCODE_API_KEY" "fixture-secret"
+  else
+    not_ok "client environment fixture failed"
+  fi
+
   # The scheduler flag is operator-owned. The fixture above sets it to true, and
   # the script must not silently rewrite it to false, because a value that looks
   # editable but is not is the same defect class as the ones already fixed.
