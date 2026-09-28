@@ -2077,6 +2077,10 @@ setup_ai_memory() {
     start_ai_memory_service
   else
     log "Using centralized ai-memory at $AI_MEMORY_SERVER_URL"
+    # A client still needs its environment file converged, because it carries
+    # the server URL and the scheduler flag. This also strips the policy the
+    # server owns, which would otherwise linger as a value that governs nothing.
+    configure_ai_memory_env_file
     if [[ "$(agent_stack_platform)" == Linux ]]; then
       systemctl --user disable --now ai-memory.service >/dev/null 2>&1 || true
     fi
