@@ -1545,6 +1545,8 @@ server_owned = {
 }
 # Retired selectors, removed on every host so no dead variable lingers.
 retired = {"DOTFILES_OPENCODE_SUBAGENT_PROFILE"}
+# Managed here as well, so every copy is stripped before one is appended.
+client_managed = {"AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL"}
 managed_comment = "# Managed by guisaliba/agents apply.sh."
 
 try:
@@ -1560,6 +1562,10 @@ for line in original_lines:
     if parsed is not None and parsed[0] in server_owned:
         continue
     if parsed is not None and parsed[0] in retired:
+        continue
+    # Strip names this branch owns too, so a copy written by an earlier run or
+    # left above the marker cannot survive alongside the one appended below.
+    if parsed is not None and parsed[0] in client_managed:
         continue
     kept_lines.append(line)
 
