@@ -71,9 +71,9 @@ BASH_ALIASES_SOURCE="${BASH_ALIASES_SOURCE:-$REPO_DIR/shell/opencode.bash}"
 BASH_ALIASES_FILE="$HOME/.bash_aliases"
 OPENCODE_SHELL_BLOCK_START="# >>> dotfiles OpenCode ai-memory wrapper >>>"
 OPENCODE_SHELL_BLOCK_END="# <<< dotfiles OpenCode ai-memory wrapper <<<"
-MACOS_BASH_PROFILE="$HOME/.bash_profile"
-MACOS_BASH_PROFILE_BLOCK_START="# >>> guisaliba/agents Bash aliases >>>"
-MACOS_BASH_PROFILE_BLOCK_END="# <<< guisaliba/agents Bash aliases <<<"
+BASH_PROFILE="$HOME/.bash_profile"
+BASH_PROFILE_BLOCK_START="# >>> guisaliba/agents Bash aliases >>>"
+BASH_PROFILE_BLOCK_END="# <<< guisaliba/agents Bash aliases <<<"
 GOOGLE_CHROME_APP_PATH="${GOOGLE_CHROME_APP_PATH:-/Applications/Google Chrome.app}"
 
 log() {
@@ -714,14 +714,17 @@ atomic_write_text(target_path, content, target_mode, ".bash_aliases.")
 PY
 }
 
-configure_macos_bash_profile() {
-  [[ "$(agent_stack_platform)" == "Darwin" ]] || return 0
-
-  log "Making macOS login Bash load ~/.bash_aliases"
+# Every platform needs this block, not only macOS. The ai-memory CLI reads
+# AI_MEMORY_SERVER_URL and AI_MEMORY_AUTH_TOKEN from the environment, never from
+# the environment file, so a client host whose login shell does not source that
+# file cannot reach the server at all. Guarding this on Darwin left Linux clients
+# unable to start a managed workstream.
+configure_bash_login_env() {
+  log "Making login Bash load the managed shell and ai-memory environment"
   python3 - \
-    "$MACOS_BASH_PROFILE" \
-    "$MACOS_BASH_PROFILE_BLOCK_START" \
-    "$MACOS_BASH_PROFILE_BLOCK_END" \
+    "$BASH_PROFILE" \
+    "$BASH_PROFILE_BLOCK_START" \
+    "$BASH_PROFILE_BLOCK_END" \
     "$AGENT_STACK_HELPER" <<'PY'
 import stat
 import sys
@@ -2043,7 +2046,7 @@ main() {
   setup_ai_memory
   start_opencode_server
   merge_opencode_shell_override
-  configure_macos_bash_profile
+  configure_bash_login_env
   install_plugins
   install_required_skills
 

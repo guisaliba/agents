@@ -1144,7 +1144,7 @@ test_ai_memory_token_delivery() {
     export HOME PATH
     source "$REPO_DIR/apply.sh"
     agent_stack_platform() { printf '%s\n' Darwin; }
-    configure_macos_bash_profile
+    configure_bash_login_env
   ) >/dev/null 2>&1; then
     require_contains "$profile" 'source "$HOME/.config/ai-memory/env"'
   else
@@ -1539,7 +1539,7 @@ test_apply_scope() {
     setup_opencode() { printf '%s\n' opencode-config >>"$action_log"; }
     setup_ai_memory() { printf '%s\n' ai-memory-config >>"$action_log"; }
     merge_opencode_shell_override() { printf '%s\n' shell >>"$action_log"; }
-    configure_macos_bash_profile() { printf '%s\n' bash-profile >>"$action_log"; }
+    configure_bash_login_env() { printf '%s\n' bash-profile >>"$action_log"; }
     install_plugins() { printf '%s\n' plugins >>"$action_log"; }
     install_required_skills() { printf '%s\n' skills >>"$action_log"; }
     main
@@ -2333,6 +2333,7 @@ PY
 
 test_macos_bash_profile() {
   local fixture_root fixture_home stub_bin profile first_profile
+  local linux_home linux_profile linux_first
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
   stub_bin="$fixture_root/bin"
@@ -2348,8 +2349,8 @@ test_macos_bash_profile() {
     PATH="$stub_bin:/usr/bin:/bin"
     export HOME PATH
     source "$REPO_DIR/apply.sh"
-    configure_macos_bash_profile
-    configure_macos_bash_profile
+    configure_bash_login_env
+    configure_bash_login_env
   ) >/dev/null 2>&1; then
     ok "macOS Bash profile setup applies twice"
   else
@@ -2362,18 +2363,47 @@ test_macos_bash_profile() {
   require_contains "$profile" 'source "$HOME/.profile"'
   cp "$profile" "$first_profile"
 
+  # Every platform needs the env file loaded, not just macOS. On a client host
+  # the ai-memory CLI reads AI_MEMORY_SERVER_URL from the environment only, so
+  # a block written solely on macOS leaves a Linux client unable to reach the
+  # server at all.
+  linux_home="$fixture_root/linux-home"
+  linux_profile="$linux_home/.bash_profile"
+  linux_first="$fixture_root/linux-first-profile"
+  mkdir -p "$linux_home"
+  printf '%s\n' 'export PRESERVE_LINUX=yes' >"$linux_profile"
   if (
-    HOME="$fixture_home"
+    HOME="$linux_home"
     PATH="/usr/bin:/bin"
     export HOME PATH
     source "$REPO_DIR/apply.sh"
-    configure_macos_bash_profile
+    agent_stack_platform() { printf '%s\n' Linux; }
+    configure_bash_login_env
+    configure_bash_login_env
   ) >/dev/null 2>&1; then
-    ok "Linux leaves the Bash profile unchanged"
+    ok "Linux Bash profile setup applies twice"
   else
-    not_ok "Linux Bash profile check failed"
+    not_ok "Linux Bash profile setup failed"
   fi
-  require_same_file "$first_profile" "$profile"
+  require_contains "$linux_profile" "export PRESERVE_LINUX=yes"
+  require_text_count "$linux_profile" "# >>> guisaliba/agents Bash aliases >>>" "1"
+  require_contains "$linux_profile" 'source "$HOME/.bash_aliases"'
+  require_contains "$linux_profile" 'source "$HOME/.profile"'
+  require_contains "$linux_profile" 'source "$HOME/.config/ai-memory/env"'
+  cp "$linux_profile" "$linux_first"
+  if (
+    HOME="$linux_home"
+    PATH="/usr/bin:/bin"
+    export HOME PATH
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Linux; }
+    configure_bash_login_env
+  ) >/dev/null 2>&1; then
+    ok "Linux Bash profile setup is idempotent"
+  else
+    not_ok "Linux Bash profile second apply failed"
+  fi
+  require_same_file "$linux_first" "$linux_profile"
 
   rm -rf -- "$fixture_root"
 }
