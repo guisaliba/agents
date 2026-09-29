@@ -2876,6 +2876,7 @@ test_macos_bash_profile() {
   require_contains "$linux_profile" 'source "$HOME/.bash_aliases"'
   require_contains "$linux_profile" 'source "$HOME/.profile"'
   require_contains "$linux_profile" 'source "$HOME/.config/ai-memory/env"'
+  require_contains "$linux_profile" 'source "$HOME/.config/opencode/server.env"'
   require_contains "$linux_profile" 'AI_MEMORY_AUTH_TOKEN="$(tr -d'
   require_contains "$linux_profile" '$HOME/.config/ai-memory/client-token'
   cp "$linux_profile" "$linux_first"
