@@ -141,6 +141,20 @@ require_dir() {
   [[ -d "$path" ]] && ok "dir exists: $path" || not_ok "missing dir: $path"
 }
 
+require_file_content() {
+  local path="$1"
+  local expected="$2"
+  local actual=""
+  if [[ -f "$path" ]]; then
+    actual="$(tr -d '\r\n' <"$path")"
+  fi
+  if [[ "$actual" == "$expected" ]]; then
+    ok "file content: $path == $expected"
+  else
+    not_ok "file content mismatch: $path has [$actual] instead of [$expected]"
+  fi
+}
+
 require_contains() {
   local path="$1"
   local needle="$2"
@@ -1994,7 +2008,8 @@ test_daily_task_sync() {
 
 test_opencode_shell_override() {
   local fixture_root fixture_home aliases first_aliases stub_bin
-  local ai_memory_log raw_log expected yolo_log managed_rc
+  local ai_memory_log raw_log expected yolo_log managed_rc token_log
+  local server_host server_stub token_home token_stub
   local malformed_home malformed_aliases malformed_before malformed_log
   local temp_source_home temp_source temp_source_aliases temp_source_first
   fixture_root="$(mktemp -d)"
@@ -2003,6 +2018,7 @@ test_opencode_shell_override() {
   first_aliases="$fixture_root/first-bash-aliases"
   stub_bin="$fixture_root/bin"
   ai_memory_log="$fixture_root/ai-memory.log"
+  token_log="$fixture_root/token.log"
   raw_log="$fixture_root/raw-opencode.log"
   expected="$fixture_root/expected.log"
   yolo_log="$fixture_root/yolo.log"
@@ -2029,7 +2045,70 @@ test_opencode_shell_override() {
   require_text_count "$aliases" "$OPENCODE_SHELL_BLOCK_END" "1"
   require_contains "$aliases" 'opencode() {'
   require_contains "$aliases" 'opencode-raw() {'
-  require_contains "$aliases" 'command ai-memory run opencode2 --executable "$HOME/.opencode/bin/opencode" "${forwarded[@]}"'
+  require_contains "$aliases" 'command ai-memory run opencode2 --executable "$HOME/.opencode/bin/opencode"'
+  require_contains "$aliases" 'OPENCODE_SERVER_PORT:-4096'
+  # The token must be read by the wrapper itself, not only by a login shell.
+  require_contains "$aliases" 'AI_MEMORY_AUTH_TOKEN='
+
+  # A non-login shell, or any process that did not pass through the profile,
+  # must still authenticate. Drive the wrapper with the token deliberately unset
+  # and the env file present, and require that the CLI call carries it.
+  : >"$ai_memory_log"
+  : >"$token_log"
+  token_home="$fixture_root/token-home"
+  token_stub="$fixture_root/token-bin"
+  mkdir -p "$token_home/projects/agents" "$token_home/.config/ai-memory" \
+    "$token_home/.opencode/bin" "$token_stub"
+  printf '%s\n' 'AI_MEMORY_AUTH_TOKEN="fixture-bearer-token"' \
+    >"$token_home/.config/ai-memory/env"
+  chmod 600 "$token_home/.config/ai-memory/env"
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf '\''%s\n'\'' "$@" >"$OPENCODE_TEST_AI_MEMORY_LOG"' \
+    'printf '\''%s\n'\'' "${AI_MEMORY_AUTH_TOKEN:-}" >"$OPENCODE_TEST_TOKEN_LOG"' \
+    >"$token_stub/ai-memory"
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf '\''%s\n'\'' "$@" >"$OPENCODE_TEST_RAW_LOG"' >"$token_home/.opencode/bin/opencode"
+  chmod +x "$token_stub/ai-memory" "$token_home/.opencode/bin/opencode"
+  cp "$aliases" "$token_home/.bash_aliases"
+  if (
+    cd "$token_home/projects/agents"
+    HOME="$token_home" \
+      PATH="$token_stub:/usr/bin:/bin" \
+      OPENCODE_SERVER_ENABLED=true \
+      OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
+      OPENCODE_TEST_RAW_LOG="$raw_log" \
+      OPENCODE_TEST_TOKEN_LOG="$token_log" \
+      env -u AI_MEMORY_AUTH_TOKEN \
+      bash --noprofile --norc -c \
+        'source "$HOME/.bash_aliases"; opencode'
+  ); then
+    require_file_content "$token_log" "fixture-bearer-token"
+  else
+    not_ok "the wrapper failed with the token unset in the shell"
+  fi
+
+  # An explicit export must win, so an operator override is never overwritten.
+  : >"$ai_memory_log"
+  : >"$token_log"
+  if (
+    cd "$token_home/projects/agents"
+    HOME="$token_home" \
+      PATH="$token_stub:/usr/bin:/bin" \
+      OPENCODE_SERVER_ENABLED=true \
+      AI_MEMORY_AUTH_TOKEN="operator-override" \
+      OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
+      OPENCODE_TEST_RAW_LOG="$raw_log" \
+      OPENCODE_TEST_TOKEN_LOG="$token_log" \
+      bash --noprofile --norc -c \
+        'source "$HOME/.bash_aliases"; opencode'
+  ); then
+    require_file_content "$token_log" "operator-override"
+  else
+    not_ok "the wrapper failed with an explicit token"
+  fi
+
   require_contains "$aliases" 'export PATH="$HOME/.opencode/bin:$PATH"'
   cp "$aliases" "$first_aliases"
 
@@ -2059,10 +2138,76 @@ test_opencode_shell_override() {
      'printf '\''%s\n'\'' "$@" >"$OPENCODE_TEST_RAW_LOG"' >"$fixture_home/.opencode/bin/opencode"
   chmod +x "$stub_bin/ai-memory" "$fixture_home/.opencode/bin/opencode"
 
+  # On a host that runs the OpenCode server, the wrapper must reuse that server
+  # instead of letting the TUI spawn its own. Both want the same port, so the
+  # TUI cannot bind and reports "Timed out waiting for the background service
+  # to start". --server is the documented flag for reusing an existing server.
+  : >"$ai_memory_log"
+  server_host="$fixture_root/server-host"
+  server_stub="$fixture_root/server-bin"
+  mkdir -p "$server_host/projects/agents" "$server_host/.config/ai-memory" \
+    "$server_host/.opencode/bin" "$server_stub"
+  printf '%s\n' 'OPENCODE_SERVER_ENABLED=true' >"$server_host/.config/ai-memory/env"
+  # --new returns 2 before it calls ai-memory unless the directory is a Git
+  # work tree, so the fixture needs a real repository to reach the argument.
+  (
+    cd "$server_host/projects/agents"
+    git init --quiet
+    printf '%s\n' fixture >tracked.txt
+    git -c user.email=fixture@example.test -c user.name=fixture add tracked.txt
+    git -c user.email=fixture@example.test -c user.name=fixture \
+      commit --quiet -m initial
+  ) >/dev/null 2>&1
+  # A private stub tree, because $stub_bin belongs to the previous fixture home
+  # and this one has its own HOME.
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf '\''%s\n'\'' "$@" >"$OPENCODE_TEST_AI_MEMORY_LOG"' >"$server_stub/ai-memory"
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf '\''%s\n'\'' "$@" >"$OPENCODE_TEST_RAW_LOG"' >"$server_host/.opencode/bin/opencode"
+  chmod +x "$server_stub/ai-memory" "$server_host/.opencode/bin/opencode"
+  cp "$aliases" "$server_host/.bash_aliases"
+  if (
+    cd "$server_host/projects/agents"
+    HOME="$server_host" \
+      PATH="$server_stub:/usr/bin:/bin" \
+      OPENCODE_SERVER_ENABLED=true \
+      OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
+      OPENCODE_TEST_RAW_LOG="$raw_log" \
+      bash --noprofile --norc -c \
+        'source "$HOME/.bash_aliases"; opencode'
+  ); then
+    printf '%s\n' run opencode2 --executable "$server_host/.opencode/bin/opencode" \
+      --server http://127.0.0.1:4096 >"$expected"
+    require_same_file "$expected" "$ai_memory_log"
+  else
+    not_ok "a server host did not pass --server to ai-memory run"
+  fi
+
+  : >"$ai_memory_log"
+  if (
+    cd "$server_host/projects/agents"
+    HOME="$server_host" \
+      PATH="$server_stub:/usr/bin:/bin" \
+      OPENCODE_SERVER_ENABLED=true \
+      OPENCODE_SERVER_PORT=5000 \
+      OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
+      OPENCODE_TEST_RAW_LOG="$raw_log" \
+      bash --noprofile --norc -c \
+        'source "$HOME/.bash_aliases"; opencode --new'
+  ) >/dev/null 2>&1; then
+    printf '%s\n' run opencode2 --executable "$server_host/.opencode/bin/opencode" \
+      --server http://127.0.0.1:5000 >"$expected"
+    require_same_file "$expected" "$ai_memory_log"
+  else
+    not_ok "a server host did not honour OPENCODE_SERVER_PORT"
+  fi
+
+  : >"$ai_memory_log"
   if HOME="$fixture_home" \
     PATH="$stub_bin:/usr/bin:/bin" \
     OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
-    OPENCODE_TEST_RAW_LOG="$raw_log" \
     bash --noprofile --norc -c \
       'source "$HOME/.bash_aliases"; opencode -c "two words"'; then
     printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" -c 'two words' >"$expected"

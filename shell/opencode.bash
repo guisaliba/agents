@@ -10,6 +10,18 @@ export PATH="$HOME/.opencode/bin:$PATH"
 # M4, run this command on the M4. The OpenCode server and its web UI remain
 # available for a browser or phone, but the shell never drives it with --server,
 # so no client path is ever translated into a server path.
+#
+# On a host that runs the OpenCode server, the TUI must reuse that server rather
+# than spawn its own. Both want the same port, so the TUI cannot bind and reports
+# "Timed out waiting for the background service to start". --server is the
+# documented flag for reusing a server that already exists. A client host leaves
+# OPENCODE_SERVER_ENABLED unset and passes nothing.
+#
+# The bearer token is read here too. The ai-memory CLI reads it from the
+# environment, and only a login shell sources ~/.config/ai-memory/env, so a
+# non-login shell, or any process that never went through the profile, reaches
+# the server with no credential and gets 401. An already-exported value wins, so
+# an operator override is never overwritten.
 opencode() {
   local argument new_worktree=false
   local forwarded=()
@@ -26,6 +38,31 @@ opencode() {
     fi
     forwarded+=("$argument")
   done
+
+  local -a server_arguments=()
+  if [[ "${OPENCODE_SERVER_ENABLED:-false}" == true ]]; then
+    server_arguments=(--server "http://127.0.0.1:${OPENCODE_SERVER_PORT:-4096}")
+  fi
+
+  if [[ -z "${AI_MEMORY_AUTH_TOKEN:-}" && -s "$HOME/.config/ai-memory/env" ]]; then
+    local environment_file_token="" environment_line
+    while IFS= read -r environment_line || [[ -n "$environment_line" ]]; do
+      case "$environment_line" in
+        AI_MEMORY_AUTH_TOKEN=*)
+          environment_file_token="${environment_line#AI_MEMORY_AUTH_TOKEN=}"
+          # Strip one layer of surrounding double quotes if present. The closing
+          # quote is removed first, so a stray opening quote is left alone.
+          if [[ "$environment_file_token" == '"'*'"' ]]; then
+            environment_file_token="${environment_file_token:1:${#environment_file_token}-2}"
+          fi
+          break
+          ;;
+      esac
+    done < "$HOME/.config/ai-memory/env"
+    if [[ -n "$environment_file_token" ]]; then
+      export AI_MEMORY_AUTH_TOKEN="$environment_file_token"
+    fi
+  fi
 
   if [[ "$new_worktree" == true ]]; then
     local common_dir repository_root worktree_root slug worktree_dir
@@ -48,12 +85,14 @@ opencode() {
     printf 'branch:   opencode/%s\n' "$slug"
     (
       cd "$worktree_dir" || exit 1
-      command ai-memory run opencode2 --executable "$HOME/.opencode/bin/opencode" "${forwarded[@]}"
+      command ai-memory run opencode2 --executable "$HOME/.opencode/bin/opencode" \
+        "${server_arguments[@]}" "${forwarded[@]}"
     )
     return
   fi
 
-  command ai-memory run opencode2 --executable "$HOME/.opencode/bin/opencode" "${forwarded[@]}"
+  command ai-memory run opencode2 --executable "$HOME/.opencode/bin/opencode" \
+    "${server_arguments[@]}" "${forwarded[@]}"
 }
 opencode-raw() {
   "$HOME/.opencode/bin/opencode" "$@"
