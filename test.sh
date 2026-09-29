@@ -605,7 +605,7 @@ require_ai_memory_llm_policy() {
     profile="$(ai_memory_selected_profile)"
     profile_spec="$(ai_memory_profile_spec "$profile")"
     IFS='|' read -r expected_provider expected_model credential expected_subagent_model <<<"$profile_spec"
-    if [[ "$(ai_memory_env_value DOTFILES_AI_MEMORY_LLM_ENABLED 2>/dev/null || true)" == "false" ]] || ! ai_memory_profile_credential_ready "$credential"; then
+    if ! ai_memory_llm_enabled || ! ai_memory_profile_credential_ready "$credential"; then
       expected_provider=""
     fi
     actual_provider="$(ai_memory_env_value AI_MEMORY_LLM_PROVIDER)"
@@ -798,7 +798,7 @@ PY
   printf '%s\n' \
     'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-deepseek-v4.1-flash' \
     'OPENCODE_API_KEY=fixture-secret' \
-    'DOTFILES_AI_MEMORY_LLM_ENABLED=false' >"$profile_env"
+    'AGENTS_AI_MEMORY_LLM_ENABLED=false' >"$profile_env"
   printf '%s\n' \
     '{"model":"keep","small_model":"opencode-go/deepseek-v4-flash"}' >"$profile_config"
   if (
@@ -1414,6 +1414,7 @@ test_ai_memory_env_file() {
   printf '%s\n' \
     'OPENCODE_API_KEY=fixture-secret' \
     'DOTFILES_OPENCODE_SUBAGENT_PROFILE=openai-gpt-6-luna' \
+    'DOTFILES_AI_MEMORY_LLM_ENABLED=false' \
     'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-muse-spark-1.3-contributor' \
     'AI_MEMORY_LLM_PROVIDER=opencode' \
     'AI_MEMORY_LLM_MODEL=muse-spark-1.3-contributor' \
@@ -1458,6 +1459,12 @@ test_ai_memory_env_file() {
       fi
     done
     require_env_assignment "$client_env_file" "OPENCODE_API_KEY" "fixture-secret"
+    require_env_assignment "$client_env_file" "AGENTS_AI_MEMORY_LLM_ENABLED" "false"
+    if grep -q '^DOTFILES_AI_MEMORY_LLM_ENABLED=' "$client_env_file"; then
+      not_ok "the retired pause flag survived on a client"
+    else
+      ok "the retired pause flag migrates on a client"
+    fi
     # Exactly one copy, not a duplicate above the marker plus one below it.
     if [[ "$(grep -c '^AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL=' "$client_env_file")" -eq 1 ]]; then
       ok "the client approval flag appears exactly once"
@@ -1527,6 +1534,36 @@ test_ai_memory_env_file() {
     fi
   else
     not_ok "migrating a scheduler flag from the managed block failed"
+  fi
+
+  # The DOTFILES_ pause flag is retired in favour of the agents-owned name.
+  # An old checkout migrates its value, drops the old name, and drops the
+  # stale dotfiles marker, which current apply.sh never wrote.
+  migrate_home="$fixture_root/enabled-migrate-home"
+  migrate_env="$migrate_home/.config/ai-memory/env"
+  mkdir -p "$(dirname "$migrate_env")"
+  printf '%s\n' \
+    '# Managed by dotfiles/agents/apply.sh.' \
+    'DOTFILES_AI_MEMORY_LLM_ENABLED=false' \
+    'UNRELATED_SETTING=keep' >"$migrate_env"
+  if (
+    HOME="$migrate_home"
+    source "$REPO_DIR/apply.sh"
+    configure_ai_memory_env_file
+  ) >/dev/null 2>&1; then
+    require_env_assignment "$migrate_env" "AGENTS_AI_MEMORY_LLM_ENABLED" "false"
+  else
+    not_ok "migrating the retired pause flag failed"
+  fi
+  if grep -q 'DOTFILES_AI_MEMORY_LLM_ENABLED' "$migrate_env"; then
+    not_ok "the retired pause flag survived migration"
+  else
+    ok "the retired pause flag is removed"
+  fi
+  if grep -q 'Managed by dotfiles/agents/apply.sh' "$migrate_env"; then
+    not_ok "the stale dotfiles marker survived"
+  else
+    ok "the stale dotfiles marker is removed"
   fi
 
   no_key_home="$fixture_root/no-key-home"

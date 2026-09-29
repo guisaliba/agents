@@ -1454,6 +1454,18 @@ ai_memory_env_has_nonempty_value() {
   [[ -n "$value" ]]
 }
 
+# Pause-flag ownership: agents owns AGENTS_AI_MEMORY_LLM_ENABLED. The
+# DOTFILES_ name is retired; read it as fallback for one release so existing
+# checkouts migrate without losing an explicit false.
+ai_memory_llm_enabled() {
+  local value
+  value="$(ai_memory_env_value AGENTS_AI_MEMORY_LLM_ENABLED 2>/dev/null || true)"
+  if [[ -z "$value" ]]; then
+    value="$(ai_memory_env_value DOTFILES_AI_MEMORY_LLM_ENABLED 2>/dev/null || true)"
+  fi
+  [[ "$value" != "false" ]]
+}
+
 ai_memory_profile_list() {
   printf '%s\n' \
     opencode-go-deepseek-v4.1-flash \
@@ -1527,8 +1539,8 @@ configure_ai_memory_env_file() {
   ensure_ai_memory_env_file
   log "Converging the ai-memory provider and paid-job policy"
 
-  # A client runs no ai-memory service and its sessions execute on the server, so
-  # the server owns the profile. Strip the values a client inherits rather than
+  # A client runs no ai-memory service, so the server owns the profile and the
+  # provider choice. Strip the values a client inherits rather than
   # leave inert ones behind: a value that governs nothing still reads as live.
   if agent_stack_is_client_host; then
     provider_state="$(python3 - \
@@ -1552,6 +1564,12 @@ server_owned = {
 }
 # Retired selectors, removed on every host so no dead variable lingers.
 retired = {"DOTFILES_OPENCODE_SUBAGENT_PROFILE"}
+# Retired pause flag: migrate its value once to the agents-owned name.
+retired_pause_old = "DOTFILES_AI_MEMORY_LLM_ENABLED"
+retired_pause_new = "AGENTS_AI_MEMORY_LLM_ENABLED"
+# Stale marker from the dotfiles-era installer; current apply.sh never wrote
+# it, so drop it wherever it still heads a block.
+stale_comments = {"# Managed by dotfiles/agents/apply.sh."}
 # Managed here as well, so every copy is stripped before one is appended.
 client_managed = {"AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL"}
 managed_comment = "# Managed by guisaliba/agents apply.sh."
@@ -1561,20 +1579,38 @@ try:
 except OSError as exc:
     raise SystemExit(f"ERROR: Cannot read ai-memory environment file at {path}: {exc}")
 
+pause_value = None
+pause_new_present = False
+for line in original_lines:
+    parsed = parse_env_assignment(line)
+    if parsed is None:
+        continue
+    if parsed[0] == retired_pause_new:
+        pause_new_present = True
+    if parsed[0] == retired_pause_old:
+        pause_value = parsed[1]
+
 kept_lines = []
 for line in original_lines:
     if line == managed_comment:
+        continue
+    if line in stale_comments:
         continue
     parsed = parse_env_assignment(line)
     if parsed is not None and parsed[0] in server_owned:
         continue
     if parsed is not None and parsed[0] in retired:
         continue
+    if parsed is not None and parsed[0] == retired_pause_old:
+        continue
     # Strip names this branch owns too, so a copy written by an earlier run or
     # left above the marker cannot survive alongside the one appended below.
     if parsed is not None and parsed[0] in client_managed:
         continue
     kept_lines.append(line)
+
+if pause_value is not None and not pause_new_present:
+    kept_lines.append(f"{retired_pause_new}={pause_value}")
 
 while kept_lines and not kept_lines[-1].strip():
     kept_lines.pop()
@@ -1602,7 +1638,7 @@ PY
   IFS='|' read -r provider model credential subagent_model <<<"$profile_spec"
 
   provider_state="zero-llm"
-  if [[ "$(ai_memory_env_value DOTFILES_AI_MEMORY_LLM_ENABLED 2>/dev/null || true)" != "false" ]] && ai_memory_profile_credential_ready "$credential"; then
+  if ai_memory_llm_enabled && ai_memory_profile_credential_ready "$credential"; then
     provider_state="enabled"
   else
     provider=""
@@ -1644,6 +1680,12 @@ managed_names = {
 operator_owned_names = {"AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED"}
 scheduler_default = "false"
 managed_comment = "# Managed by guisaliba/agents apply.sh."
+# Retired pause flag: migrate its value once to the agents-owned name.
+retired_pause_old = "DOTFILES_AI_MEMORY_LLM_ENABLED"
+retired_pause_new = "AGENTS_AI_MEMORY_LLM_ENABLED"
+# Stale marker from the dotfiles-era installer; current apply.sh never wrote
+# it, so drop it wherever it still heads a block.
+stale_comments = {"# Managed by dotfiles/agents/apply.sh."}
 
 
 try:
@@ -1654,6 +1696,8 @@ except OSError as exc:
 # Last assignment wins, matching the shared parser, so read the operator's value
 # before removing every copy of the name.
 scheduler_value = None
+pause_value = None
+pause_new_present = False
 for line in original_lines:
     parsed = parse_env_assignment(line)
     if parsed is None:
@@ -1661,6 +1705,10 @@ for line in original_lines:
     name, value = parsed
     if name in operator_owned_names:
         scheduler_value = value
+    if name == retired_pause_new:
+        pause_new_present = True
+    if name == retired_pause_old:
+        pause_value = value
 if scheduler_value is None:
     scheduler_value = scheduler_default
 
@@ -1668,10 +1716,14 @@ kept_lines = []
 for line in original_lines:
     if line == managed_comment:
         continue
+    if line in stale_comments:
+        continue
     parsed = parse_env_assignment(line)
     if parsed is not None and parsed[0] in managed_names:
         continue
     if parsed is not None and parsed[0] in operator_owned_names:
+        continue
+    if parsed is not None and parsed[0] == retired_pause_old:
         continue
     kept_lines.append(line)
 
@@ -1683,6 +1735,8 @@ if kept_lines:
 # The operator's own value goes above the managed block, so the ownership split
 # stays visible: everything above the marker is theirs, everything below is ours.
 kept_lines.append(f"AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED={scheduler_value}")
+if pause_value is not None and not pause_new_present:
+    kept_lines.append(f"{retired_pause_new}={pause_value}")
 kept_lines.append("")
 kept_lines.extend(
     [
@@ -1703,8 +1757,8 @@ PY
 
   if [[ "$provider_state" == "enabled" ]]; then
     log "ai-memory LLM enabled by $profile"
-  elif [[ "$(ai_memory_env_value DOTFILES_AI_MEMORY_LLM_ENABLED 2>/dev/null || true)" == "false" ]]; then
-    log "ai-memory LLM paused by DOTFILES_AI_MEMORY_LLM_ENABLED=false"
+  elif ! ai_memory_llm_enabled; then
+    log "ai-memory LLM paused by AGENTS_AI_MEMORY_LLM_ENABLED=false"
   elif [[ "$credential" == "opencode-api-key" ]]; then
     log "ai-memory remains in zero-LLM mode. Add OPENCODE_API_KEY to $AI_MEMORY_ENV_FILE, then rerun apply."
   fi

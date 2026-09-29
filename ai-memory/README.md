@@ -75,12 +75,15 @@ Set `DOTFILES_AI_MEMORY_LLM_PROFILE` in `~/.config/ai-memory/env` to select
 a profile. Apply preserves an explicit valid selection; remove the assignment
 to use the default.
 
-Set `DOTFILES_AI_MEMORY_LLM_ENABLED=false` in the same file to pause LLM jobs
+Set `AGENTS_AI_MEMORY_LLM_ENABLED=false` in the same file to pause LLM jobs
 without removing `OPENCODE_API_KEY`. After usage is restored, remove that
 assignment, run `source ./apply.sh && configure_ai_memory_env_file`, and
 restart the service with `systemctl --user restart ai-memory` on Linux.
 Subagent selection is independent; see
 [`../opencode/README.md`](../opencode/README.md).
+
+The `DOTFILES_AI_MEMORY_LLM_ENABLED` name is retired; `apply.sh` migrates its
+value once to the new name and removes the old line.
 
 ## Boundary
 
