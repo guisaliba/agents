@@ -8,8 +8,8 @@ invalid JSON file or an invalid managed structure.
 
 ```text
 Primary, fixed by apply.sh:
-  build -> openai/gpt-6-sol
-  plan  -> openai/gpt-6-sol
+  build -> openai/gpt-6-luna
+  plan  -> openai/gpt-6-luna
 
 Everything else, from one profile:
   general -> <profile>

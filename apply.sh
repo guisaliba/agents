@@ -1154,7 +1154,7 @@ agents = {}
 for name, config in {**legacy_modes, **legacy_agents, **native_agents}.items():
     agents[name] = convert_agent(config, f"agents.{name}")
 
-primary_model = "openai/gpt-6-sol"
+primary_model = "openai/gpt-6-luna"
 data["model"] = primary_model
 data["default_agent"] = "build"
 
