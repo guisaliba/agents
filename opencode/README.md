@@ -43,12 +43,12 @@ the running process disagree.
 ### Why a client must not set it
 
 A managed workstream is created by an `ai-memory run` process, and that process
-runs wherever the command was typed. On a client, `opencode` forwards over SSH,
-so the session executes on the **server**, and the server's `opencode.json` and
-environment file decide the model. A profile on the client would be a copy that
-governs nothing, and a stale copy is worse than none because it looks
-authoritative. That is exactly how `agents.title` ended up holding a model id
-no profile has ever produced.
+runs wherever the command was typed. A session started on a client is a client
+session, with its own checkout and state, while memory reads go to the central
+store. The server still owns the profile for its own ai-memory service and its
+own sessions. A profile on the client would govern no server process, and a
+stale copy is worse than none because it looks authoritative. That is exactly
+how `agents.title` ended up holding a model id no profile has ever produced.
 
 So on a client, `apply.sh` writes **no** agent model and removes any model
 already there, then tells you where the real value lives.

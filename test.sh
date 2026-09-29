@@ -2046,7 +2046,9 @@ test_opencode_shell_override() {
   require_contains "$aliases" 'opencode() {'
   require_contains "$aliases" 'opencode-raw() {'
   require_contains "$aliases" 'command ai-memory run opencode2 --executable "$HOME/.opencode/bin/opencode"'
-  require_contains "$aliases" 'OPENCODE_SERVER_PORT:-4096'
+  require_contains "$aliases" '--standalone'
+  # The TUI must never attach to the shared daemon. That path loses
+  # AI_MEMORY_RUN_ID and breaks handoff delivery.
   # The token must be read by the wrapper itself, not only by a login shell.
   require_contains "$aliases" 'AI_MEMORY_AUTH_TOKEN='
 
@@ -2138,10 +2140,10 @@ test_opencode_shell_override() {
      'printf '\''%s\n'\'' "$@" >"$OPENCODE_TEST_RAW_LOG"' >"$fixture_home/.opencode/bin/opencode"
   chmod +x "$stub_bin/ai-memory" "$fixture_home/.opencode/bin/opencode"
 
-  # On a host that runs the OpenCode server, the wrapper must reuse that server
-  # instead of letting the TUI spawn its own. Both want the same port, so the
-  # TUI cannot bind and reports "Timed out waiting for the background service
-  # to start". --server is the documented flag for reusing an existing server.
+  # On any host the TUI uses a private server instead of the shared daemon.
+  # The shared daemon has no AI_MEMORY_RUN_ID, so attaching to it with
+  # --server breaks handoff delivery. --standalone avoids the port conflict
+  # and keeps the managed context in the TUI process.
   : >"$ai_memory_log"
   server_host="$fixture_root/server-host"
   server_stub="$fixture_root/server-bin"
@@ -2179,10 +2181,10 @@ test_opencode_shell_override() {
         'source "$HOME/.bash_aliases"; opencode'
   ); then
     printf '%s\n' run opencode2 --executable "$server_host/.opencode/bin/opencode" \
-      --server http://127.0.0.1:4096 >"$expected"
+      --standalone >"$expected"
     require_same_file "$expected" "$ai_memory_log"
   else
-    not_ok "a server host did not pass --server to ai-memory run"
+    not_ok "a server host did not pass --standalone to ai-memory run"
   fi
 
   : >"$ai_memory_log"
@@ -2198,10 +2200,10 @@ test_opencode_shell_override() {
         'source "$HOME/.bash_aliases"; opencode --new'
   ) >/dev/null 2>&1; then
     printf '%s\n' run opencode2 --executable "$server_host/.opencode/bin/opencode" \
-      --server http://127.0.0.1:5000 >"$expected"
+      --standalone >"$expected"
     require_same_file "$expected" "$ai_memory_log"
   else
-    not_ok "a server host did not honour OPENCODE_SERVER_PORT"
+    not_ok "a server host did not pass --standalone for --new"
   fi
 
   : >"$ai_memory_log"
@@ -2210,7 +2212,7 @@ test_opencode_shell_override() {
     OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
     bash --noprofile --norc -c \
       'source "$HOME/.bash_aliases"; opencode -c "two words"'; then
-    printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" -c 'two words' >"$expected"
+    printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" --standalone -c 'two words' >"$expected"
     require_same_file "$expected" "$ai_memory_log"
   else
     not_ok "managed OpenCode Bash function failed"
@@ -2222,7 +2224,7 @@ test_opencode_shell_override() {
     OPENCODE_TEST_RAW_LOG="$raw_log" \
     bash --noprofile --norc -c \
       'source "$HOME/.bash_aliases"; opencode session list'; then
-    printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" session list >"$expected"
+    printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" --standalone session list >"$expected"
     require_same_file "$expected" "$ai_memory_log"
   else
     not_ok "managed OpenCode session utility forwarding failed"
@@ -2243,7 +2245,7 @@ test_opencode_shell_override() {
   else
     not_ok "managed OpenCode launch returned $managed_rc instead of 7"
   fi
-  printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" -c 'fixture task' >"$expected"
+  printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" --standalone -c 'fixture task' >"$expected"
   require_same_file "$expected" "$ai_memory_log"
 
   if HOME="$fixture_home" PATH="$stub_bin:/usr/bin:/bin" \
@@ -2283,7 +2285,7 @@ test_opencode_shell_override() {
       OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
       bash --noprofile --norc -c 'source "$HOME/.bash_aliases"; opencode'
   ); then
-    printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" >"$expected"
+    printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" --standalone >"$expected"
     require_same_file "$expected" "$ai_memory_log"
   else
     not_ok "managed OpenCode launch ignored a configured server URL"
@@ -2295,7 +2297,7 @@ test_opencode_shell_override() {
     bash --noprofile --norc -c \
       'source "$HOME/.bash_aliases"; opencode "$HOME/projects/agents"'; then
     printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" \
-      "$fixture_home/projects/agents" >"$expected"
+      --standalone "$fixture_home/projects/agents" >"$expected"
     require_same_file "$expected" "$ai_memory_log"
   else
     not_ok "managed OpenCode explicit-directory forwarding failed"
@@ -2308,7 +2310,7 @@ test_opencode_shell_override() {
       OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
       bash --noprofile --norc -c 'source "$HOME/.bash_aliases"; opencode -c'
   ); then
-    printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" -c >"$expected"
+    printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" --standalone -c >"$expected"
     require_same_file "$expected" "$ai_memory_log"
   else
     not_ok "managed OpenCode continue-flag forwarding failed"
@@ -2321,7 +2323,7 @@ test_opencode_shell_override() {
       OPENCODE_TEST_AI_MEMORY_LOG="$ai_memory_log" \
       bash --noprofile --norc -c 'source "$HOME/.bash_aliases"; opencode --fresh'
   ); then
-    printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" --fresh >"$expected"
+    printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" --standalone --fresh >"$expected"
     require_same_file "$expected" "$ai_memory_log"
   else
     not_ok "managed OpenCode fresh-flag forwarding failed"
@@ -2330,6 +2332,8 @@ test_opencode_shell_override() {
   require_text_count "$aliases" "OPENCODE_CLIENT_HOME" "0"
   require_text_count "$aliases" "OPENCODE_SERVER_HOME" "0"
   require_text_count "$aliases" '"$HOME/.opencode/bin/opencode" --server' "0"
+  require_text_count "$aliases" "--server http" "0"
+  require_text_count "$aliases" "OPENCODE_SERVER_PORT" "0"
 
   # opencode --new gives the session its own checkout, so concurrent sessions in
   # one repository never share a working tree. Each checkout is its own
@@ -2365,7 +2369,7 @@ test_opencode_shell_override() {
     else
       not_ok "opencode --new did not report a usable Git worktree"
     fi
-    printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" >"$expected"
+    printf '%s\n' run opencode2 --executable "$fixture_home/.opencode/bin/opencode" --standalone >"$expected"
     require_same_file "$expected" "$new_log"
     if grep -q -- "--new" "$new_log"; then
       not_ok "opencode --new leaked its own flag to ai-memory"
