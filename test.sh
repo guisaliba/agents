@@ -701,8 +701,8 @@ PY
   require_file_mode "$fixture_token" "600"
 
   require_json_value "$fixture_config" "theme" "user-theme"
-  require_json_value "$fixture_config" "model" "openai/gpt-6-sol"
-  require_json_value "$fixture_config" "agents.plan.model" "openai/gpt-6-sol"
+  require_json_value "$fixture_config" "model" "openai/gpt-6-luna"
+  require_json_value "$fixture_config" "agents.plan.model" "openai/gpt-6-luna"
   require_json_array_count "$fixture_config" "instructions" "user-rules.md" "1"
   require_json_array_count "$fixture_config" "instructions" "$AI_MEMORY_INSTRUCTIONS_REFERENCE" "1"
   require_json_array_count "$fixture_config" "plugins" "user/plugin" "1"
@@ -861,7 +861,7 @@ PY
     merge_opencode_json
   ) >"$fixture_root/client-profile.log" 2>&1; then
     ok "a client host does not select a profile"
-    require_json_value "$client_profile_config" "model" "openai/gpt-6-sol"
+    require_json_value "$client_profile_config" "model" "openai/gpt-6-luna"
     if python3 -c "
 import json, sys
 data = json.load(open(sys.argv[1]))
@@ -3204,9 +3204,9 @@ fi
 require_file "$GITHUB_MCP_TOKEN_FILE"
 require_file_mode "$GITHUB_MCP_TOKEN_FILE" "600"
 require_json "$HOME/.config/opencode/opencode.json"
-require_json_value "$HOME/.config/opencode/opencode.json" "model" "openai/gpt-6-sol"
+require_json_value "$HOME/.config/opencode/opencode.json" "model" "openai/gpt-6-luna"
 require_json_value "$HOME/.config/opencode/opencode.json" "default_agent" "build"
-require_json_value "$HOME/.config/opencode/opencode.json" "agents.plan.model" "openai/gpt-6-sol"
+require_json_value "$HOME/.config/opencode/opencode.json" "agents.plan.model" "openai/gpt-6-luna"
 selected_profile_log="$(mktemp)"
 if selected_profile="$(
   source "$REPO_DIR/apply.sh"
