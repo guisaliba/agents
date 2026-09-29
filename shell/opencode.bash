@@ -7,15 +7,14 @@ export PATH="$HOME/.opencode/bin:$PATH"
 # One behavior only: a local, always-managed ai-memory workstream. The session
 # runs in the current directory on the machine you typed the command on, so a
 # session started on a client workstation is a client session. To work on the
-# M4, run this command on the M4. The OpenCode server and its web UI remain
-# available for a browser or phone, but the shell never drives it with --server,
-# so no client path is ever translated into a server path.
+# server host, run this command on the server host. The OpenCode server and its
+# web UI remain available for a browser or phone, but the shell never attaches
+# to it, so no client path is ever translated into a server path.
 #
-# On a host that runs the OpenCode server, the TUI must reuse that server rather
-# than spawn its own. Both want the same port, so the TUI cannot bind and reports
-# "Timed out waiting for the background service to start". --server is the
-# documented flag for reusing a server that already exists. A client host leaves
-# OPENCODE_SERVER_ENABLED unset and passes nothing.
+# On any host the TUI uses a private server instead of the shared background
+# service. The shared daemon has no AI_MEMORY_RUN_ID, so attaching to it
+# breaks handoff delivery. --standalone avoids any port conflict with the
+# long-lived server daemon and keeps the managed context in the TUI process.
 #
 # The bearer token is read here too. The ai-memory CLI reads it from the
 # environment, and only a login shell sources ~/.config/ai-memory/env, so a
@@ -39,10 +38,7 @@ opencode() {
     forwarded+=("$argument")
   done
 
-  local -a server_arguments=()
-  if [[ "${OPENCODE_SERVER_ENABLED:-false}" == true ]]; then
-    server_arguments=(--server "http://127.0.0.1:${OPENCODE_SERVER_PORT:-4096}")
-  fi
+  local -a server_arguments=(--standalone)
 
   if [[ -z "${AI_MEMORY_AUTH_TOKEN:-}" && -s "$HOME/.config/ai-memory/env" ]]; then
     local environment_file_token="" environment_line
