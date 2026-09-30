@@ -17,7 +17,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$SCRIPT_DIR"
 AGENT_STACK_HELPER="$REPO_DIR/lib/agent_stack.py"
 SKILLS_MANIFEST="$REPO_DIR/skills.tsv"
-RTK_VERSION="${RTK_VERSION:-v0.38.0}"
+RTK_VERSION="${RTK_VERSION:-v0.50.0}"
 OPENCODE_MIN_VERSION="${OPENCODE_MIN_VERSION:-2.0.18}"
 OPENCODE_INSTALL_URL="https://opencode.ai/v2/install"
 OPENCODE_BINARY="${OPENCODE_BINARY:-$HOME/.opencode/bin/opencode}"
@@ -1127,6 +1127,15 @@ def plugin_spec(item):
     return item if isinstance(item, str) else item["package"]
 
 
+def is_rtk_plugin_spec(spec):
+    spec = spec.strip().removeprefix("-").split("#", 1)[0]
+    if spec.startswith("file://"):
+        spec = spec[7:]
+    name = spec.rstrip("/").rsplit("/", 1)[-1]
+    name = name.removesuffix(".ts").removesuffix(".js").split("@", 1)[0]
+    return name.lower() == "rtk"
+
+
 if "update" not in data and "autoupdate" in data:
     legacy_update = data.pop("autoupdate")
     data["update"] = "notify" if legacy_update == "notify" else "auto" if legacy_update is True else "disable"
@@ -1207,7 +1216,8 @@ plugins = [convert_plugin(item) for item in [*legacy_plugins, *native_plugins]]
 plugins = [
     item for item in plugins
     if not (
-        plugin_spec(item) == learn_plugin_spec
+        is_rtk_plugin_spec(plugin_spec(item))
+        or plugin_spec(item) == learn_plugin_spec
         or plugin_spec(item) == learn_legacy_plugin_base
         or plugin_spec(item).startswith(f"{learn_legacy_plugin_base}#")
         or plugin_spec(item) == learn_older_plugin_base
@@ -1414,7 +1424,6 @@ remove_v1_opencode_plugins() {
   log "Removing V1-only generated OpenCode plugins"
   for plugin in \
     "$HOME/.config/opencode/plugins/ai-memory.ts" \
-    "$HOME/.config/opencode/plugins/rtk.ts" \
     "$HOME/.config/opencode/plugins/herdr-agent-state.js"
   do
     [[ ! -e "$plugin" && ! -L "$plugin" ]] || rm -f "$plugin"
@@ -2155,20 +2164,198 @@ setup_ai_memory() {
   wire_ai_memory_to_opencode
 }
 
-install_rtk() {
-  if have rtk; then
-    log "RTK already installed, skipping"
+rtk_cli_is_compatible() {
+  local version_output rewrite_output rewrite_exit
+
+  version_output="$(rtk --version 2>/dev/null)" || return 1
+  python3 - "$version_output" <<'PY' || return 1
+import re
+import sys
+
+if not re.search(r"(?<!\d)v?\d+\.\d+\.\d+(?![A-Za-z0-9.+-])", sys.argv[1]):
+    raise SystemExit(1)
+PY
+
+  if rewrite_output="$(rtk rewrite 'git status --short' 2>/dev/null)"; then
+    rewrite_exit=0
   else
-    log "Installing RTK"
+    rewrite_exit=$?
+  fi
+  [[ "$rewrite_exit" == 0 || "$rewrite_exit" == 3 ]] || return 1
+
+  rewrite_output="${rewrite_output#"${rewrite_output%%[![:space:]]*}"}"
+  rewrite_output="${rewrite_output%"${rewrite_output##*[![:space:]]}"}"
+  [[ -n "$rewrite_output" && "$rewrite_output" != 'git status --short' ]]
+}
+
+rtk_cli_meets_install_version() {
+  local version_output
+  version_output="$(rtk --version 2>/dev/null)" || return 1
+  python3 - "$RTK_VERSION" "$version_output" <<'PY'
+import re
+import sys
+
+def version(value):
+    match = re.search(r"(?<!\d)v?(\d+)\.(\d+)\.(\d+)(?![A-Za-z0-9.+-])", value)
+    return tuple(map(int, match.groups())) if match else None
+
+required = version(sys.argv[1])
+installed = version(sys.argv[2])
+if required is None or installed is None or installed < required:
+    raise SystemExit(1)
+PY
+}
+
+install_rtk() {
+  local install_required=false version_output
+  RTK_CLI_INSTALLED_BY_APPLY=false
+
+  if have rtk; then
+    if rtk_cli_is_compatible; then
+      version_output="$(rtk --version 2>/dev/null)"
+      log "Keeping compatible RTK CLI: $version_output"
+    else
+      log "Installed RTK CLI does not pass the rewrite compatibility check"
+      install_required=true
+    fi
+  else
+    install_required=true
+  fi
+
+  if [[ "$install_required" == true ]]; then
+    [[ "$RTK_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || \
+      die "RTK_VERSION must be a stable vX.Y.Z release tag; branches and prereleases are not allowed"
+    log "Installing RTK CLI $RTK_VERSION"
     curl -fsSL "https://raw.githubusercontent.com/rtk-ai/rtk/$RTK_VERSION/install.sh" | \
       RTK_VERSION="$RTK_VERSION" sh || die "RTK install failed"
     export PATH="$HOME/.local/bin:$HOME/bin:$PATH"
     have rtk || die "RTK install did not put rtk on PATH"
+    rtk_cli_is_compatible || die "Installed RTK CLI failed its rewrite compatibility check"
+    rtk_cli_meets_install_version || \
+      die "Installed RTK CLI is older than the pinned stable release $RTK_VERSION"
+    RTK_CLI_INSTALLED_BY_APPLY=true
   fi
 
-  log "Initializing RTK for OpenCode"
-  rtk init -g --opencode || die "RTK OpenCode init failed"
   rtk gain || true
+}
+
+install_rtk_plugin() {
+  local source="$REPO_DIR/plugins/rtk/rtk.ts"
+  local plugin_dir="$HOME/.config/opencode/plugins"
+  local target="$plugin_dir/rtk.ts"
+  local backup_dir="$HOME/.local/share/opencode/plugin-backups"
+  local directory timestamp backup_file duplicate
+
+  [[ -f "$source" && ! -L "$source" ]] || die "Missing regular tracked RTK plugin source: $source"
+
+  for directory in "$HOME/.config" "$HOME/.config/opencode" "$plugin_dir"; do
+    [[ ! -L "$directory" ]] || die "RTK plugin directory must not be a symlink: $directory"
+    [[ ! -e "$directory" || -d "$directory" ]] || \
+      die "RTK plugin directory must be a directory: $directory"
+  done
+  mkdir -p "$plugin_dir" || die "Could not create OpenCode plugin directory: $plugin_dir"
+
+  for duplicate in "$plugin_dir/rtk.js" "$plugin_dir/rtk"; do
+    [[ ! -e "$duplicate" && ! -L "$duplicate" ]] || \
+      die "Another local RTK plugin may be loadable at $duplicate; remove it before apply"
+  done
+
+  python3 "$AGENT_STACK_HELPER" guard-regular-file "$target" "RTK plugin target" || \
+    die "Unsafe RTK plugin target: $target"
+  python3 - "$plugin_dir" "$target" <<'PY' || \
+    die "Another local plugin declares the RTK id; remove it before apply"
+import json
+import re
+import sys
+from pathlib import Path
+
+plugin_dir = Path(sys.argv[1])
+target = Path(sys.argv[2])
+rtk_id = re.compile(r"""(?m)(?:^|[,{]\s*)['\"]?id['\"]?\s*:\s*['\"]rtk['\"]""")
+source_suffixes = {".ts", ".js", ".mjs", ".cjs"}
+
+
+def check_source(path):
+    if path.is_file() and path.suffix.lower() in source_suffixes:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise SystemExit(f"ERROR: Cannot inspect local plugin {path}: {exc}")
+        if rtk_id.search(text):
+            raise SystemExit(f"ERROR: Another local plugin declares id 'rtk': {path}")
+
+
+for entry in plugin_dir.iterdir():
+    if entry == target:
+        continue
+    if entry.is_file():
+        check_source(entry)
+        continue
+    if not entry.is_dir():
+        continue
+
+    manifest = entry / "package.json"
+    main_files = ["index.ts", "index.js", "index.mjs", "index.cjs"]
+    if manifest.is_file():
+        try:
+            package = json.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise SystemExit(f"ERROR: Cannot inspect local plugin manifest {manifest}: {exc}")
+        package_name = package.get("name", "") if isinstance(package, dict) else ""
+        if isinstance(package_name, str) and (
+            package_name.lower() == "rtk" or package_name.lower().endswith("/rtk")
+        ):
+            raise SystemExit(f"ERROR: Another local plugin package is RTK: {manifest}")
+        if isinstance(package, dict):
+            for field in ("main", "module"):
+                value = package.get(field)
+                if isinstance(value, str):
+                    candidate = (entry / value).resolve()
+                    try:
+                        candidate.relative_to(entry.resolve())
+                    except ValueError:
+                        raise SystemExit(f"ERROR: Local plugin entry escapes its directory: {candidate}")
+                    check_source(candidate)
+    for name in main_files:
+        check_source(entry / name)
+PY
+  if [[ -f "$target" ]] && cmp -s "$source" "$target"; then
+    if [[ "${RTK_CLI_INSTALLED_BY_APPLY:-false}" == true ]]; then
+      log "RTK CLI was installed while the tracked plugin file was already present; reload any running OpenCode process that set up this plugin before RTK was available"
+    else
+      log "RTK V2 plugin already matches the tracked payload"
+    fi
+    return 0
+  fi
+
+  if [[ -e "$target" ]]; then
+    for directory in \
+      "$HOME/.local" \
+      "$HOME/.local/share" \
+      "$HOME/.local/share/opencode" \
+      "$backup_dir"
+    do
+      [[ ! -L "$directory" ]] || die "RTK backup directory must not be a symlink: $directory"
+      [[ ! -e "$directory" || -d "$directory" ]] || \
+        die "RTK backup path must be a directory: $directory"
+    done
+    mkdir -p "$backup_dir" || die "Could not create RTK backup directory: $backup_dir"
+    chmod 700 "$backup_dir"
+    timestamp="$(date -u '+%Y%m%dT%H%M%SZ')"
+    backup_file="$(mktemp "$backup_dir/rtk.ts.$timestamp.XXXXXXXX")" || \
+      die "Could not create a timestamped RTK plugin backup"
+    if ! cp -p "$target" "$backup_file"; then
+      rm -f "$backup_file"
+      die "Could not back up the existing RTK plugin: $target"
+    fi
+    chmod 600 "$backup_file" || die "Could not protect RTK plugin backup: $backup_file"
+    log "Backed up replaced RTK plugin to $backup_file"
+  fi
+
+  python3 "$AGENT_STACK_HELPER" atomic-write "$target" 644 ".rtk.ts." <"$source" || \
+    die "Could not atomically install the tracked RTK plugin"
+  cmp -s "$source" "$target" || die "Installed RTK plugin does not match the tracked payload"
+  log "Installed tracked RTK V2 plugin at $target"
 }
 
 install_plannotator() {
@@ -2246,7 +2433,8 @@ PY
 
 install_plugins() {
   log "Installing V2-compatible plugins"
-  log "RTK is disabled: no released RTK version has verified OpenCode V2 support"
+  install_rtk
+  install_rtk_plugin
   install_plannotator
 }
 
@@ -2353,10 +2541,10 @@ main() {
   setup_opencode
   setup_ai_memory
   warn_on_stale_ai_memory_service
+  install_plugins
   start_opencode_server
   merge_opencode_shell_override
   configure_bash_login_env
-  install_plugins
   install_required_skills
 
   log "Setup complete. Open a new Bash shell or source ~/.bash_aliases, then run ./test.sh to verify."

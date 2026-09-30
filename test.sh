@@ -652,9 +652,16 @@ config = {
     },
     "plugin": [
         "user/plugin",
+        "rtk",
+        "rtk@0.50.0",
         ["github:guisaliba/opencode-learn#v0.0.1", {"textModel": "stale/model"}],
         ["github:guisaliba/learn#v0.0.1", {"textModel": "stale/model"}],
         "github:guisaliba/learn#main",
+    ],
+    "plugins": [
+        "-rtk",
+        {"package": "@rtk-ai/rtk@0.50.0"},
+        {"package": "~/.config/opencode/plugins/rtk.ts", "options": {"legacy": True}},
     ],
     "mcp": {
         "custom": {
@@ -706,6 +713,10 @@ PY
   require_json_array_count "$fixture_config" "instructions" "user-rules.md" "1"
   require_json_array_count "$fixture_config" "instructions" "$AI_MEMORY_INSTRUCTIONS_REFERENCE" "1"
   require_json_array_count "$fixture_config" "plugins" "user/plugin" "1"
+  require_json_literal \
+    "$fixture_config" \
+    "plugins" \
+    '["user/plugin",{"package":"@plannotator/opencode@latest","options":{"workflow":"plan-agent","planningAgents":["plan"]}}]'
   require_json_array_item_count \
     "$fixture_config" \
     "plugins" \
@@ -1930,6 +1941,7 @@ test_apply_scope() {
     verify_ai_memory_unauthenticated_loopback() { printf '%s\n' loopback >>"$action_log"; }
     setup_opencode() { printf '%s\n' opencode-config >>"$action_log"; }
     setup_ai_memory() { printf '%s\n' ai-memory-config >>"$action_log"; }
+    start_opencode_server() { printf '%s\n' server >>"$action_log"; }
     merge_opencode_shell_override() { printf '%s\n' shell >>"$action_log"; }
     configure_bash_login_env() { printf '%s\n' bash-profile >>"$action_log"; }
     install_plugins() { printf '%s\n' plugins >>"$action_log"; }
@@ -1951,11 +1963,340 @@ test_apply_scope() {
     loopback \
     opencode-config \
     ai-memory-config \
+    plugins \
+    server \
     shell \
     bash-profile \
-    plugins \
     skills >"$expected_log"
   require_same_file "$expected_log" "$action_log"
+
+  rm -rf -- "$fixture_root"
+}
+
+test_rtk_plugin_installation() {
+  local fixture_root fixture_home plugin_dir plugin_target plugin_config stub_bin rtk_log backup_dir
+  local first_backup_count second_backup_count backup_file
+  local -a backups=() rtk_entries=()
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  plugin_dir="$fixture_home/.config/opencode/plugins"
+  plugin_target="$plugin_dir/rtk.ts"
+  plugin_config="$fixture_home/.config/opencode/opencode.json"
+  stub_bin="$fixture_root/bin"
+  rtk_log="$fixture_root/rtk.log"
+  backup_dir="$fixture_home/.local/share/opencode/plugin-backups"
+  mkdir -p "$plugin_dir" "$stub_bin"
+  printf '%s\n' 'legacy RTK V1 plugin' >"$plugin_target"
+  printf '%s\n' 'export default { id: "other-plugin" }' >"$plugin_dir/other.ts"
+  printf '%s\n' '{"plugins":["unrelated-plugin","rtk"]}' >"$plugin_config"
+  cat >"$stub_bin/rtk" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$RTK_TEST_LOG"
+case "${1:-}" in
+  --version) printf '%s\n' 'rtk 0.38.0' ;;
+  rewrite)
+    [[ "${2:-}" == 'git status --short' ]] || exit 8
+    printf '%s' 'rtk git status --short'
+    exit 3
+    ;;
+  gain) ;;
+  init) printf '%s\n' 'official init must not run' >>"$RTK_TEST_LOG" ;;
+  *) exit 9 ;;
+esac
+SH
+  chmod +x "$stub_bin/rtk"
+
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:$PATH"
+    RTK_TEST_LOG="$rtk_log"
+    export HOME PATH RTK_TEST_LOG
+    unset RTK_VERSION RTK_BIN
+    source "$REPO_DIR/apply.sh"
+    install_plannotator() { :; }
+    setup_opencode
+    install_plugins
+    [[ "$RTK_VERSION" == v0.50.0 ]]
+  ) >/dev/null 2>&1; then
+    ok "normal OpenCode setup and plugin installation install the pinned RTK payload"
+  else
+    not_ok "normal OpenCode setup and plugin installation did not install RTK"
+  fi
+
+  require_same_file "$REPO_DIR/plugins/rtk/rtk.ts" "$plugin_target"
+  require_file "$plugin_dir/other.ts"
+  shopt -s nullglob
+  rtk_entries=("$plugin_dir"/rtk* "$plugin_dir"/.rtk*)
+  shopt -u nullglob
+  if [[ ${#rtk_entries[@]} -eq 1 && "${rtk_entries[0]}" == "$plugin_target" ]]; then
+    ok "RTK install leaves one local RTK plugin and no discovery backup"
+  else
+    not_ok "RTK install left a second local RTK plugin"
+  fi
+  if [[ -d "$backup_dir" ]]; then
+    shopt -s nullglob
+    backups=("$backup_dir"/rtk.ts.*)
+    shopt -u nullglob
+  fi
+  if [[ ${#backups[@]} -eq 1 ]]; then
+    backup_file="${backups[0]}"
+    if [[ "${backup_file%/*}" == "$backup_dir" ]] && \
+      grep -q 'legacy RTK V1 plugin' "$backup_file"; then
+      ok "legacy RTK content is backed up outside the plugin discovery directory"
+    else
+      not_ok "legacy RTK backup is not safe or does not preserve the old content"
+    fi
+  else
+    not_ok "expected one backup of the replaced RTK plugin, found ${#backups[@]}"
+  fi
+  if grep -q '^init' "$rtk_log"; then
+    not_ok "apply invoked RTK's legacy OpenCode plugin generator"
+  else
+    ok "apply verifies the RTK CLI without running the legacy plugin generator"
+  fi
+  if grep -q '^rewrite git status --short$' "$rtk_log"; then
+    ok "apply validates installed RTK rewrite behavior"
+  else
+    not_ok "apply did not validate the installed RTK rewrite behavior"
+  fi
+
+  first_backup_count="${#backups[@]}"
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:$PATH"
+    RTK_TEST_LOG="$rtk_log"
+    export HOME PATH RTK_TEST_LOG
+    unset RTK_VERSION RTK_BIN
+    source "$REPO_DIR/apply.sh"
+    install_plannotator() { :; }
+    setup_opencode
+    install_plugins
+  ) >/dev/null 2>&1; then
+    ok "RTK plugin setup succeeds on a repeat apply"
+  else
+    not_ok "RTK plugin setup failed on a repeat apply"
+  fi
+  shopt -s nullglob
+  backups=("$backup_dir"/rtk.ts.*)
+  shopt -u nullglob
+  second_backup_count="${#backups[@]}"
+  if [[ "$first_backup_count" == "$second_backup_count" ]]; then
+    ok "repeat apply does not create another legacy RTK backup"
+  else
+    not_ok "repeat apply created an extra RTK backup"
+  fi
+  require_same_file "$REPO_DIR/plugins/rtk/rtk.ts" "$plugin_target"
+
+  rm -rf -- "$fixture_root"
+}
+
+test_rtk_unsafe_target_handling() {
+  local fixture_root symlink_home symlink_plugins symlink_target sentinel external_dir
+  local directory_home directory_plugins directory_target
+  fixture_root="$(mktemp -d)"
+  symlink_home="$fixture_root/symlink-home"
+  symlink_plugins="$symlink_home/.config/opencode/plugins"
+  symlink_target="$symlink_plugins/rtk.ts"
+  sentinel="$fixture_root/sentinel"
+  external_dir="$fixture_root/external-plugins"
+  directory_home="$fixture_root/directory-home"
+  directory_plugins="$directory_home/.config/opencode/plugins"
+  directory_target="$directory_plugins/rtk.ts"
+
+  mkdir -p "$symlink_plugins" "$external_dir" "$directory_target"
+  printf '%s\n' 'do not replace this file' >"$sentinel"
+  ln -s "$sentinel" "$symlink_target"
+  if (
+    HOME="$symlink_home"
+    export HOME
+    source "$REPO_DIR/apply.sh"
+    install_rtk_plugin
+  ) >/dev/null 2>&1; then
+    not_ok "RTK installer accepted a symlink target"
+  else
+    ok "RTK installer rejects a symlink target"
+  fi
+  require_file_content "$sentinel" "do not replace this file"
+
+  if (
+    HOME="$directory_home"
+    export HOME
+    source "$REPO_DIR/apply.sh"
+    install_rtk_plugin
+  ) >/dev/null 2>&1; then
+    not_ok "RTK installer accepted a directory target"
+  else
+    ok "RTK installer rejects a directory target"
+  fi
+
+  rmdir "$directory_target" "$directory_plugins"
+  ln -s "$external_dir" "$directory_plugins"
+  if (
+    HOME="$directory_home"
+    export HOME
+    source "$REPO_DIR/apply.sh"
+    install_rtk_plugin
+  ) >/dev/null 2>&1; then
+    not_ok "RTK installer accepted a symlink plugin directory"
+  else
+    ok "RTK installer rejects a symlink plugin directory"
+  fi
+  if [[ ! -e "$external_dir/rtk.ts" ]]; then
+    ok "RTK installer does not write through a plugin-directory symlink"
+  else
+    not_ok "RTK installer wrote through a plugin-directory symlink"
+  fi
+
+  rm -rf -- "$fixture_root"
+}
+
+test_rtk_duplicate_local_plugin_handling() {
+  local fixture_root fixture_home plugin_dir target duplicate package_dir
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  plugin_dir="$fixture_home/.config/opencode/plugins"
+  target="$plugin_dir/rtk.ts"
+  duplicate="$plugin_dir/custom-plugin.ts"
+  package_dir="$plugin_dir/custom-package"
+  mkdir -p "$plugin_dir"
+
+  printf '%s\n' 'export default { id: "rtk" }' >"$duplicate"
+  if (
+    HOME="$fixture_home"
+    export HOME
+    source "$REPO_DIR/apply.sh"
+    install_rtk_plugin
+  ) >/dev/null 2>&1; then
+    not_ok "RTK installer accepted another local file with id rtk"
+  else
+    ok "RTK installer rejects another local file with id rtk"
+  fi
+  [[ ! -e "$target" ]] && ok "RTK installer preserves the conflicting local plugin" || \
+    not_ok "RTK installer wrote over a conflicting local plugin"
+
+  rm -f "$duplicate"
+  mkdir -p "$package_dir"
+  printf '%s\n' '{"name":"other-package","main":"index.js"}' >"$package_dir/package.json"
+  printf '%s\n' 'export default { id: "rtk" }' >"$package_dir/index.js"
+  if (
+    HOME="$fixture_home"
+    export HOME
+    source "$REPO_DIR/apply.sh"
+    install_rtk_plugin
+  ) >/dev/null 2>&1; then
+    not_ok "RTK installer accepted a package entry with id rtk"
+  else
+    ok "RTK installer rejects a package entry with id rtk"
+  fi
+  [[ ! -e "$target" ]] && ok "RTK installer preserves the conflicting plugin package" || \
+    not_ok "RTK installer wrote over a conflicting plugin package"
+
+  rm -rf -- "$fixture_root"
+}
+
+test_rtk_cli_installation() {
+  local fixture_root fixture_home stub_bin curl_log rtk_log invalid_version apply_log plugin_target
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  stub_bin="$fixture_root/bin"
+  curl_log="$fixture_root/curl.log"
+  rtk_log="$fixture_root/rtk.log"
+  apply_log="$fixture_root/apply.log"
+  mkdir -p "$fixture_home" "$stub_bin"
+  plugin_target="$fixture_home/.config/opencode/plugins/rtk.ts"
+  mkdir -p "${plugin_target%/*}"
+  cp "$REPO_DIR/plugins/rtk/rtk.ts" "$plugin_target"
+  cat >"$stub_bin/curl" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$RTK_CURL_LOG"
+cat <<'INSTALLER'
+[ "$RTK_VERSION" = "v0.50.0" ] || exit 10
+mkdir -p "$HOME/.local/bin"
+cat >"$HOME/.local/bin/rtk" <<'RTK'
+#!/bin/sh
+printf '%s\n' "$*" >>"$RTK_TEST_LOG"
+case "${1:-}" in
+  --version) printf '%s\n' 'rtk 0.50.0' ;;
+  rewrite)
+    [ "${2:-}" = 'git status --short' ] || exit 8
+    printf '%s' 'rtk git status --short'
+    exit 3
+    ;;
+  gain) ;;
+  init) printf '%s\n' 'official init must not run' >>"$RTK_TEST_LOG" ;;
+  *) exit 9 ;;
+esac
+RTK
+chmod +x "$HOME/.local/bin/rtk"
+INSTALLER
+SH
+  chmod +x "$stub_bin/curl"
+
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    RTK_CURL_LOG="$curl_log"
+    RTK_TEST_LOG="$rtk_log"
+    export HOME PATH RTK_CURL_LOG RTK_TEST_LOG
+    unset RTK_VERSION RTK_BIN
+    source "$REPO_DIR/apply.sh"
+    have() {
+      if [[ "$1" == rtk ]]; then
+        [[ -x "$HOME/.local/bin/rtk" ]]
+      else
+        command -v "$1" >/dev/null 2>&1
+      fi
+    }
+    install_rtk
+    install_rtk_plugin
+    [[ "$RTK_VERSION" == v0.50.0 ]]
+  ) >"$apply_log" 2>&1; then
+    ok "fresh RTK installation uses the pinned stable CLI"
+  else
+    not_ok "fresh RTK installation did not use the pinned stable CLI"
+  fi
+  require_executable "$fixture_home/.local/bin/rtk"
+  require_same_file "$REPO_DIR/plugins/rtk/rtk.ts" "$plugin_target"
+  require_contains "$apply_log" "reload any running OpenCode process"
+  if [[ ! -e "$fixture_home/.local/share/opencode/plugin-backups" ]]; then
+    ok "identical RTK plugin content is not backed up again"
+  else
+    not_ok "identical RTK plugin content created an unnecessary backup"
+  fi
+  require_contains "$curl_log" "https://raw.githubusercontent.com/rtk-ai/rtk/v0.50.0/install.sh"
+  require_contains "$rtk_log" "rewrite git status --short"
+  if grep -q '^init$' "$rtk_log"; then
+    not_ok "fresh RTK installation ran the legacy OpenCode plugin generator"
+  else
+    ok "fresh RTK installation does not generate a legacy OpenCode plugin"
+  fi
+
+  for invalid_version in main v0.51.0-rc.1; do
+    : >"$curl_log"
+    if (
+      HOME="$fixture_root/invalid-home"
+      PATH="$stub_bin:/usr/bin:/bin"
+      RTK_CURL_LOG="$curl_log"
+      RTK_TEST_LOG="$rtk_log"
+      RTK_VERSION="$invalid_version"
+      export HOME PATH RTK_CURL_LOG RTK_TEST_LOG RTK_VERSION
+      mkdir -p "$HOME"
+      source "$REPO_DIR/apply.sh"
+      have() {
+        if [[ "$1" == rtk ]]; then
+          [[ -x "$HOME/.local/bin/rtk" ]]
+        else
+          command -v "$1" >/dev/null 2>&1
+        fi
+      }
+      install_rtk
+    ) >/dev/null 2>&1; then
+      not_ok "fresh RTK installation accepted an unstable version tag: $invalid_version"
+    else
+      ok "fresh RTK installation rejects unstable version tag: $invalid_version"
+    fi
+    require_empty_file "$curl_log"
+  done
 
   rm -rf -- "$fixture_root"
 }
@@ -3021,7 +3362,16 @@ for theme_file in "${tracked_theme_files[@]}"; do
 done
 require_contains "$REPO_DIR/apply.sh" "merge_opencode_cli_json"
 require_contains "$REPO_DIR/apply.sh" "--agent opencode2"
-require_contains "$REPO_DIR/apply.sh" "RTK is disabled"
+require_file "$REPO_DIR/plugins/rtk/rtk.ts"
+require_file "$REPO_DIR/plugins/rtk/README.md"
+require_file "$REPO_DIR/plugins/rtk/LICENSE"
+require_file "$REPO_DIR/plugins/rtk/rtk.test.ts"
+require_file "$REPO_DIR/plugins/rtk/rtk-resolver.test.ts"
+require_file "$REPO_DIR/plugins/rtk/smoke-test.py"
+require_file "$REPO_DIR/plugins/rtk/verification.md"
+require_contains "$REPO_DIR/apply.sh" 'RTK_VERSION="${RTK_VERSION:-v0.50.0}"'
+require_contains "$REPO_DIR/apply.sh" "install_rtk_plugin"
+require_text_count "$REPO_DIR/apply.sh" "rtk init -g --opencode" "0"
 require_file "$REPO_DIR/skills/README.md"
 require_file "$REPO_DIR/skills/daily-tasks/SKILL.md"
 require_executable "$REPO_DIR/skills/daily-tasks/scripts/journal-task-sync"
@@ -3081,6 +3431,16 @@ test_agent_stack_helpers
 test_macos_platform_prerequisites
 test_apply_scope
 
+# RTK plugin fixture checks. The resolver test runs in its own Bun process so
+# its node:fs mock cannot affect the real-child-process tests.
+printf '\n--- RTK Plugin Fixtures ---\n'
+test_rtk_plugin_installation
+test_rtk_unsafe_target_handling
+test_rtk_duplicate_local_plugin_handling
+test_rtk_cli_installation
+bun test "$REPO_DIR/plugins/rtk/rtk.test.ts" || not_ok "RTK rewrite behavior tests failed"
+bun test "$REPO_DIR/plugins/rtk/rtk-resolver.test.ts" || not_ok "RTK resolver tests failed"
+
 # Manifest installation fixture checks
 printf '\n--- Skill Installation Fixtures ---\n'
 
@@ -3131,7 +3491,12 @@ require_executable "$HOME/.opencode/bin/opencode"
 require_command ai-memory
 require_command rtk
 require_command plannotator
-[[ ! -e "$HOME/.config/opencode/plugins/rtk.ts" ]] && ok "RTK V1 plugin is absent" || not_ok "RTK V1 plugin remains"
+if [[ -f "$HOME/.config/opencode/plugins/rtk.ts" && ! -L "$HOME/.config/opencode/plugins/rtk.ts" ]] && \
+  cmp -s "$REPO_DIR/plugins/rtk/rtk.ts" "$HOME/.config/opencode/plugins/rtk.ts"; then
+  ok "installed RTK V2 plugin matches the tracked payload"
+else
+  not_ok "installed RTK V2 plugin does not match the tracked payload"
+fi
 
 "$HOME/.opencode/bin/opencode" --help >/dev/null 2>&1 && ok "OpenCode V2 help runs" || not_ok "OpenCode V2 help failed"
 ai-memory --help >/dev/null 2>&1 && ok "ai-memory help runs" || not_ok "ai-memory help failed"
