@@ -15,12 +15,9 @@ Everything else, from one profile:
   general -> <profile>
   explore -> <profile>
   title   -> <profile>
-
-  opencode-go-deepseek-v4.1-flash          -> opencode-go/deepseek-v4.1-flash
-  opencode-go-muse-spark-1.3-contributor   -> opencode-go/muse-spark-1.3-contributor
 ```
 
-## One Profile, and Who Owns It
+## Model Selection
 
 `DOTFILES_AI_MEMORY_LLM_PROFILE` in `~/.config/ai-memory/env` is the **single**
 selector. It decides, in one move:
@@ -29,7 +26,14 @@ selector. It decides, in one move:
 - the `general`, `explore` and `title` OpenCode agents
 - nothing else. The primary `build` and `plan` models are fixed.
 
-Set it **on the server host**. A client host must not set it.
+Currently, two profiles are available: `opencode-go-deepseek-v4.1-flash` and `opencode-go-muse-spark-1.3-contributor`.
+
+```sh
+opencode-go-deepseek-v4.1-flash -> opencode-go/deepseek-v4.1-flash
+opencode-go-muse-spark-1.3-contributor -> opencode-go/muse-spark-1.3-contributor
+```
+
+Set it **on the server host** if you are running a remote managed OpenCode server. A client host must not set it.
 
 ```sh
 # on the server, in ~/.config/ai-memory/env
@@ -89,7 +93,6 @@ path. Global model, agent, plugin, MCP, and instruction entries are merged by
 The terminal theme belongs in `cli.json` at `theme.name`.
 Tracked themes under `opencode/themes/` are copied to the global theme path.
 The pinned asset provenance is recorded by the tracked theme file history.
-Learn is disabled until its server and terminal plugins have a verified V2 port.
 
 ## Keybinds
 
@@ -141,5 +144,3 @@ the tailnet uses it to reach the web UI and the API. A client reads it from
 The shell wrapper does not use the server. `opencode` always starts a local
 ai-memory workstream, so a session never leaves the machine where you typed the
 command. To work on the server, run `opencode` on the server.
-
-See [V2-MIGRATION.md](V2-MIGRATION.md) for security, rollback, and acceptance.
