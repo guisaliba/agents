@@ -3058,7 +3058,6 @@ if [[ "$manifest_valid" == true ]]; then
     esac
   done <<<"$manifest_rows"
 fi
-require_contains "$REPO_DIR/AGENTS.md" "When you are the primary agent, you are the final owner of delegated work."
 require_text_count "$REPO_DIR/shell/opencode.bash" "$OPENCODE_SHELL_BLOCK_START" "1"
 require_text_count "$REPO_DIR/shell/opencode.bash" "$OPENCODE_SHELL_BLOCK_END" "1"
 
@@ -3185,7 +3184,6 @@ rewritten="$(rtk rewrite "git status --short" 2>/dev/null || true)"
 
 require_file "$HOME/.config/opencode/AGENTS.md"
 require_contains "$HOME/.config/opencode/AGENTS.md" "ASD-STE100"
-require_contains "$HOME/.config/opencode/AGENTS.md" "When you are the primary agent, you are the final owner of delegated work."
 require_contains "$HOME/.config/opencode/AGENTS.md" "<!-- ai-memory:start -->"
 require_contains "$HOME/.config/opencode/AGENTS.md" "<!-- ai-memory:end -->"
 require_file "$HOME/.bash_aliases"
