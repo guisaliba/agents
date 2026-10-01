@@ -74,7 +74,7 @@ OPENCODE_SHELL_BLOCK_END="# <<< dotfiles OpenCode ai-memory wrapper <<<"
 BASH_PROFILE="$HOME/.bash_profile"
 BASH_PROFILE_BLOCK_START="# >>> guisaliba/agents Bash aliases >>>"
 BASH_PROFILE_BLOCK_END="# <<< guisaliba/agents Bash aliases <<<"
-GOOGLE_CHROME_APP_PATH="${GOOGLE_CHROME_APP_PATH:-/Applications/Google Chrome.app}"
+GOOGLE_CHROME_APP_PATH_MACOS="${GOOGLE_CHROME_APP_PATH_MACOS:-/Applications/Google Chrome.app}"
 
 log() {
   printf '\n==> %s\n' "$*"
@@ -137,13 +137,13 @@ prepare_full_stack_prerequisites() {
   case "$(agent_stack_platform)" in
     Linux) ;;
     Darwin)
-      if [[ ! -d "$GOOGLE_CHROME_APP_PATH" ]]; then
+      if [[ ! -d "$GOOGLE_CHROME_APP_PATH_MACOS" ]]; then
         have brew || die "Homebrew is required to install Google Chrome on macOS"
         log "Installing Google Chrome"
         brew install --cask google-chrome || die "Google Chrome installation failed"
       fi
-      [[ -d "$GOOGLE_CHROME_APP_PATH" ]] || \
-        die "Google Chrome is missing at $GOOGLE_CHROME_APP_PATH"
+      [[ -d "$GOOGLE_CHROME_APP_PATH_MACOS" ]] || \
+        die "Google Chrome is missing at $GOOGLE_CHROME_APP_PATH_MACOS"
       ;;
     *) die "Unsupported operating system: $(agent_stack_platform)" ;;
   esac

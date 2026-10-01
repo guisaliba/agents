@@ -1858,7 +1858,7 @@ test_macos_platform_prerequisites() {
     'case "$*" in' \
     '  "install bash") printf '\''#!/bin/bash\nexit 0\n'\'' >"$MACOS_TEST_BREW_PREFIX/bin/bash" ;;' \
     '  "install python") printf '\''#!/bin/bash\nexit 0\n'\'' >"$MACOS_TEST_BREW_PREFIX/bin/python3" ;;' \
-    '  "install --cask google-chrome") mkdir -p "$GOOGLE_CHROME_APP_PATH"; exit 0 ;;' \
+    '  "install --cask google-chrome") mkdir -p "$GOOGLE_CHROME_APP_PATH_MACOS"; exit 0 ;;' \
     '  *) exit 2 ;;' \
     'esac' \
     'chmod +x "$MACOS_TEST_BREW_PREFIX/bin/${2/python/python3}"' >"$stub_bin/brew"
@@ -1869,8 +1869,8 @@ test_macos_platform_prerequisites() {
     PATH="$stub_bin:/usr/bin:$brew_prefix/bin:/bin"
     MACOS_TEST_BREW_PREFIX="$brew_prefix"
     MACOS_TEST_INSTALL_LOG="$install_log"
-    GOOGLE_CHROME_APP_PATH="$fixture_root/Applications/Google Chrome.app"
-    export HOME PATH MACOS_TEST_BREW_PREFIX MACOS_TEST_INSTALL_LOG GOOGLE_CHROME_APP_PATH
+    GOOGLE_CHROME_APP_PATH_MACOS="$fixture_root/Applications/Google Chrome.app"
+    export HOME PATH MACOS_TEST_BREW_PREFIX MACOS_TEST_INSTALL_LOG GOOGLE_CHROME_APP_PATH_MACOS
     source "$REPO_DIR/apply.sh"
     prepare_platform_prerequisites
     prepare_platform_prerequisites
