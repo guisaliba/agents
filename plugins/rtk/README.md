@@ -25,3 +25,5 @@ rtk <command>
 Re-enable it only after a stable RTK release proves the V2 default export,
 shell filtering, exit-code 3 handling, timeout rejection, missing-binary
 fail-open behavior, macOS/Linux lookup, and a real stable V2 loader test.
+
+A temporary implementation for RTK might land, soon to be overwritten by the official, stable release.
