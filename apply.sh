@@ -1128,7 +1128,11 @@ def plugin_spec(item):
 
 
 def is_rtk_plugin_spec(spec):
-    spec = spec.strip().removeprefix("-").split("#", 1)[0]
+    spec = spec.strip()
+    # OpenCode uses a leading "-" as an explicit plugin-disable directive.
+    if spec.startswith("-"):
+        return False
+    spec = spec.split("#", 1)[0]
     if spec.startswith("file://"):
         spec = spec[7:]
     name = spec.rstrip("/").rsplit("/", 1)[-1]

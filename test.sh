@@ -713,10 +713,11 @@ PY
   require_json_array_count "$fixture_config" "instructions" "user-rules.md" "1"
   require_json_array_count "$fixture_config" "instructions" "$AI_MEMORY_INSTRUCTIONS_REFERENCE" "1"
   require_json_array_count "$fixture_config" "plugins" "user/plugin" "1"
+  require_json_array_count "$fixture_config" "plugins" "-rtk" "1"
   require_json_literal \
     "$fixture_config" \
     "plugins" \
-    '["user/plugin",{"package":"@plannotator/opencode@latest","options":{"workflow":"plan-agent","planningAgents":["plan"]}}]'
+    '["user/plugin","-rtk",{"package":"@plannotator/opencode@latest","options":{"workflow":"plan-agent","planningAgents":["plan"]}}]'
   require_json_array_item_count \
     "$fixture_config" \
     "plugins" \
