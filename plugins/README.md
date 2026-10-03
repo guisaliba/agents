@@ -7,7 +7,7 @@ not vendored here unless the component explicitly owns a tracked exception.
 | ----------- | ----------------------------------- | ---------------------------------------------- |
 | Learn       | Disabled pending a full V2 port     | [learn/README.md](learn/README.md)             |
 | Plannotator | `~/.config/opencode/opencode.json`  | [plannotator/README.md](plannotator/README.md) |
-| RTK         | Disabled pending a released V2 hook | [rtk/README.md](rtk/README.md)                 |
+| RTK         | `~/.config/opencode/plugins/rtk.ts` | [rtk/README.md](rtk/README.md)             |
 
 ai-memory also generates an OpenCode lifecycle plugin. It remains documented
 at [`../ai-memory/README.md`](../ai-memory/README.md) because it owns a native
@@ -17,5 +17,6 @@ to the plugin.
 Add future OpenCode plugin documentation under `plugins/<name>/README.md` and
 link it from this index.
 
-Learn is disabled until its server and terminal plugins have a verified V2 port. RTK is disabled until a stable release
-for its V2 hook.
+Learn is disabled until its server and terminal plugins have a verified V2 port.
+RTK uses a temporary tracked V2 adapter until an official stable release is
+available.
