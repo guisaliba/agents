@@ -2169,7 +2169,7 @@ setup_ai_memory() {
 }
 
 rtk_cli_is_compatible() {
-  local version_output rewrite_output rewrite_exit
+  local version_output rewrite_output rewrite_exit probe_home
 
   version_output="$(rtk --version 2>/dev/null)" || return 1
   python3 - "$version_output" <<'PY' || return 1
@@ -2180,11 +2180,23 @@ if not re.search(r"(?<!\d)v?\d+\.\d+\.\d+(?![A-Za-z0-9.+-])", sys.argv[1]):
     raise SystemExit(1)
 PY
 
-  if rewrite_output="$(rtk rewrite 'git status --short' 2>/dev/null)"; then
+  probe_home="$(mktemp -d)" || return 1
+  mkdir -p "$probe_home/.claude" "$probe_home/.config" || {
+    rm -rf "$probe_home"
+    return 1
+  }
+  if rewrite_output="$(
+    cd "$probe_home" && \
+      HOME="$probe_home" \
+      XDG_CONFIG_HOME="$probe_home/.config" \
+      CLAUDE_CONFIG_DIR="$probe_home/.claude" \
+      rtk rewrite 'git status --short' 2>/dev/null
+  )"; then
     rewrite_exit=0
   else
     rewrite_exit=$?
   fi
+  rm -rf "$probe_home"
   [[ "$rewrite_exit" == 0 || "$rewrite_exit" == 3 ]] || return 1
 
   rewrite_output="${rewrite_output#"${rewrite_output%%[![:space:]]*}"}"

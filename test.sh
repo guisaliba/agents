@@ -2195,6 +2195,87 @@ test_rtk_duplicate_local_plugin_handling() {
   rm -rf -- "$fixture_root"
 }
 
+test_rtk_cli_compatibility_ignores_user_policy() {
+  local fixture_root fixture_home policy_project stub_bin curl_log rtk_log
+  local rewrite_output rewrite_exit
+  fixture_root="$(mktemp -d)"
+  fixture_home="$fixture_root/home"
+  policy_project="$fixture_root/project"
+  stub_bin="$fixture_root/bin"
+  curl_log="$fixture_root/curl.log"
+  rtk_log="$fixture_root/rtk.log"
+  mkdir -p "$fixture_home/.claude" "$policy_project/.claude" "$stub_bin"
+  printf '%s\n' '{"permissions":{"deny":["Bash(git status --short)"]}}' \
+    >"$fixture_home/.claude/settings.json"
+  printf '%s\n' '{"permissions":{"deny":["Bash(git status --short)"]}}' \
+    >"$policy_project/.claude/settings.json"
+  cat >"$stub_bin/rtk" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*|$HOME|$PWD|${CLAUDE_CONFIG_DIR:-}" >>"$RTK_TEST_LOG"
+case "${1:-}" in
+  --version) printf '%s\n' 'rtk 0.38.0' ;;
+  rewrite)
+    if [[ "$HOME" == "$RTK_POLICY_HOME" || "$PWD" == "$RTK_POLICY_CWD" ]]; then
+      printf '%s' 'policy denied'
+      exit 2
+    fi
+    [[ "${CLAUDE_CONFIG_DIR:-}" == "$HOME/.claude" ]] || exit 8
+    printf '%s' 'rtk git status --short'
+    exit 3
+    ;;
+  gain) ;;
+  *) exit 9 ;;
+esac
+SH
+  cat >"$stub_bin/curl" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$RTK_CURL_LOG"
+exit 9
+SH
+  chmod +x "$stub_bin/rtk" "$stub_bin/curl"
+  : >"$curl_log"
+
+  if rewrite_output="$(
+    cd "$policy_project"
+    HOME="$fixture_home" \
+      RTK_POLICY_HOME="$fixture_home" \
+      RTK_POLICY_CWD="$policy_project" \
+      PATH="$stub_bin:/usr/bin:/bin" \
+      RTK_TEST_LOG="$rtk_log" \
+      rtk rewrite 'git status --short' 2>/dev/null
+  )"; then
+    not_ok "fixture RTK permission rule did not deny the policy command"
+  else
+    rewrite_exit=$?
+    if [[ "$rewrite_exit" == 2 ]]; then
+      ok "fixture RTK permission rule returns deny exit code 2"
+    else
+      not_ok "fixture RTK permission rule returned exit code $rewrite_exit, not 2"
+    fi
+  fi
+
+  if (
+    cd "$policy_project"
+    HOME="$fixture_home"
+    RTK_POLICY_HOME="$fixture_home"
+    RTK_POLICY_CWD="$policy_project"
+    PATH="$stub_bin:/usr/bin:/bin"
+    RTK_TEST_LOG="$rtk_log"
+    RTK_CURL_LOG="$curl_log"
+    export HOME RTK_POLICY_HOME RTK_POLICY_CWD PATH RTK_TEST_LOG RTK_CURL_LOG
+    unset RTK_VERSION RTK_BIN
+    source "$REPO_DIR/apply.sh"
+    install_rtk
+  ) >/dev/null 2>&1; then
+    ok "apply keeps a compatible RTK CLI when user policy denies the probe command"
+  else
+    not_ok "user RTK policy made apply reject or reinstall a compatible CLI"
+  fi
+  require_empty_file "$curl_log"
+
+  rm -rf -- "$fixture_root"
+}
+
 test_rtk_cli_installation() {
   local fixture_root fixture_home stub_bin curl_log rtk_log invalid_version apply_log plugin_target
   fixture_root="$(mktemp -d)"
@@ -3438,6 +3519,7 @@ printf '\n--- RTK Plugin Fixtures ---\n'
 test_rtk_plugin_installation
 test_rtk_unsafe_target_handling
 test_rtk_duplicate_local_plugin_handling
+test_rtk_cli_compatibility_ignores_user_policy
 test_rtk_cli_installation
 bun test "$REPO_DIR/plugins/rtk/rtk.test.ts" || not_ok "RTK rewrite behavior tests failed"
 bun test "$REPO_DIR/plugins/rtk/rtk-resolver.test.ts" || not_ok "RTK resolver tests failed"
