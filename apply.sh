@@ -2291,6 +2291,18 @@ rtk_id = re.compile(r"""(?m)(?:^|[,{]\s*)['\"]?id['\"]?\s*:\s*['\"]rtk['\"]""")
 source_suffixes = {".ts", ".js", ".mjs", ".cjs"}
 
 
+def export_targets(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for key, nested in value.items():
+            if key != "types":
+                yield from export_targets(nested)
+    elif isinstance(value, list):
+        for nested in value:
+            yield from export_targets(nested)
+
+
 def check_source(path):
     if path.is_file() and path.suffix.lower() in source_suffixes:
         try:
@@ -2323,15 +2335,20 @@ for entry in plugin_dir.iterdir():
         ):
             raise SystemExit(f"ERROR: Another local plugin package is RTK: {manifest}")
         if isinstance(package, dict):
-            for field in ("main", "module"):
-                value = package.get(field)
-                if isinstance(value, str):
-                    candidate = (entry / value).resolve()
-                    try:
-                        candidate.relative_to(entry.resolve())
-                    except ValueError:
-                        raise SystemExit(f"ERROR: Local plugin entry escapes its directory: {candidate}")
-                    check_source(candidate)
+            entry_points = [package.get("main"), package.get("module")]
+            exports = package.get("exports")
+            if isinstance(exports, dict) and any(key.startswith(".") for key in exports):
+                exports = exports.get(".")
+            entry_points.extend(export_targets(exports))
+            for value in entry_points:
+                if not isinstance(value, str):
+                    continue
+                candidate = (entry / value).resolve()
+                try:
+                    candidate.relative_to(entry.resolve())
+                except ValueError:
+                    raise SystemExit(f"ERROR: Local plugin entry escapes its directory: {candidate}")
+                check_source(candidate)
     for name in main_files:
         check_source(entry / name)
 PY

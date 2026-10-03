@@ -2152,7 +2152,7 @@ test_rtk_unsafe_target_handling() {
 }
 
 test_rtk_duplicate_local_plugin_handling() {
-  local fixture_root fixture_home plugin_dir target duplicate package_dir
+  local fixture_root fixture_home plugin_dir target duplicate package_dir exports_package_dir
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
   plugin_dir="$fixture_home/.config/opencode/plugins"
@@ -2191,6 +2191,24 @@ test_rtk_duplicate_local_plugin_handling() {
   fi
   [[ ! -e "$target" ]] && ok "RTK installer preserves the conflicting plugin package" || \
     not_ok "RTK installer wrote over a conflicting plugin package"
+
+  rm -rf -- "$package_dir"
+  exports_package_dir="$plugin_dir/exports-package"
+  mkdir -p "$exports_package_dir/src"
+  printf '%s\n' '{"name":"exports-package","exports":{".":"./src/index.ts"}}' >"$exports_package_dir/package.json"
+  printf '%s\n' 'export default { id: "rtk" }' >"$exports_package_dir/src/index.ts"
+  if (
+    HOME="$fixture_home"
+    export HOME
+    source "$REPO_DIR/apply.sh"
+    install_rtk_plugin
+  ) >/dev/null 2>&1; then
+    not_ok "RTK installer accepted a package exports entry with id rtk"
+  else
+    ok "RTK installer rejects an exports-only package entry with id rtk"
+  fi
+  [[ ! -e "$target" ]] && ok "RTK installer preserves the exports-only plugin package" || \
+    not_ok "RTK installer wrote over an exports-only plugin package"
 
   rm -rf -- "$fixture_root"
 }
