@@ -2062,6 +2062,7 @@ SH
   fi
 
   first_backup_count="${#backups[@]}"
+  chmod 0666 "$plugin_target"
   if (
     HOME="$fixture_home"
     PATH="$stub_bin:$PATH"
@@ -2087,6 +2088,7 @@ SH
     not_ok "repeat apply created an extra RTK backup"
   fi
   require_same_file "$REPO_DIR/plugins/rtk/rtk.ts" "$plugin_target"
+  require_file_mode "$plugin_target" "644"
 
   rm -rf -- "$fixture_root"
 }

@@ -2355,6 +2355,10 @@ for entry in plugin_dir.iterdir():
         check_source(entry / name)
 PY
   if [[ -f "$target" ]] && cmp -s "$source" "$target"; then
+    if ! python3 -c 'import stat, sys; from pathlib import Path; raise SystemExit(0 if stat.S_IMODE(Path(sys.argv[1]).stat().st_mode) == 0o644 else 1)' "$target"; then
+      chmod 644 "$target" || die "Could not set RTK plugin mode to 0644: $target"
+      log "Set RTK plugin mode to 0644"
+    fi
     if [[ "${RTK_CLI_INSTALLED_BY_APPLY:-false}" == true ]]; then
       log "RTK CLI was installed while the tracked plugin file was already present; reload any running OpenCode process that set up this plugin before RTK was available"
     else
