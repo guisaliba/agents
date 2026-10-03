@@ -2288,6 +2288,8 @@ from pathlib import Path
 plugin_dir = Path(sys.argv[1])
 target = Path(sys.argv[2])
 rtk_id = re.compile(r"""(?m)(?:^|[,{]\s*)['\"]?id['\"]?\s*:\s*['\"]rtk['\"]""")
+rtk_id_binding = re.compile(r"""\b(?:const|let|var)\s+id(?:\s*:[^=\n]+)?\s*=\s*['\"]rtk['\"]""")
+rtk_id_shorthand = re.compile(r"(?m)(?:^|[,{]\s*)id\s*(?=[,}])")
 source_suffixes = {".ts", ".js", ".mjs", ".cjs"}
 
 
@@ -2309,7 +2311,7 @@ def check_source(path):
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeError) as exc:
             raise SystemExit(f"ERROR: Cannot inspect local plugin {path}: {exc}")
-        if rtk_id.search(text):
+        if rtk_id.search(text) or (rtk_id_binding.search(text) and rtk_id_shorthand.search(text)):
             raise SystemExit(f"ERROR: Another local plugin declares id 'rtk': {path}")
 
 

@@ -2175,6 +2175,21 @@ test_rtk_duplicate_local_plugin_handling() {
   [[ ! -e "$target" ]] && ok "RTK installer preserves the conflicting local plugin" || \
     not_ok "RTK installer wrote over a conflicting local plugin"
 
+  printf '%s\n' 'const id = "rtk"; export default { id }' >"$duplicate"
+  if (
+    HOME="$fixture_home"
+    export HOME
+    source "$REPO_DIR/apply.sh"
+    install_rtk_plugin
+  ) >/dev/null 2>&1; then
+    not_ok "RTK installer accepted a local plugin with shorthand id rtk"
+  else
+    ok "RTK installer rejects a local plugin with shorthand id rtk"
+  fi
+  [[ ! -e "$target" ]] && ok "RTK installer preserves the shorthand-ID plugin" || \
+    not_ok "RTK installer wrote over the shorthand-ID plugin"
+  rm -f "$target"
+
   rm -f "$duplicate"
   mkdir -p "$package_dir"
   printf '%s\n' '{"name":"other-package","main":"index.js"}' >"$package_dir/package.json"
