@@ -68,6 +68,20 @@ plugin SHA-256, the `shell` tool name, and three local provider requests. The
 OpenCode loader and shell tool ran. The RTK hook changed the command before the
 shell tool executed it.
 
+## Project plugin ID probe
+
+An isolated OpenCode `2.0.18` run tested a project plugin beside the global RTK
+adapter:
+
+| Project plugin ID | Project setup ran | Global RTK rewrite ran |
+| --- | --- | --- |
+| `project.test` | Yes | Yes |
+| `rtk` | No | Yes |
+
+The smoke script can repeat this check with `RTK_SMOKE_PROJECT_PLUGIN_ID` set to
+each ID. This confirms that a project plugin with the pinned global ID does not
+initialize alongside the global adapter.
+
 ## Limits
 
 - The runtime test ran on macOS arm64. It did not run on Linux or Windows.

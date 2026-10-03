@@ -95,6 +95,14 @@ Install RTK and this plugin on every host that runs OpenCode tools. This can be 
 client running a local TUI, or the server running a web or phone session. This
 change does not connect local TUIs to the server or change the current topology.
 
+OpenCode also discovers project plugins under each project's `.opencode/plugins`
+directory. The pinned source has the fixed ID `rtk`. A project plugin with that
+same ID conflicts with the global adapter: the tested OpenCode 2.0.18 loader
+keeps the global adapter and does not initialize the project copy. The apply
+script can inspect the global plugin directory, but it cannot inspect every
+project workspace on the host. Do not use two RTK plugins with ID `rtk` in one
+OpenCode location. A different ID needs a different source payload.
+
 The normal apply path installs both the CLI and plugin before its existing
 server start point. At plugin setup, a missing RTK CLI means the plugin registers
 no hook. If RTK is installed later, reload or restart the OpenCode process that
@@ -121,6 +129,14 @@ TMPDIR=<private-temporary-directory> \
 OPENCODE_BIN=<path-to-opencode> \
 RTK_BIN=<path-to-rtk> \
 python3 plugins/rtk/smoke-test.py
+```
+
+Set `RTK_SMOKE_PROJECT_PLUGIN_ID` to test project/global ID collisions. A unique
+ID loads beside the global adapter. The ID `rtk` does not:
+
+```sh
+RTK_SMOKE_PROJECT_PLUGIN_ID=project.test python3 plugins/rtk/smoke-test.py
+RTK_SMOKE_PROJECT_PLUGIN_ID=rtk python3 plugins/rtk/smoke-test.py
 ```
 
 The script supports macOS and Linux. The recorded runtime test used macOS arm64.

@@ -216,6 +216,9 @@ def run_smoke():
 
     opencode = os.environ.get("OPENCODE_BIN") or shutil.which("opencode")
     rtk_bin = os.environ.get("RTK_BIN") or shutil.which("rtk")
+    project_plugin_id = os.environ.get("RTK_SMOKE_PROJECT_PLUGIN_ID")
+    if project_plugin_id is not None and not project_plugin_id.strip():
+        fail("RTK_SMOKE_PROJECT_PLUGIN_ID must not be empty")
     if not opencode:
         fail("OpenCode is not on PATH; set OPENCODE_BIN to a stable V2 binary")
     if not rtk_bin:
@@ -230,11 +233,25 @@ def run_smoke():
         plugin_target = plugin_dir / "rtk.ts"
         command_log = scratch / "executed-command.log"
         output_log = scratch / "shell-output.log"
+        project_plugin_marker = scratch / "project-plugin-loaded"
         plugin_dir.mkdir(parents=True)
         workspace.mkdir()
         wrapper_dir.mkdir()
         shutil.copyfile(PLUGIN_SOURCE, plugin_target)
         plugin_target.chmod(0o644)
+        if project_plugin_id is not None:
+            project_plugin_dir = workspace / ".opencode" / "plugins"
+            project_plugin_dir.mkdir(parents=True)
+            project_plugin_source = (
+                'import { appendFileSync } from "node:fs"\n'
+                'const marker = process.env.RTK_SMOKE_PROJECT_PLUGIN_MARKER\n'
+                'export default {\n'
+                f'  id: {json.dumps(project_plugin_id)},\n'
+                '  async setup() { appendFileSync(marker, "setup\\n") },\n'
+                '  async server() { appendFileSync(marker, "server\\n"); return {} },\n'
+                '}\n'
+            )
+            (project_plugin_dir / "project-rtk.ts").write_text(project_plugin_source, encoding="utf-8")
 
         log_paths = {"commands": command_log, "output": output_log}
         provider = http.server.ThreadingHTTPServer(("127.0.0.1", 0), ProviderHandler)
@@ -244,6 +261,8 @@ def run_smoke():
         rtk_bin = Path(rtk_bin).resolve()
         env = isolated_environment(home, wrapper_dir, rtk_bin, log_paths)
         env["PWD"] = str(workspace)
+        if project_plugin_id is not None:
+            env["RTK_SMOKE_PROJECT_PLUGIN_MARKER"] = str(project_plugin_marker)
 
         wrapper = wrapper_dir / "rtk"
         wrapper.write_text(
@@ -403,6 +422,9 @@ def run_smoke():
             "shell_output": shell_output,
             "provider_requests": len(provider.state.requests),
         }
+        if project_plugin_id is not None:
+            report["project_plugin_id"] = project_plugin_id
+            report["project_plugin_loaded"] = project_plugin_marker.is_file()
         print(json.dumps(report, indent=2))
 
 
