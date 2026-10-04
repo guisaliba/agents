@@ -2232,7 +2232,7 @@ test_rtk_duplicate_local_plugin_handling() {
 
 test_rtk_cli_compatibility_ignores_user_policy() {
   local fixture_root fixture_home policy_project stub_bin curl_log rtk_log
-  local rewrite_output rewrite_exit
+  local rewrite_output rewrite_exit bad_exit
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
   policy_project="$fixture_root/project"
@@ -2253,6 +2253,10 @@ case "${1:-}" in
     if [[ "$HOME" == "$RTK_POLICY_HOME" || "$PWD" == "$RTK_POLICY_CWD" ]]; then
       printf '%s' 'policy denied'
       exit 2
+    fi
+    if [[ -n "${RTK_TEST_BAD_REWRITE_EXIT:-}" ]]; then
+      printf '%s' 'warning: rewrite unavailable'
+      exit "$RTK_TEST_BAD_REWRITE_EXIT"
     fi
     [[ "${CLAUDE_CONFIG_DIR:-}" == "$HOME/.claude" ]] || exit 8
     printf '%s' 'rtk git status --short'
@@ -2307,6 +2311,23 @@ SH
     not_ok "user RTK policy made apply reject or reinstall a compatible CLI"
   fi
   require_empty_file "$curl_log"
+
+  for bad_exit in 0 3; do
+    if (
+      cd "$policy_project"
+      HOME="$fixture_home"
+      RTK_TEST_BAD_REWRITE_EXIT="$bad_exit"
+      RTK_TEST_LOG="$rtk_log"
+      PATH="$stub_bin:/usr/bin:/bin"
+      export HOME RTK_TEST_BAD_REWRITE_EXIT RTK_TEST_LOG PATH
+      source "$REPO_DIR/apply.sh"
+      ! rtk_cli_is_compatible
+    ) >/dev/null 2>&1; then
+      ok "apply rejects warning rewrite output with exit $bad_exit"
+    else
+      not_ok "apply accepted warning rewrite output with exit $bad_exit"
+    fi
+  done
 
   rm -rf -- "$fixture_root"
 }

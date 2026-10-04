@@ -2201,7 +2201,7 @@ PY
 
   rewrite_output="${rewrite_output#"${rewrite_output%%[![:space:]]*}"}"
   rewrite_output="${rewrite_output%"${rewrite_output##*[![:space:]]}"}"
-  [[ -n "$rewrite_output" && "$rewrite_output" != 'git status --short' ]]
+  [[ "$rewrite_output" == 'rtk git status --short' ]]
 }
 
 rtk_cli_meets_install_version() {
