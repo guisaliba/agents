@@ -2502,7 +2502,7 @@ test_daily_task_sync() {
 }
 
 test_opencode_shell_override() {
-  local fixture_root fixture_home aliases first_aliases stub_bin
+  local fixture_root fixture_home aliases first_aliases stub_bin rtk_path_home rtk_conflict_bin
   local ai_memory_log raw_log expected yolo_log managed_rc token_log
   local server_host server_stub token_home token_stub
   local malformed_home malformed_aliases malformed_before malformed_log
@@ -2606,7 +2606,24 @@ test_opencode_shell_override() {
     not_ok "the wrapper failed with an explicit token"
   fi
 
-  require_contains "$aliases" 'export PATH="$HOME/.opencode/bin:$PATH"'
+  require_contains "$aliases" 'export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$PATH"'
+  rtk_path_home="$fixture_root/rtk-path-home"
+  rtk_conflict_bin="$fixture_root/rtk-conflict-bin"
+  mkdir -p "$rtk_path_home/.opencode/bin" "$rtk_path_home/.local/bin" "$rtk_conflict_bin"
+  printf '%s\n' '#!/bin/sh' 'exit 8' >"$rtk_path_home/.local/bin/rtk"
+  printf '%s\n' '#!/bin/sh' 'exit 9' >"$rtk_conflict_bin/rtk"
+  chmod +x "$rtk_path_home/.local/bin/rtk" "$rtk_conflict_bin/rtk"
+  if (
+    HOME="$rtk_path_home"
+    PATH="$rtk_conflict_bin:/usr/bin:/bin"
+    export HOME PATH
+    source "$REPO_DIR/shell/opencode.bash"
+    [[ "$(command -v rtk)" == "$HOME/.local/bin/rtk" ]]
+  ); then
+    ok "managed OpenCode launches find the newly installed RTK before older PATH entries"
+  else
+    not_ok "managed OpenCode launches can select an older RTK before the installed CLI"
+  fi
   cp "$aliases" "$first_aliases"
 
   if (

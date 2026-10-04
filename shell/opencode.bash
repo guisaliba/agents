@@ -3,7 +3,7 @@
 # resolves the native OpenCode executable without recursing into this wrapper.
 unalias opencode opencode-raw 2>/dev/null || true
 unset -f opencode opencode-raw 2>/dev/null || true
-export PATH="$HOME/.opencode/bin:$PATH"
+export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$PATH"
 # One behavior only: a local, always-managed ai-memory workstream. The session
 # runs in the current directory on the machine you typed the command on, so a
 # session started on a client workstation is a client session. To work on the
