@@ -2133,7 +2133,7 @@ wire_ai_memory_to_opencode() {
     --data-dir "$AI_MEMORY_DATA_DIR" \
     --config "$AI_MEMORY_CONFIG_FILE" \
     install-hooks \
-    --agent opencode2 \
+    --agent open-code \
     --server-url "$AI_MEMORY_SERVER_URL" \
     --project-strategy repo-root \
     "${auth_token_arguments[@]}" \
