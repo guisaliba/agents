@@ -75,9 +75,9 @@ do
   unset "$AI_MEMORY_TEST_ENV_NAME"
 done
 
-AI_MEMORY_MIN_VERSION="1.28.0"
-AI_MEMORY_RELEASE_VERSION_EXPECTED="2.1.1"
-AI_MEMORY_MACOS_AARCH64_SHA256_EXPECTED="1cc2acdbbd62cc7ecf6e1fe91515ea77786910b2c102f1fe8781aa6c0357eb64"
+AI_MEMORY_MIN_VERSION="2.6.0"
+AI_MEMORY_RELEASE_VERSION_EXPECTED="2.6.0"
+AI_MEMORY_MACOS_AARCH64_SHA256_EXPECTED="3c23c80b07f7cba0045f13e50e92c98a53fb5f741b50560a67ce3b9739e1bff9"
 AI_MEMORY_LLM_PROFILE_EXPECTED="opencode-go-deepseek-v4.1-flash"
 AI_MEMORY_LLM_PROVIDER_EXPECTED="opencode"
 AI_MEMORY_LLM_MODEL_EXPECTED="deepseek-v4.1-flash"
@@ -3150,9 +3150,78 @@ test_native_ai_memory_requirement() {
   rm -rf -- "$fixture_root"
 }
 
+test_linux_ai_memory_upgrade() {
+  local fixture_root stub_bin yay_log
+  fixture_root="$(mktemp -d)"
+  stub_bin="$fixture_root/bin"
+  yay_log="$fixture_root/yay.log"
+  mkdir -p "$stub_bin"
+  cat >"$stub_bin/ai-memory" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' 'ai-memory 2.1.1'
+SH
+  cat >"$stub_bin/yay" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$AI_MEMORY_TEST_YAY_LOG"
+cat >"$AI_MEMORY_TEST_BIN/ai-memory" <<'AI_MEMORY'
+#!/usr/bin/env bash
+printf '%s\n' 'ai-memory 2.6.0'
+AI_MEMORY
+chmod +x "$AI_MEMORY_TEST_BIN/ai-memory"
+SH
+  chmod +x "$stub_bin/ai-memory" "$stub_bin/yay"
+
+  if (
+    PATH="$stub_bin:/usr/bin:/bin"
+    AI_MEMORY_MIN_VERSION="2.6.0"
+    AI_MEMORY_AUR_PACKAGE="ai-memory-bin"
+    AI_MEMORY_TEST_BIN="$stub_bin"
+    AI_MEMORY_TEST_YAY_LOG="$yay_log"
+    export PATH AI_MEMORY_MIN_VERSION AI_MEMORY_AUR_PACKAGE
+    export AI_MEMORY_TEST_BIN AI_MEMORY_TEST_YAY_LOG
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Linux; }
+    verify_native_ai_memory() { :; }
+    install_ai_memory
+    [[ "$(ai-memory --version)" == "ai-memory 2.6.0" ]]
+  ) >/dev/null 2>&1; then
+    ok "Linux apply upgrades an existing ai-memory below the detection minimum"
+  else
+    not_ok "Linux apply kept an ai-memory too old for OpenCode version detection"
+  fi
+  require_contains "$yay_log" "-S --needed --noconfirm ai-memory-bin"
+
+  : >"$yay_log"
+  cat >"$stub_bin/ai-memory" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' 'ai-memory 2.6.0'
+SH
+  chmod +x "$stub_bin/ai-memory"
+  if (
+    PATH="$stub_bin:/usr/bin:/bin"
+    AI_MEMORY_MIN_VERSION="2.6.0"
+    AI_MEMORY_AUR_PACKAGE="ai-memory-bin"
+    AI_MEMORY_TEST_BIN="$stub_bin"
+    AI_MEMORY_TEST_YAY_LOG="$yay_log"
+    export PATH AI_MEMORY_MIN_VERSION AI_MEMORY_AUR_PACKAGE
+    export AI_MEMORY_TEST_BIN AI_MEMORY_TEST_YAY_LOG
+    source "$REPO_DIR/apply.sh"
+    agent_stack_platform() { printf '%s\n' Linux; }
+    verify_native_ai_memory() { :; }
+    install_ai_memory
+  ) >/dev/null 2>&1; then
+    ok "Linux apply keeps an ai-memory that meets the detection minimum"
+  else
+    not_ok "Linux apply failed with an ai-memory that meets the detection minimum"
+  fi
+  require_empty_file "$yay_log"
+
+  rm -rf -- "$fixture_root"
+}
+
 test_macos_ai_memory_installation() {
   local fixture_root fixture_home fixture_source fixture_archive stub_bin install_log expected_url
-  local runtime binary
+  local runtime binary upgrade_home old_runtime upgrade_binary upgrade_log
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
   fixture_source="$fixture_root/release"
@@ -3217,6 +3286,36 @@ test_macos_ai_memory_installation() {
     not_ok "macOS ai-memory command does not link to the stable release bundle"
   fi
   require_text_count "$install_log" "$expected_url" "1"
+
+  upgrade_home="$fixture_root/upgrade-home"
+  old_runtime="$upgrade_home/.local/opt/ai-memory/2.1.1"
+  upgrade_binary="$upgrade_home/.local/bin/ai-memory"
+  upgrade_log="$fixture_root/upgrade.log"
+  mkdir -p "$old_runtime/hooks/opencode" "${upgrade_binary%/*}"
+  printf '%s\n' '#!/bin/bash' "printf 'ai-memory 2.1.1\\n'" >"$old_runtime/ai-memory"
+  chmod +x "$old_runtime/ai-memory"
+  ln -s "$old_runtime/ai-memory" "$upgrade_binary"
+  if (
+    HOME="$upgrade_home"
+    PATH="$upgrade_home/.local/bin:$stub_bin"
+    AI_MEMORY_TEST_ARCHIVE="$fixture_archive"
+    AI_MEMORY_TEST_DOWNLOAD_LOG="$install_log"
+    AI_MEMORY_TEST_SHA256="$AI_MEMORY_MACOS_AARCH64_SHA256_EXPECTED"
+    export HOME PATH AI_MEMORY_TEST_ARCHIVE AI_MEMORY_TEST_DOWNLOAD_LOG AI_MEMORY_TEST_SHA256
+    source "$REPO_DIR/apply.sh"
+    verify_native_ai_memory() { :; }
+    install_ai_memory
+  ) >"$upgrade_log" 2>&1; then
+    ok "macOS apply upgrades an older managed ai-memory release"
+  else
+    not_ok "macOS apply rejected an older managed ai-memory symlink"
+  fi
+  if [[ -L "$upgrade_binary" && "$(readlink "$upgrade_binary")" == "$upgrade_home/.local/opt/ai-memory/2.6.0/ai-memory" ]]; then
+    ok "macOS ai-memory command points to the new managed release"
+  else
+    not_ok "macOS ai-memory command does not point to the new managed release"
+  fi
+  require_executable "$old_runtime/ai-memory"
 
   rm -rf -- "$fixture_root"
 }
@@ -3691,6 +3790,7 @@ test_optional_ai_jail
 printf '\n--- Native ai-memory Fixtures ---\n'
 
 test_native_ai_memory_requirement
+test_linux_ai_memory_upgrade
 test_macos_ai_memory_installation
 test_ai_memory_user_service_installation
 test_macos_ai_memory_launch_daemon

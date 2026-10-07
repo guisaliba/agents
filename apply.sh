@@ -33,11 +33,11 @@ OPENCODE_SERVER_LOG_DIR="${OPENCODE_SERVER_LOG_DIR:-$HOME/Library/Logs/opencode}
 GITHUB_MCP_TOKEN_FILE="$HOME/.config/opencode/secrets/github-mcp-pat"
 GITHUB_MCP_TOKEN_REFERENCE="~/.config/opencode/secrets/github-mcp-pat"
 AI_MEMORY_AUR_PACKAGE="${AI_MEMORY_AUR_PACKAGE:-ai-memory-bin}"
-AI_MEMORY_MIN_VERSION="${AI_MEMORY_MIN_VERSION:-1.28.0}"
-AI_MEMORY_RELEASE_VERSION="${AI_MEMORY_RELEASE_VERSION:-2.1.1}"
+AI_MEMORY_MIN_VERSION="${AI_MEMORY_MIN_VERSION:-2.6.0}"
+AI_MEMORY_RELEASE_VERSION="${AI_MEMORY_RELEASE_VERSION:-2.6.0}"
 AI_MEMORY_RELEASE_BASE_URL="https://github.com/akitaonrails/ai-memory/releases/download/v$AI_MEMORY_RELEASE_VERSION"
-AI_MEMORY_MACOS_AARCH64_SHA256="1cc2acdbbd62cc7ecf6e1fe91515ea77786910b2c102f1fe8781aa6c0357eb64"
-AI_MEMORY_MACOS_X86_64_SHA256="3c2ca543abdf964c7fe4471e54824876d7327a04d0f222327ad6a8f010f78910"
+AI_MEMORY_MACOS_AARCH64_SHA256="3c23c80b07f7cba0045f13e50e92c98a53fb5f741b50560a67ce3b9739e1bff9"
+AI_MEMORY_MACOS_X86_64_SHA256="7523b656739ac75989e7a15ac05523fc15112bc915f83cff96e3da90e7c73b5e"
 AI_MEMORY_INSTALL_ROOT="${AI_MEMORY_INSTALL_ROOT:-$HOME/.local/opt/ai-memory/$AI_MEMORY_RELEASE_VERSION}"
 AI_MEMORY_BINARY="${AI_MEMORY_BINARY:-$HOME/.local/bin/ai-memory}"
 AI_MEMORY_DATA_DIR="$HOME/.local/share/ai-memory"
@@ -175,15 +175,21 @@ check_prerequisites() {
 install_aur_command() {
   local command_name="$1"
   local package_name="$2"
+  local minimum_version="${3:-}"
 
   if have "$command_name"; then
-    log "$command_name already installed, skipping"
-    return
+    if [[ -z "$minimum_version" ]] || \
+      (require_minimum_version "$command_name" "$minimum_version") >/dev/null 2>&1; then
+      log "$command_name already meets its minimum version, skipping"
+      return
+    fi
+    log "Updating $command_name to version $minimum_version from the AUR"
+  else
+    log "Installing $command_name from the AUR package $package_name"
   fi
 
-  have yay || die "$command_name is missing. Install $package_name with an AUR helper, or put a supported native $command_name binary on PATH before running apply."
+  have yay || die "$command_name is missing or too old. Install or update $package_name with an AUR helper, or put a supported native $command_name binary on PATH before running apply."
 
-  log "Installing $command_name from the AUR package $package_name"
   yay -S --needed --noconfirm "$package_name" || die "$package_name installation failed"
   have "$command_name" || die "$package_name did not put $command_name on PATH"
 }
@@ -246,7 +252,7 @@ ai_memory_macos_release_spec() {
 
 install_ai_memory_macos() {
   local release_spec asset expected_sha download_url archive temporary_dir actual_sha
-  local existing_command installed_version
+  local existing_command installed_version managed_release_root temporary_link
 
   release_spec="$(ai_memory_macos_release_spec)"
   IFS=$'\t' read -r asset expected_sha <<<"$release_spec"
@@ -259,8 +265,23 @@ install_ai_memory_macos() {
   if [[ -e "$AI_MEMORY_BINARY" && ! -L "$AI_MEMORY_BINARY" ]]; then
     die "Managed macOS ai-memory path must be a symlink: $AI_MEMORY_BINARY"
   fi
-  if [[ -L "$AI_MEMORY_BINARY" && "$(readlink "$AI_MEMORY_BINARY")" != "$AI_MEMORY_INSTALL_ROOT/ai-memory" ]]; then
-    die "Managed macOS ai-memory symlink points outside the pinned release: $AI_MEMORY_BINARY"
+  managed_release_root="${AI_MEMORY_INSTALL_ROOT%/*}"
+  if [[ -L "$AI_MEMORY_BINARY" ]] && ! python3 - \
+    "$AI_MEMORY_BINARY" "$managed_release_root" <<'PY'
+import sys
+from pathlib import Path
+
+binary = Path(sys.argv[1])
+release_root = Path(sys.argv[2]).resolve()
+try:
+    target = binary.resolve(strict=True)
+    relative = target.relative_to(release_root)
+except (OSError, ValueError):
+    raise SystemExit(1)
+raise SystemExit(0 if len(relative.parts) == 2 and relative.name == "ai-memory" else 1)
+PY
+  then
+    die "Managed macOS ai-memory symlink must target a versioned release under $managed_release_root"
   fi
 
   if [[ -d "$AI_MEMORY_INSTALL_ROOT" ]]; then
@@ -302,7 +323,20 @@ install_ai_memory_macos() {
   [[ -d "$AI_MEMORY_INSTALL_ROOT/hooks/opencode" ]] || \
     die "Installed ai-memory release bundle has no OpenCode hooks: $AI_MEMORY_INSTALL_ROOT"
   mkdir -p "$(dirname "$AI_MEMORY_BINARY")"
-  if [[ ! -L "$AI_MEMORY_BINARY" ]]; then
+  if [[ -L "$AI_MEMORY_BINARY" ]]; then
+    if [[ "$(readlink "$AI_MEMORY_BINARY")" != "$AI_MEMORY_INSTALL_ROOT/ai-memory" ]]; then
+      temporary_link="$AI_MEMORY_BINARY.tmp.$$"
+      [[ ! -e "$temporary_link" && ! -L "$temporary_link" ]] || \
+        die "Temporary ai-memory symlink path already exists: $temporary_link"
+      ln -s "$AI_MEMORY_INSTALL_ROOT/ai-memory" "$temporary_link" || \
+        die "Could not create temporary ai-memory symlink: $temporary_link"
+      if ! mv -f "$temporary_link" "$AI_MEMORY_BINARY"; then
+        rm -f "$temporary_link"
+        die "Could not switch ai-memory to release $AI_MEMORY_RELEASE_VERSION"
+      fi
+      log "Updated managed ai-memory symlink to release $AI_MEMORY_RELEASE_VERSION"
+    fi
+  else
     ln -s "$AI_MEMORY_INSTALL_ROOT/ai-memory" "$AI_MEMORY_BINARY" || \
       die "Could not link ai-memory at $AI_MEMORY_BINARY"
   fi
@@ -342,7 +376,12 @@ PY
 
 install_ai_memory() {
   case "$(agent_stack_platform)" in
-    Linux) install_aur_command ai-memory "$AI_MEMORY_AUR_PACKAGE" ;;
+    Linux)
+      if have ai-memory; then
+        verify_native_ai_memory
+      fi
+      install_aur_command ai-memory "$AI_MEMORY_AUR_PACKAGE" "$AI_MEMORY_MIN_VERSION"
+      ;;
     Darwin) install_ai_memory_macos ;;
     *) die "Unsupported operating system: $(agent_stack_platform)" ;;
   esac
