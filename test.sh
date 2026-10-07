@@ -852,9 +852,9 @@ PY
     not_ok "muse unified profile fixture failed"
   fi
 
-  # A client must not be able to select a profile. Its sessions execute on the
-  # server, so the server owns the value and the client is told where it comes
-  # from instead of carrying a stale copy.
+  # A remote ai-memory client must not select a profile. Its sessions use the
+  # remote service, so that server owns the value and the local host carries no
+  # stale copy.
   client_profile_home="$fixture_root/client-profile-home"
   client_profile_config="$client_profile_home/.config/opencode/opencode.json"
   client_profile_env="$client_profile_home/.config/ai-memory/env"
@@ -872,7 +872,7 @@ PY
     source "$REPO_DIR/apply.sh"
     merge_opencode_json
   ) >"$fixture_root/client-profile.log" 2>&1; then
-    ok "a client host does not select a profile"
+    ok "a remote ai-memory client does not select a profile"
     require_json_value "$client_profile_config" "model" "openai/gpt-6-luna"
     if python3 -c "
 import json, sys
@@ -1289,6 +1289,56 @@ test_ai_memory_service_staleness() {
   rm -rf -- "$fixture_root"
 }
 
+test_ai_memory_server_role() {
+  local url
+  local -a loopback_urls=(
+    "http://127.0.0.1:49374"
+    "http://localhost:49374"
+    "http://127.23.4.5:49374/mcp"
+    "http://[::1]:49374"
+  )
+
+  if ! (
+    source "$REPO_DIR/apply.sh"
+    declare -F agent_stack_uses_remote_ai_memory >/dev/null
+  ); then
+    not_ok "ai-memory remote-mode helper is missing"
+    return 0
+  fi
+
+  for url in "${loopback_urls[@]}"; do
+    if (
+      AI_MEMORY_SERVER_URL="$url"
+      source "$REPO_DIR/apply.sh"
+      ! agent_stack_uses_remote_ai_memory
+    ) >/dev/null 2>&1; then
+      ok "ai-memory loopback URL selects the local service: $url"
+    else
+      not_ok "ai-memory loopback URL was treated as remote: $url"
+    fi
+  done
+
+  if (
+    AI_MEMORY_SERVER_URL="https://memory.example.test:8443"
+    source "$REPO_DIR/apply.sh"
+    agent_stack_uses_remote_ai_memory
+  ) >/dev/null 2>&1; then
+    ok "non-loopback ai-memory URL selects remote-service mode"
+  else
+    not_ok "non-loopback ai-memory URL was treated as local"
+  fi
+
+  if (
+    AI_MEMORY_SERVER_URL="not-a-url"
+    source "$REPO_DIR/apply.sh"
+    agent_stack_uses_remote_ai_memory
+  ) >/dev/null 2>&1; then
+    not_ok "invalid ai-memory URL was accepted as a remote server"
+  else
+    ok "invalid ai-memory URL is rejected"
+  fi
+}
+
 test_ai_memory_token_delivery() {
   local fixture_root fixture_home stub_bin token_file env_file call_log profile
   fixture_root="$(mktemp -d)"
@@ -1416,8 +1466,8 @@ test_ai_memory_env_file() {
   require_env_assignment "$fixture_env" "AI_MEMORY_LLM_MODEL" "$AI_MEMORY_LLM_MODEL_EXPECTED"
   require_env_assignment "$fixture_env" "AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL" "true"
 
-  # A client must not carry a profile it does not own, and the retired subagent
-  # selector must not linger anywhere, because a dead variable reads as live.
+  # A remote client must not carry a profile it does not own, and the retired
+  # subagent selector must not linger anywhere, because a dead variable reads as live.
   # Reached through setup_ai_memory, the way apply.sh actually runs it, so this
   # fails if the client branch ever stops converging the file again.
   client_env_home="$fixture_root/client-env-home"
@@ -1439,7 +1489,7 @@ test_ai_memory_env_file() {
     # source is silently overwritten and the fixture runs the real code. Every
     # override therefore has to come after the source.
     agent_stack_platform() { printf '%s\n' Linux; }
-    agent_stack_is_client_host() { return 0; }
+    agent_stack_uses_remote_ai_memory() { return 0; }
     install_ai_memory_systemd_user_service() { :; }
     start_ai_memory_systemd_user_service() { :; }
     wire_ai_memory_to_opencode() { :; }
@@ -3516,7 +3566,7 @@ for theme_file in "${tracked_theme_files[@]}"; do
   require_json "$theme_file"
 done
 require_contains "$REPO_DIR/apply.sh" "merge_opencode_cli_json"
-require_contains "$REPO_DIR/apply.sh" "--agent opencode2"
+require_contains "$REPO_DIR/apply.sh" "--agent open-code"
 require_file "$REPO_DIR/plugins/rtk/rtk.ts"
 require_file "$REPO_DIR/plugins/rtk/README.md"
 require_file "$REPO_DIR/plugins/rtk/LICENSE"
@@ -3576,6 +3626,7 @@ test_opencode_cli_json_merge
 printf '\n--- ai-memory File Fixtures ---\n'
 
 test_ai_memory_service_staleness
+test_ai_memory_server_role
 test_ai_memory_token_delivery
 test_ai_memory_env_file
 
@@ -3729,7 +3780,7 @@ require_json_value "$HOME/.config/opencode/opencode.json" "agents.plan.model" "o
 selected_profile_log="$(mktemp)"
 if selected_profile="$(
   source "$REPO_DIR/apply.sh"
-  opencode_selected_subagent_profile 2>"$selected_profile_log"
+  ai_memory_selected_profile 2>"$selected_profile_log"
 )"; then
   ok "subagent profile selection is supported: $selected_profile"
   profile_spec="$(
@@ -3873,10 +3924,25 @@ require_file "$OPENCODE_SERVER_ENV_FILE"
 require_file_mode "$OPENCODE_SERVER_ENV_FILE" "600"
 case "$(uname -s)" in
   Linux)
-    systemctl --user is-enabled --quiet ai-memory.service >/dev/null 2>&1 && \
-      not_ok "local ai-memory user service remains enabled" || ok "local ai-memory user service is disabled"
-    systemctl --user is-active --quiet ai-memory.service >/dev/null 2>&1 && \
-      not_ok "local ai-memory user service remains active" || ok "local ai-memory user service is inactive"
+    if (
+      source "$REPO_DIR/apply.sh"
+      AI_MEMORY_SERVER_URL="$AI_MEMORY_EXPECTED_SERVER_URL"
+      agent_stack_uses_remote_ai_memory
+    ) >/dev/null 2>&1; then
+      systemctl --user is-enabled --quiet ai-memory.service >/dev/null 2>&1 && \
+        not_ok "remote ai-memory mode leaves the local user service enabled" || \
+        ok "remote ai-memory mode disables the local user service"
+      systemctl --user is-active --quiet ai-memory.service >/dev/null 2>&1 && \
+        not_ok "remote ai-memory mode leaves the local user service active" || \
+        ok "remote ai-memory mode stops the local user service"
+    else
+      systemctl --user is-enabled --quiet ai-memory.service >/dev/null 2>&1 && \
+        ok "loopback ai-memory mode enables the local user service" || \
+        not_ok "loopback ai-memory mode does not enable the local user service"
+      systemctl --user is-active --quiet ai-memory.service >/dev/null 2>&1 && \
+        ok "loopback ai-memory mode runs the local user service" || \
+        not_ok "loopback ai-memory mode does not run the local user service"
+    fi
     require_file "$HOME/.config/ai-memory/client-token"
     require_file_mode "$HOME/.config/ai-memory/client-token" "600"
     ;;

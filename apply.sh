@@ -431,11 +431,9 @@ verify_ai_memory_unauthenticated_loopback() {
     return 0
   fi
 
-  # A host pointed at a remote ai-memory server is a client host. It is not
-  # loopback, so the unauthenticated policy does not apply. The ai-memory CLI
-  # reads its bearer from the environment, so a client must be allowed to carry
-  # one; forbidding it made a client unable to reach the server at all.
-  if [[ "$AI_MEMORY_SERVER_URL" != "$AI_MEMORY_LOOPBACK_SERVER_URL" ]]; then
+  # A host pointed at a remote ai-memory server uses remote-client policy. The
+  # ai-memory CLI reads its bearer from the environment, so it must be allowed.
+  if agent_stack_uses_remote_ai_memory; then
     log "Verifying the authenticated ai-memory client policy for $AI_MEMORY_SERVER_URL"
     if [[ -z "${AI_MEMORY_AUTH_TOKEN:-}" ]] && \
       ! ai_memory_env_has_nonempty_value AI_MEMORY_AUTH_TOKEN && \
@@ -998,9 +996,10 @@ merge_opencode_json() {
   local profile subagent_model
   mkdir -p "$(dirname "$config")"
 
-  # On a client the model is the server's decision, so nothing is written here.
+  # With a remote ai-memory server, its model is the decision, so this host
+  # writes no agent model.
   # An empty subagent_model makes the python step leave every agent model alone.
-  if agent_stack_is_client_host; then
+  if agent_stack_uses_remote_ai_memory; then
     agent_stack_profile_owner_note
     subagent_model=""
   else
@@ -1507,17 +1506,52 @@ opencode_subagent_profile_list() {
 # subagents, and the title agent all resolve from this single value. Three
 # separate selectors let them drift apart, which is how agents.title ended up
 # holding a model id that no profile has ever produced.
-agent_stack_is_client_host() {
-  [[ "$AI_MEMORY_SERVER_URL" != "$AI_MEMORY_LOOPBACK_SERVER_URL" ]]
+ai_memory_server_url_is_loopback() {
+  python3 - "$AI_MEMORY_SERVER_URL" <<'PY'
+import ipaddress
+import sys
+from urllib.parse import urlsplit
+
+try:
+    url = urlsplit(sys.argv[1])
+    host = url.hostname
+    url.port  # Validate the optional port instead of accepting malformed URLs.
+except ValueError:
+    raise SystemExit(2)
+
+if url.scheme not in {"http", "https"} or not host or url.username or url.password:
+    raise SystemExit(2)
+
+host = host.rstrip(".").lower()
+if host == "localhost" or host.endswith(".localhost"):
+    raise SystemExit(0)
+
+try:
+    address = ipaddress.ip_address(host)
+except ValueError:
+    raise SystemExit(1)
+
+if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+    address = address.ipv4_mapped
+raise SystemExit(0 if address.is_loopback else 1)
+PY
 }
 
-# A client host runs no services and holds no store, so its sessions execute on
-# the server and the server owns the profile. The client deliberately does not
-# carry a copy: a stale copy is worse than none, because it looks authoritative.
+agent_stack_uses_remote_ai_memory() {
+  local loopback_status=0
+  ai_memory_server_url_is_loopback || loopback_status=$?
+  case "$loopback_status" in
+    0) return 1 ;;
+    1) return 0 ;;
+    *) die "AI_MEMORY_SERVER_URL must be a valid HTTP(S) URL without user information" ;;
+  esac
+}
+
+# A host that uses a remote ai-memory service has no local store, so the remote
+# server owns its profile. Do not carry a stale local copy that looks authoritative.
 agent_stack_profile_owner_note() {
-  log "Profile selection is owned by the server host. This host carries no profile."
-  log "  A session here runs on the server, so the server's opencode.json and"
-  log "  ai-memory environment decide the model. Change it there, not here."
+  log "Profile selection is owned by the remote ai-memory server. This host carries no profile."
+  log "  The remote server's OpenCode config and ai-memory environment decide the model."
 }
 
 opencode_subagent_profile_model() {
@@ -1552,10 +1586,9 @@ configure_ai_memory_env_file() {
   ensure_ai_memory_env_file
   log "Converging the ai-memory provider and paid-job policy"
 
-  # A client runs no ai-memory service, so the server owns the profile and the
-  # provider choice. Strip the values a client inherits rather than
-  # leave inert ones behind: a value that governs nothing still reads as live.
-  if agent_stack_is_client_host; then
+  # A host using a remote ai-memory service does not own its profile or provider
+  # choice. Strip those values rather than leave inert settings that look live.
+  if agent_stack_uses_remote_ai_memory; then
     provider_state="$(python3 - \
       "$AI_MEMORY_ENV_FILE" \
       "$AGENT_STACK_HELPER" <<'PY'
@@ -2152,7 +2185,7 @@ wire_ai_memory_to_opencode() {
 }
 
 setup_ai_memory() {
-  if [[ "$AI_MEMORY_SERVER_URL" == "$AI_MEMORY_LOOPBACK_SERVER_URL" ]]; then
+  if ! agent_stack_uses_remote_ai_memory; then
     initialize_ai_memory
     start_ai_memory_service
   else
