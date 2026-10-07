@@ -56,6 +56,25 @@ AI_MEMORY_EXPECTED_SERVER_URL="$(
   printf '%s' "${AI_MEMORY_SERVER_URL:-}"
 )"
 AI_MEMORY_EXPECTED_SERVER_URL="${AI_MEMORY_EXPECTED_SERVER_URL:-http://127.0.0.1:49374}"
+
+# Repo fixtures use temporary HOME directories. Keep host-level ai-memory
+# settings out of those fixtures so a sourced apply.sh cannot mistake a local
+# fixture for a remote client or consume the host's bearer token. Restore the
+# values before full-mode checks inspect the live installation.
+AI_MEMORY_TEST_HOST_ENV=()
+for AI_MEMORY_TEST_ENV_NAME in \
+  AI_MEMORY_SERVER_URL \
+  AI_MEMORY_AUTH_TOKEN \
+  AI_MEMORY_AUTH__BEARER_TOKEN \
+  AI_MEMORY_AUTH__ACTOR_PROXY_BEARER_TOKEN \
+  AI_MEMORY_AUTH_TOKEN_FILE
+do
+  if [[ -n "${!AI_MEMORY_TEST_ENV_NAME-}" ]]; then
+    AI_MEMORY_TEST_HOST_ENV+=("$AI_MEMORY_TEST_ENV_NAME=${!AI_MEMORY_TEST_ENV_NAME}")
+  fi
+  unset "$AI_MEMORY_TEST_ENV_NAME"
+done
+
 AI_MEMORY_MIN_VERSION="1.28.0"
 AI_MEMORY_RELEASE_VERSION_EXPECTED="2.1.1"
 AI_MEMORY_MACOS_AARCH64_SHA256_EXPECTED="1cc2acdbbd62cc7ecf6e1fe91515ea77786910b2c102f1fe8781aa6c0357eb64"
@@ -3687,6 +3706,11 @@ if [[ "$repo_only" == "true" ]]; then
   printf 'agent stack repository tests passed\n'
   exit 0
 fi
+
+# Live checks need the host values that repo fixtures deliberately hide.
+for AI_MEMORY_TEST_HOST_ASSIGNMENT in "${AI_MEMORY_TEST_HOST_ENV[@]}"; do
+  export "$AI_MEMORY_TEST_HOST_ASSIGNMENT"
+done
 
 # Local machine checks
 printf '\n--- Local Machine ---\n'
