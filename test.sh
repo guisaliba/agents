@@ -1373,25 +1373,66 @@ test_ai_memory_token_delivery() {
     'printf '\''%s\n'\'' "$*" >>"$OPENCODE_TEST_CALL_LOG"' >"$stub_bin/ai-memory"
   chmod +x "$stub_bin/ai-memory"
 
-  # A loopback server host still requires a bearer token, so the
-  # hook configuration must receive it even though there is no remote URL.
+  # A local client must not send its stale remote token to the unauthenticated
+  # loopback service.
   : >"$call_log"
   if (
     HOME="$fixture_home"
     PATH="$stub_bin:/usr/bin:/bin"
+    AI_MEMORY_SERVER_URL="http://127.0.0.1:49374"
+    OPENCODE_SERVER_ENABLED=false
     OPENCODE_TEST_CALL_LOG="$call_log"
-    export HOME PATH OPENCODE_TEST_CALL_LOG
+    export HOME PATH AI_MEMORY_SERVER_URL OPENCODE_SERVER_ENABLED OPENCODE_TEST_CALL_LOG
     source "$REPO_DIR/apply.sh"
-    AI_MEMORY_SERVER_URL="$AI_MEMORY_LOOPBACK_SERVER_URL"
+    wire_ai_memory_to_opencode
+  ) >/dev/null 2>&1; then
+    if grep -q -- "--auth-token" "$call_log"; then
+      not_ok "local ai-memory hook installation forwarded the remote token"
+    else
+      ok "local ai-memory hook installation does not forward the remote token"
+    fi
+  else
+    not_ok "local ai-memory hook installation failed"
+  fi
+
+  : >"$call_log"
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    AI_MEMORY_SERVER_URL="https://server.example.test:8443"
+    OPENCODE_TEST_CALL_LOG="$call_log"
+    export HOME PATH AI_MEMORY_SERVER_URL OPENCODE_TEST_CALL_LOG
+    source "$REPO_DIR/apply.sh"
     wire_ai_memory_to_opencode
   ) >/dev/null 2>&1; then
     if grep -q -- "--auth-token fixture-token-value" "$call_log"; then
-      ok "loopback ai-memory hook installation receives the bearer token"
+      ok "remote ai-memory hook installation receives its bearer token"
     else
-      not_ok "loopback ai-memory hook installation omitted the bearer token"
+      not_ok "remote ai-memory hook installation omitted its bearer token"
     fi
   else
-    not_ok "loopback ai-memory hook installation failed"
+    not_ok "remote ai-memory hook installation failed"
+  fi
+
+  printf '%s\n' 'AI_MEMORY_AUTH_TOKEN=fixture-service-token' >"$env_file"
+  : >"$call_log"
+  if (
+    HOME="$fixture_home"
+    PATH="$stub_bin:/usr/bin:/bin"
+    AI_MEMORY_SERVER_URL="http://127.0.0.1:49374"
+    OPENCODE_SERVER_ENABLED=true
+    OPENCODE_TEST_CALL_LOG="$call_log"
+    export HOME PATH AI_MEMORY_SERVER_URL OPENCODE_SERVER_ENABLED OPENCODE_TEST_CALL_LOG
+    source "$REPO_DIR/apply.sh"
+    wire_ai_memory_to_opencode
+  ) >/dev/null 2>&1; then
+    if grep -q -- "--auth-token fixture-service-token" "$call_log"; then
+      ok "local OpenCode server hook installation receives its service token"
+    else
+      not_ok "local OpenCode server hook installation omitted its service token"
+    fi
+  else
+    not_ok "local OpenCode server hook installation failed"
   fi
 
   if (
@@ -1448,6 +1489,7 @@ test_ai_memory_env_file() {
     '# preserve this comment' \
     'UNRELATED_SETTING=keep' \
     'AI_MEMORY_SERVER_URL=https://stale.example.test' \
+    'AGENTS_AI_MEMORY_REMOTE_MODE=true' \
     'OPENCODE_API_KEY=fixture-secret' \
     'AI_MEMORY_LLM_PROVIDER=openai' \
     'AI_MEMORY_LLM_PROVIDER=stale-duplicate' \
@@ -1480,6 +1522,7 @@ test_ai_memory_env_file() {
   require_contains "$fixture_env" "# preserve this comment"
   require_contains "$fixture_env" "UNRELATED_SETTING=keep"
   require_env_assignment "$fixture_env" "AI_MEMORY_SERVER_URL" "http://127.0.0.1:49374"
+  require_env_assignment "$fixture_env" "AGENTS_AI_MEMORY_REMOTE_MODE" "false"
   require_env_assignment "$fixture_env" "OPENCODE_API_KEY" "fixture-secret"
   require_env_assignment "$fixture_env" "DOTFILES_AI_MEMORY_LLM_PROFILE" "$AI_MEMORY_LLM_PROFILE_EXPECTED"
   require_env_assignment "$fixture_env" "AI_MEMORY_LLM_PROVIDER" "$AI_MEMORY_LLM_PROVIDER_EXPECTED"
@@ -1496,6 +1539,7 @@ test_ai_memory_env_file() {
   printf '%s\n' \
     'OPENCODE_API_KEY=fixture-secret' \
     'AI_MEMORY_SERVER_URL=https://stale.example.test' \
+    'AGENTS_AI_MEMORY_REMOTE_MODE=false' \
     'DOTFILES_OPENCODE_SUBAGENT_PROFILE=openai-gpt-6-luna' \
     'DOTFILES_AI_MEMORY_LLM_ENABLED=false' \
     'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-muse-spark-1.3-contributor' \
@@ -1542,6 +1586,7 @@ test_ai_memory_env_file() {
       fi
     done
     require_env_assignment "$client_env_file" "AI_MEMORY_SERVER_URL" "https://server.example.test:8443"
+    require_env_assignment "$client_env_file" "AGENTS_AI_MEMORY_REMOTE_MODE" "true"
     require_env_assignment "$client_env_file" "OPENCODE_API_KEY" "fixture-secret"
     require_env_assignment "$client_env_file" "AGENTS_AI_MEMORY_LLM_ENABLED" "false"
     if grep -q '^DOTFILES_AI_MEMORY_LLM_ENABLED=' "$client_env_file"; then
@@ -3526,6 +3571,7 @@ PY
 test_macos_bash_profile() {
   local fixture_root fixture_home stub_bin profile first_profile
   local linux_home linux_profile linux_first
+  local local_auth_home remote_auth_home server_auth_home auth_home
   fixture_root="$(mktemp -d)"
   fixture_home="$fixture_root/home"
   stub_bin="$fixture_root/bin"
@@ -3582,8 +3628,53 @@ test_macos_bash_profile() {
   require_contains "$linux_profile" 'source "$HOME/.profile"'
   require_contains "$linux_profile" 'source "$HOME/.config/ai-memory/env"'
   require_contains "$linux_profile" 'source "$HOME/.config/opencode/server.env"'
+  require_contains "$linux_profile" 'AGENTS_AI_MEMORY_REMOTE_MODE:-false'
   require_contains "$linux_profile" 'AI_MEMORY_AUTH_TOKEN="$(tr -d'
   require_contains "$linux_profile" '$HOME/.config/ai-memory/client-token'
+
+  local_auth_home="$fixture_root/local-auth-home"
+  remote_auth_home="$fixture_root/remote-auth-home"
+  server_auth_home="$fixture_root/server-auth-home"
+  for auth_home in "$local_auth_home" "$remote_auth_home" "$server_auth_home"; do
+    mkdir -p "$auth_home/.config/ai-memory" "$auth_home/.config/opencode"
+    cp "$linux_profile" "$auth_home/.bash_profile"
+    printf '%s\n' 'fixture-token-value' >"$auth_home/.config/ai-memory/client-token"
+  done
+  printf '%s\n' \
+    'AI_MEMORY_SERVER_URL=http://127.0.0.1:49374' \
+    'AGENTS_AI_MEMORY_REMOTE_MODE=false' >"$local_auth_home/.config/ai-memory/env"
+  if env -i HOME="$local_auth_home" USER="$(id -un)" PATH="/usr/bin:/bin" \
+    /bin/bash --noprofile --norc -c '. "$HOME/.bash_profile"; [[ -z "${AI_MEMORY_AUTH_TOKEN:-}" ]]' \
+    >/dev/null 2>&1; then
+    ok "local-service login does not export the remote client token"
+  else
+    not_ok "local-service login exports the remote client token"
+  fi
+
+  printf '%s\n' \
+    'AI_MEMORY_SERVER_URL=https://memory.example.test:8443' \
+    'AGENTS_AI_MEMORY_REMOTE_MODE=true' >"$remote_auth_home/.config/ai-memory/env"
+  if env -i HOME="$remote_auth_home" USER="$(id -un)" PATH="/usr/bin:/bin" \
+    /bin/bash --noprofile --norc -c '. "$HOME/.bash_profile"; [[ "${AI_MEMORY_AUTH_TOKEN:-}" == fixture-token-value ]]' \
+    >/dev/null 2>&1; then
+    ok "remote-service login exports the client token"
+  else
+    not_ok "remote-service login omitted the client token"
+  fi
+
+  printf '%s\n' \
+    'AI_MEMORY_SERVER_URL=http://127.0.0.1:49374' \
+    'AGENTS_AI_MEMORY_REMOTE_MODE=false' \
+    'AI_MEMORY_AUTH_TOKEN=fixture-service-token' >"$server_auth_home/.config/ai-memory/env"
+  printf '%s\n' 'OPENCODE_SERVER_ENABLED=true' >"$server_auth_home/.config/opencode/server.env"
+  if env -i HOME="$server_auth_home" USER="$(id -un)" PATH="/usr/bin:/bin" \
+    /bin/bash --noprofile --norc -c '. "$HOME/.bash_profile"; [[ "${AI_MEMORY_AUTH_TOKEN:-}" == fixture-service-token ]]' \
+    >/dev/null 2>&1; then
+    ok "local OpenCode server login keeps its service token"
+  else
+    not_ok "local OpenCode server login dropped its service token"
+  fi
+
   cp "$linux_profile" "$linux_first"
   if (
     HOME="$linux_home"

@@ -845,13 +845,15 @@ kept.extend(
         '  source "$HOME/.config/opencode/server.env"',
         '  set +a',
         "fi",
-        '# The ai-memory CLI reads its bearer from the environment, never from the',
-        '# token file, so remote mode needs the token exported for `ai-memory run`.',
-        '# Read it here instead of asking the operator to paste a secret into this',
-        '# file, and strip the trailing newline the 0600 token file carries.',
-        'if [[ -f "$HOME/.config/ai-memory/client-token" ]]; then',
-        '  AI_MEMORY_AUTH_TOKEN="$(tr -d \' \\r\\n\' < "$HOME/.config/ai-memory/client-token")"',
-        '  export AI_MEMORY_AUTH_TOKEN',
+        '# A remote ai-memory service needs the client bearer. A local service',
+        '# does not, unless this host also exposes its service through OpenCode.',
+        'if [[ "${AGENTS_AI_MEMORY_REMOTE_MODE:-false}" == "true" ]]; then',
+        '  if [[ -z "${AI_MEMORY_AUTH_TOKEN:-}" && -f "$HOME/.config/ai-memory/client-token" ]]; then',
+        '    AI_MEMORY_AUTH_TOKEN="$(tr -d \' \\r\\n\' < "$HOME/.config/ai-memory/client-token")"',
+        '    export AI_MEMORY_AUTH_TOKEN',
+        '  fi',
+        'elif [[ "${OPENCODE_SERVER_ENABLED:-false}" != "true" ]]; then',
+        '  unset AI_MEMORY_AUTH_TOKEN',
         "fi",
         end_marker,
     ]
@@ -1662,6 +1664,7 @@ stale_comments = {"# Managed by dotfiles/agents/apply.sh."}
 client_managed = {
     "AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL",
     "AI_MEMORY_SERVER_URL",
+    "AGENTS_AI_MEMORY_REMOTE_MODE",
 }
 managed_comment = "# Managed by guisaliba/agents apply.sh."
 
@@ -1712,6 +1715,7 @@ kept_lines.extend(
     [
         managed_comment,
         f"AI_MEMORY_SERVER_URL={shlex.quote(server_url)}",
+        "AGENTS_AI_MEMORY_REMOTE_MODE=true",
         "AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL=true",
     ]
 )
@@ -1766,6 +1770,7 @@ managed_names = {
     "AI_MEMORY_LLM_MODEL",
     "AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL",
     "AI_MEMORY_SERVER_URL",
+    "AGENTS_AI_MEMORY_REMOTE_MODE",
 }
 # The scheduler flag is the operator's, not the script's. It is written as a
 # literal "false" here today, which makes a value in the environment file look
@@ -1838,6 +1843,7 @@ kept_lines.extend(
     [
         managed_comment,
         f"AI_MEMORY_SERVER_URL={shlex.quote(server_url)}",
+        "AGENTS_AI_MEMORY_REMOTE_MODE=false",
         f"DOTFILES_AI_MEMORY_LLM_PROFILE={profile}",
         "AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL=true",
         f"AI_MEMORY_LLM_PROVIDER={provider}",
@@ -2206,12 +2212,19 @@ PY
 
 wire_ai_memory_to_opencode() {
   log "Installing the ai-memory OpenCode V2 lifecycle plugin"
-  # The token is required whenever the server enforces bearer authentication,
-  # which includes a loopback host that also runs the OpenCode server. Key the
-  # decision off the token file, not off the server URL, so the two agree.
-  local auth_token_arguments=()
-  if [[ -s "$AI_MEMORY_AUTH_TOKEN_FILE" ]]; then
-    auth_token_arguments=(--auth-token "$(<"$AI_MEMORY_AUTH_TOKEN_FILE")")
+  # A normal loopback service is unauthenticated. Remote mode uses the
+  # client-token file; a host that also serves OpenCode uses its service token.
+  local auth_token_arguments=() auth_token=""
+  if [[ "$OPENCODE_SERVER_ENABLED" == true ]]; then
+    auth_token="$(ai_memory_env_value AI_MEMORY_AUTH_TOKEN 2>/dev/null || true)"
+  elif agent_stack_uses_remote_ai_memory; then
+    auth_token="${AI_MEMORY_AUTH_TOKEN:-}"
+    if [[ -z "$auth_token" && -s "$AI_MEMORY_AUTH_TOKEN_FILE" ]]; then
+      auth_token="$(<"$AI_MEMORY_AUTH_TOKEN_FILE")"
+    fi
+  fi
+  if [[ -n "$auth_token" ]]; then
+    auth_token_arguments=(--auth-token "$auth_token")
   fi
   ai-memory \
     --data-dir "$AI_MEMORY_DATA_DIR" \
