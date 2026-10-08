@@ -40,11 +40,10 @@ AI_MEMORY_LAUNCH_AGENT_LABEL="com.github.akitaonrails.ai-memory"
 AI_MEMORY_LAUNCH_DAEMON_SOURCE_FILE="$HOME/.config/ai-memory/com.github.akitaonrails.ai-memory.plist"
 AI_MEMORY_LAUNCH_DAEMON_FILE="/Library/LaunchDaemons/com.github.akitaonrails.ai-memory.plist"
 AI_MEMORY_MCP_EXPECTED_JSON='{"type":"remote","url":"http://127.0.0.1:49374/mcp","disabled":false}'
-# The published ai-memory endpoint is a property of this host's declared role,
-# not of its operating system and not of a hostname baked into this file. A
-# server host leaves AI_MEMORY_SERVER_URL unset and answers on loopback; a
-# client host sets it to the published origin. Deriving the expectation means a
-# fork can point at its own server and the assertions still mean something.
+# ai-memory's URL is per-host configuration, not an operating-system or
+# hostname rule. Unset means loopback; an explicit non-loopback URL selects
+# remote mode. Derive the expectation from configuration so each deployment is
+# tested against its own selected service.
 # Read in a subshell so the environment file cannot alter the rest of the run.
 AI_MEMORY_EXPECTED_SERVER_URL="$(
   if [[ -f "$AI_MEMORY_ENV_FILE" ]]; then
@@ -1448,6 +1447,7 @@ test_ai_memory_env_file() {
   printf '%s\n' \
     '# preserve this comment' \
     'UNRELATED_SETTING=keep' \
+    'AI_MEMORY_SERVER_URL=https://stale.example.test' \
     'OPENCODE_API_KEY=fixture-secret' \
     'AI_MEMORY_LLM_PROVIDER=openai' \
     'AI_MEMORY_LLM_PROVIDER=stale-duplicate' \
@@ -1479,6 +1479,7 @@ test_ai_memory_env_file() {
   require_file_mode "$fixture_env" "600"
   require_contains "$fixture_env" "# preserve this comment"
   require_contains "$fixture_env" "UNRELATED_SETTING=keep"
+  require_env_assignment "$fixture_env" "AI_MEMORY_SERVER_URL" "http://127.0.0.1:49374"
   require_env_assignment "$fixture_env" "OPENCODE_API_KEY" "fixture-secret"
   require_env_assignment "$fixture_env" "DOTFILES_AI_MEMORY_LLM_PROFILE" "$AI_MEMORY_LLM_PROFILE_EXPECTED"
   require_env_assignment "$fixture_env" "AI_MEMORY_LLM_PROVIDER" "$AI_MEMORY_LLM_PROVIDER_EXPECTED"
@@ -1494,6 +1495,7 @@ test_ai_memory_env_file() {
   mkdir -p "$(dirname "$client_env_file")"
   printf '%s\n' \
     'OPENCODE_API_KEY=fixture-secret' \
+    'AI_MEMORY_SERVER_URL=https://stale.example.test' \
     'DOTFILES_OPENCODE_SUBAGENT_PROFILE=openai-gpt-6-luna' \
     'DOTFILES_AI_MEMORY_LLM_ENABLED=false' \
     'DOTFILES_AI_MEMORY_LLM_PROFILE=opencode-go-muse-spark-1.3-contributor' \
@@ -1539,6 +1541,7 @@ test_ai_memory_env_file() {
         ok "a client carries no $governed"
       fi
     done
+    require_env_assignment "$client_env_file" "AI_MEMORY_SERVER_URL" "https://server.example.test:8443"
     require_env_assignment "$client_env_file" "OPENCODE_API_KEY" "fixture-secret"
     require_env_assignment "$client_env_file" "AGENTS_AI_MEMORY_LLM_ENABLED" "false"
     if grep -q '^DOTFILES_AI_MEMORY_LLM_ENABLED=' "$client_env_file"; then
@@ -1722,10 +1725,8 @@ test_ai_memory_env_file() {
     not_ok "ai-memory default auth files were rejected"
   fi
 
-  # A client host is not loopback. It talks to a remote server and therefore
-  # needs a bearer token, but the old client branch demanded an unauthenticated
-  # policy and forbade the token the CLI requires. Branch on the server URL so
-  # each host role is checked against the policy that role actually has.
+  # Remote mode needs a bearer token. The policy follows the configured URL,
+  # not the machine's physical client/server role.
   client_auth_home="$fixture_root/client-auth-home"
   mkdir -p "$client_auth_home/.config/ai-memory"
   if (
@@ -1737,9 +1738,9 @@ test_ai_memory_env_file() {
     agent_stack_platform() { printf '%s\n' Linux; }
     verify_ai_memory_unauthenticated_loopback
   ) >/dev/null 2>&1; then
-    ok "client host accepts a bearer token in the shell"
+    ok "remote ai-memory mode accepts a bearer token in the shell"
   else
-    not_ok "client host rejected a bearer token in the shell"
+    not_ok "remote ai-memory mode rejected a bearer token in the shell"
   fi
 
   client_env_home="$fixture_root/client-env-home"
@@ -1753,9 +1754,9 @@ test_ai_memory_env_file() {
     agent_stack_platform() { printf '%s\n' Linux; }
     verify_ai_memory_unauthenticated_loopback
   ) >/dev/null 2>&1; then
-    ok "client host accepts a bearer token in the environment file"
+    ok "remote ai-memory mode accepts a bearer token in the environment file"
   else
-    not_ok "client host rejected a bearer token in the environment file"
+    not_ok "remote ai-memory mode rejected a bearer token in the environment file"
   fi
 
   client_notoken_home="$fixture_root/client-notoken-home"
@@ -1768,9 +1769,9 @@ test_ai_memory_env_file() {
     agent_stack_platform() { printf '%s\n' Linux; }
     verify_ai_memory_unauthenticated_loopback
   ) >"$fixture_root/client-notoken.log" 2>&1; then
-    not_ok "client host without any token was accepted"
+    not_ok "remote ai-memory mode without a token was accepted"
   else
-    ok "client host without any token is rejected"
+    ok "remote ai-memory mode without a token is rejected"
   fi
   require_contains "$fixture_root/client-notoken.log" "client"
 
@@ -3554,10 +3555,9 @@ test_macos_bash_profile() {
   require_contains "$profile" 'source "$HOME/.profile"'
   cp "$profile" "$first_profile"
 
-  # Every platform needs the env file loaded, not just macOS. On a client host
-  # the ai-memory CLI reads AI_MEMORY_SERVER_URL from the environment only, so
-  # a block written solely on macOS leaves a Linux client unable to reach the
-  # server at all.
+  # Every platform needs the env file loaded, not just macOS. The ai-memory CLI
+  # reads AI_MEMORY_SERVER_URL from the environment, so every login shell must
+  # load its per-host ai-memory settings.
   linux_home="$fixture_root/linux-home"
   linux_profile="$linux_home/.bash_profile"
   linux_first="$fixture_root/linux-first-profile"

@@ -33,7 +33,10 @@ opencode-go-deepseek-v4.1-flash -> opencode-go/deepseek-v4.1-flash
 opencode-go-muse-spark-1.3-contributor -> opencode-go/muse-spark-1.3-contributor
 ```
 
-Set it **on the server host** if you are running a remote managed OpenCode server. A client host must not set it.
+Set it on each host that runs a local ai-memory service. The profile controls
+that host's service and its OpenCode subagents. When `AI_MEMORY_SERVER_URL`
+selects a remote service, that remote service owns the profile and the local
+host writes no profile-driven agent models.
 
 ```sh
 # on the server, in ~/.config/ai-memory/env
@@ -44,29 +47,27 @@ Then run `./apply.sh` and restart the ai-memory service, because the running
 service does not re-read the file on its own. `apply.sh` warns when the file and
 the running process disagree.
 
-### Why a client must not set it
+### Remote ai-memory mode
 
-A managed workstream is created by an `ai-memory run` process, and that process
-runs wherever the command was typed. A session started on a client is a client
-session, with its own checkout and state, while memory reads go to the central
-store. The server still owns the profile for its own ai-memory service and its
-own sessions. A profile on the client would govern no server process, and a
-stale copy is worse than none because it looks authoritative. That is exactly
-how `agents.title` ended up holding a model id no profile has ever produced.
+A remote ai-memory service owns its profile. A host using that service carries
+no local profile and writes no profile-driven agent models. This rule depends on
+the configured ai-memory URL, not on whether the machine is called a client or
+a server.
 
-So on a client, `apply.sh` writes **no** agent model and removes any model
-already there, then tells you where the real value lives.
+With the default loopback URL, each host's own profile controls its local
+ai-memory service and OpenCode subagents.
 
 ### Changing it
 
-Change it on the server only:
+For a local service, change the profile on that host:
 
 ```sh
-# 1. edit DOTFILES_AI_MEMORY_LLM_PROFILE on the server
+# 1. edit DOTFILES_AI_MEMORY_LLM_PROFILE on the host
 # 2. re-apply
 ./apply.sh
 # 3. restart the service, or apply.sh warns that it is stale
-sudo launchctl kickstart -k system/com.github.akitaonrails.ai-memory
+systemctl --user restart ai-memory.service # Linux
+# macOS uses the managed ai-memory LaunchDaemon restart procedure in ../ai-memory/README.md
 ```
 
 All four values move together. There is no separate subagent selector any more.

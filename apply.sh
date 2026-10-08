@@ -477,7 +477,7 @@ verify_ai_memory_unauthenticated_loopback() {
     if [[ -z "${AI_MEMORY_AUTH_TOKEN:-}" ]] && \
       ! ai_memory_env_has_nonempty_value AI_MEMORY_AUTH_TOKEN && \
       [[ ! -s "$AI_MEMORY_AUTH_TOKEN_FILE" ]]; then
-      die "This client host requires an ai-memory bearer token to reach $AI_MEMORY_SERVER_URL. Put one in $AI_MEMORY_AUTH_TOKEN_FILE, or export AI_MEMORY_AUTH_TOKEN, then re-run apply."
+      die "Remote ai-memory mode requires a bearer token for $AI_MEMORY_SERVER_URL. Put one in $AI_MEMORY_AUTH_TOKEN_FILE, or export AI_MEMORY_AUTH_TOKEN, then re-run apply."
     fi
     return 0
   fi
@@ -771,9 +771,9 @@ PY
 
 # Every platform needs this block, not only macOS. The ai-memory CLI reads
 # AI_MEMORY_SERVER_URL and AI_MEMORY_AUTH_TOKEN from the environment, never from
-# the environment file, so a client host whose login shell does not source that
-# file cannot reach the server at all. Guarding this on Darwin left Linux clients
-# unable to start a managed workstream.
+# the environment file, so every login shell must load its per-host ai-memory
+# settings. Guarding this on Darwin left Linux hosts unable to start a managed
+# workstream.
 configure_bash_login_env() {
   log "Making login Bash load the managed shell and ai-memory environment"
   python3 - \
@@ -846,7 +846,7 @@ kept.extend(
         '  set +a',
         "fi",
         '# The ai-memory CLI reads its bearer from the environment, never from the',
-        '# token file, so a client host needs the token exported for `ai-memory run`.',
+        '# token file, so remote mode needs the token exported for `ai-memory run`.',
         '# Read it here instead of asking the operator to paste a secret into this',
         '# file, and strip the trailing newline the 0600 token file carries.',
         'if [[ -f "$HOME/.config/ai-memory/client-token" ]]; then',
@@ -1226,7 +1226,7 @@ for name, model in managed_models.items():
             )
         continue
     if not model:
-        # A client host writes no agent model: the server owns it. Drop any model
+        # Remote mode writes no agent model: the remote server owns it. Drop any model
         # already there rather than leaving a stale one that looks authoritative,
         # and keep every other key in the entry.
         config.pop("model", None)
@@ -1630,12 +1630,15 @@ configure_ai_memory_env_file() {
   if agent_stack_uses_remote_ai_memory; then
     provider_state="$(python3 - \
       "$AI_MEMORY_ENV_FILE" \
-      "$AGENT_STACK_HELPER" <<'PY'
+      "$AGENT_STACK_HELPER" \
+      "$AI_MEMORY_SERVER_URL" <<'PY'
+import shlex
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
 helper_path = Path(sys.argv[2])
+server_url = sys.argv[3]
 sys.path.insert(0, str(helper_path.parent))
 sys.dont_write_bytecode = True
 
@@ -1656,7 +1659,10 @@ retired_pause_new = "AGENTS_AI_MEMORY_LLM_ENABLED"
 # it, so drop it wherever it still heads a block.
 stale_comments = {"# Managed by dotfiles/agents/apply.sh."}
 # Managed here as well, so every copy is stripped before one is appended.
-client_managed = {"AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL"}
+client_managed = {
+    "AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL",
+    "AI_MEMORY_SERVER_URL",
+}
 managed_comment = "# Managed by guisaliba/agents apply.sh."
 
 try:
@@ -1705,6 +1711,7 @@ if kept_lines:
 kept_lines.extend(
     [
         managed_comment,
+        f"AI_MEMORY_SERVER_URL={shlex.quote(server_url)}",
         "AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL=true",
     ]
 )
@@ -1713,7 +1720,7 @@ content = "\n".join(kept_lines) + "\n"
 atomic_write_text(path, content, 0o600, ".env.")
 print("client")
 PY
-)" || die "Could not clear the server-owned ai-memory policy for a client host"
+  )" || die "Could not clear the remote-service ai-memory policy for this host"
     agent_stack_profile_owner_note
     return 0
   fi
@@ -1735,7 +1742,9 @@ PY
     "$provider" \
     "$model" \
     "$provider_state" \
+    "$AI_MEMORY_SERVER_URL" \
     "$AGENT_STACK_HELPER" <<'PY'
+import shlex
 import sys
 from pathlib import Path
 
@@ -1744,7 +1753,8 @@ profile = sys.argv[2]
 provider = sys.argv[3]
 model = sys.argv[4]
 provider_state = sys.argv[5]
-helper_path = Path(sys.argv[6])
+server_url = sys.argv[6]
+helper_path = Path(sys.argv[7])
 sys.path.insert(0, str(helper_path.parent))
 sys.dont_write_bytecode = True
 
@@ -1755,6 +1765,7 @@ managed_names = {
     "AI_MEMORY_LLM_PROVIDER",
     "AI_MEMORY_LLM_MODEL",
     "AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL",
+    "AI_MEMORY_SERVER_URL",
 }
 # The scheduler flag is the operator's, not the script's. It is written as a
 # literal "false" here today, which makes a value in the environment file look
@@ -1826,6 +1837,7 @@ kept_lines.append("")
 kept_lines.extend(
     [
         managed_comment,
+        f"AI_MEMORY_SERVER_URL={shlex.quote(server_url)}",
         f"DOTFILES_AI_MEMORY_LLM_PROFILE={profile}",
         "AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL=true",
         f"AI_MEMORY_LLM_PROVIDER={provider}",
@@ -2228,7 +2240,7 @@ setup_ai_memory() {
     initialize_ai_memory
     start_ai_memory_service
   else
-    log "Using centralized ai-memory at $AI_MEMORY_SERVER_URL"
+    log "Using remote ai-memory at $AI_MEMORY_SERVER_URL"
     # A client still needs its environment file converged, because it carries
     # the server URL and the scheduler flag. This also strips the policy the
     # server owns, which would otherwise linger as a value that governs nothing.

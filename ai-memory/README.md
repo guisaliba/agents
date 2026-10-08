@@ -1,18 +1,20 @@
 # ai-memory
 
-The server owns the primary ai-memory store. It remains bound to loopback and is
-published to the tailnet by Tailscale Serve with bearer authentication.
+Each host runs its own ai-memory service and keeps its own store. By default,
+the service listens on loopback at `127.0.0.1:49374`. A host that provides web
+or phone access can publish its own service to the tailnet with Tailscale Serve.
 
-The published origin is a per-deployment value. It is never written into this
-repository. Read it from the environment file on the host that serves it:
+`AI_MEMORY_SERVER_URL` is a per-host override. Leave it unset, or set it to a
+loopback URL, to use the local service. Set a non-loopback URL only when this
+host must use a remote ai-memory service:
 
 ```sh
 grep '^AI_MEMORY_SERVER_URL=' ~/.config/ai-memory/env
 ```
 
-It has the shape `https://<server-host>:<port>`, and the MCP endpoint is that
-origin plus `/mcp`. A server host leaves the variable unset and answers on
-`http://127.0.0.1:49374`.
+For a remote service, use its base URL; the MCP endpoint is that URL plus
+`/mcp`. `apply.sh` starts the local service for loopback URLs and leaves the
+local service stopped for a non-loopback URL.
 
 ## Ownership
 
@@ -57,13 +59,13 @@ user service.
 The ai-memory binary owns the generated OpenCode plugin, instructions, and
 five ai-memory skills. Do not edit generated files by hand.
 
-`DOTFILES_AI_MEMORY_LLM_PROFILE` is the single profile for the whole stack. It
-sets the service LLM provider and model **and** the `general`, `explore` and
-`title` OpenCode agents, so the two can no longer drift apart. Set it on the
-**server** host only. A client runs no ai-memory service, and its sessions
-execute on the server, so the server owns the value and the client deliberately
-carries no copy. See [../opencode/README.md](../opencode/README.md) for the
-full ownership rule and the change procedure.
+`DOTFILES_AI_MEMORY_LLM_PROFILE` is the single profile for a local service. It
+sets that service's LLM provider and model **and** the local OpenCode `general`,
+`explore` and `title` agents, so the values cannot drift apart. Set it on each
+host that runs a local service. In remote mode, the remote service owns the
+profile; the local host carries no copy. See
+[../opencode/README.md](../opencode/README.md) for the ownership rule and change
+procedure.
 
 The default profile is `opencode-go-deepseek-v4.1-flash`, which uses
 `opencode-go/deepseek-v4.1-flash`. The alternative profile is
@@ -85,13 +87,13 @@ Subagent selection is independent; see
 The `DOTFILES_AI_MEMORY_LLM_ENABLED` name is retired; `apply.sh` migrates its
 value once to the new name and removes the old line.
 
-## Boundary
+## Remote service override
 
-The server backend remains on `127.0.0.1:49374`. Remote clients set
-`AI_MEMORY_SERVER_URL` to the Tailscale HTTPS origin and keep the bearer token
-in `~/.config/ai-memory/client-token`, mode `0600`. Apply stops the Linux local
-service while a remote URL is active. The local data directory is retained as
-an emergency fallback; automatic bidirectional store merge is out of scope.
+Use remote mode only when this host must share another host's service. Set
+`AI_MEMORY_SERVER_URL` to that service's base URL and keep its bearer token in
+`~/.config/ai-memory/client-token`, mode `0600`. Apply stops the local service
+while the URL is non-loopback. The local data directory is retained; automatic
+bidirectional store merge is out of scope.
 
 Captured content can be sent to the selected provider during explicit
 consolidation, review, or reranking. Keep credentials, memory data, and the
