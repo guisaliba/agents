@@ -1,0 +1,18 @@
+test_backend_must_match_version_and_selected_store (__main__.LauncherTests.test_backend_must_match_version_and_selected_store) ... ok
+test_child_exit_code_and_selected_resources_are_preserved (__main__.LauncherTests.test_child_exit_code_and_selected_resources_are_preserved) ... ok
+test_generator_diagnostics_are_not_disclosed (__main__.LauncherTests.test_generator_diagnostics_are_not_disclosed) ... ok
+test_incompatible_session_options_are_rejected (__main__.LauncherTests.test_incompatible_session_options_are_rejected) ... ok
+test_loopback_endpoint (__main__.LauncherTests.test_loopback_endpoint) ... ok
+test_other_endpoints_are_rejected (__main__.LauncherTests.test_other_endpoints_are_rejected) ... ok
+test_primary_model_requires_explicit_selection (__main__.LauncherTests.test_primary_model_requires_explicit_selection) ... ok
+test_redirect_is_not_followed (__main__.LauncherTests.test_redirect_is_not_followed) ... ok
+test_resource_overrides_are_not_accepted (__main__.LauncherTests.test_resource_overrides_are_not_accepted) ... ok
+test_subagent_scope_and_child_observer_require_explicit_selection (__main__.LauncherTests.test_subagent_scope_and_child_observer_require_explicit_selection) ... ok
+test_unapproved_global_prompt_or_model_overrides_are_rejected (__main__.LauncherTests.test_unapproved_global_prompt_or_model_overrides_are_rejected) ... ok
+test_unavailable_backend_is_a_clear_failure (__main__.LauncherTests.test_unavailable_backend_is_a_clear_failure) ... ok
+test_verification_cannot_use_shared_agent_or_resume (__main__.LauncherTests.test_verification_cannot_use_shared_agent_or_resume) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.037s
+
+OK

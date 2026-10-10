@@ -1,0 +1,103 @@
+{
+  "checks": [
+    {
+      "name": "endpoint rejects remote hosts, credentials, paths, queries, and invalid ports",
+      "passed": true
+    },
+    {
+      "name": "unselected resource flags are rejected",
+      "passed": true
+    },
+    {
+      "name": "approved instructions reach the real Pi system prompt without project instructions",
+      "passed": true
+    },
+    {
+      "name": "only approved resources load; project session-directory override is ignored",
+      "passed": true
+    },
+    {
+      "name": "RTK rewrites the real Pi bash tool and reduces output",
+      "passed": true,
+      "raw_bytes": 3279,
+      "reduced_bytes": 1260
+    },
+    {
+      "name": "marker-free projects capture both tool calls and an ended session",
+      "passed": true,
+      "capture": [
+        {
+          "session": "01a11f2e-8bc1-7539-88ee-949616bc2bcc",
+          "agent": "pi",
+          "ended": true,
+          "workspace": "default",
+          "project": "launcher-fixture-f1407979df",
+          "observations_by_kind": {
+            "post-tool-use": 2,
+            "pre-tool-use": 2,
+            "session-end": 1,
+            "session-start": 1,
+            "stop": 1,
+            "user-prompt": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "normal persistent session is saved in the chosen agent directory",
+      "passed": true
+    },
+    {
+      "name": "temporary generated resources are removed after Pi exits",
+      "passed": true
+    },
+    {
+      "name": "interactive terminal delivers instructions, rewrites bash, captures both tools, and exits normally",
+      "passed": true,
+      "capture": [
+        {
+          "session": "01a11f2e-a7c0-76f8-90fb-3b6b7bf1c8e2",
+          "agent": "pi",
+          "ended": true,
+          "workspace": "default",
+          "project": "launcher-fixture-f1407979df",
+          "observations_by_kind": {
+            "post-tool-use": 2,
+            "pre-tool-use": 2,
+            "session-end": 1,
+            "session-start": 1,
+            "stop": 1,
+            "user-prompt": 1
+          }
+        }
+      ],
+      "terminal_output_bytes": 134261
+    },
+    {
+      "name": "shared Pi settings, OpenCode configuration, and original instructions are unchanged",
+      "passed": true
+    }
+  ],
+  "complete": true,
+  "daily_primary_models_verified": false,
+  "verification_model": "opencode-go/deepseek-v4.1-flash",
+  "launcher_sha256": "b215b1f40807b1d0ab319cde9057cdfa045271e5daa69b9712fe1dbf7e151ff7",
+  "instructions_sha256": "b7a5f2887289e867c8dce84c119f210383e22a5161fbf8d6bff122353a320f4e",
+  "port_complete": false,
+  "generated_extension_sha256": [
+    "ab2b9fddb16355ef7e1a71e44c71668aa566c6b88e7c3a353e93615642c353f0",
+    "48f07e4fd8e38b350cae84fe0116d2bc29932d535e333a307cb9e477f5272de6"
+  ],
+  "session": "01a11f2e-8bc1-7539-88ee-949616bc2bcc",
+  "interactive_session": "01a11f2e-a7c0-76f8-90fb-3b6b7bf1c8e2",
+  "primary_model_authentication": "not_ready",
+  "primary_model_check": "not run: authenticate openai in the separate agent directory first",
+  "unit_tests": {
+    "command": "python3 -B pi/test-launch.py -v",
+    "exit_code": 0,
+    "output": "test_backend_must_match_version_and_selected_store (__main__.LauncherTests.test_backend_must_match_version_and_selected_store) ... ok\ntest_child_exit_code_and_selected_resources_are_preserved (__main__.LauncherTests.test_child_exit_code_and_selected_resources_are_preserved) ... ok\ntest_generator_diagnostics_are_not_disclosed (__main__.LauncherTests.test_generator_diagnostics_are_not_disclosed) ... ok\ntest_incompatible_session_options_are_rejected (__main__.LauncherTests.test_incompatible_session_options_are_rejected) ... ok\ntest_loopback_endpoint (__main__.LauncherTests.test_loopback_endpoint) ... ok\ntest_other_endpoints_are_rejected (__main__.LauncherTests.test_other_endpoints_are_rejected) ... ok\ntest_primary_model_requires_explicit_selection (__main__.LauncherTests.test_primary_model_requires_explicit_selection) ... ok\ntest_redirect_is_not_followed (__main__.LauncherTests.test_redirect_is_not_followed) ... ok\ntest_resource_overrides_are_not_accepted (__main__.LauncherTests.test_resource_overrides_are_not_accepted) ... ok\ntest_unapproved_global_prompt_or_model_overrides_are_rejected (__main__.LauncherTests.test_unapproved_global_prompt_or_model_overrides_are_rejected) ... ok\ntest_unavailable_backend_is_a_clear_failure (__main__.LauncherTests.test_unavailable_backend_is_a_clear_failure) ... ok\ntest_verification_cannot_use_shared_agent_or_resume (__main__.LauncherTests.test_verification_cannot_use_shared_agent_or_resume) ... ok\n\n----------------------------------------------------------------------\nRan 12 tests in 0.011s\n\nOK\n"
+  },
+  "verification_runner_sha256": "515e63ad32158325e1fb71d6812731dba072fa3f7709ed83b4d59391a3517a27",
+  "unit_runner_sha256": "b219c677038db803d2194624848d87aeb9876b0bc1258a4b83865b3c8fb5d7ac",
+  "verification_scope": "Real print and interactive Pi sessions using the approved isolated test model; primary-model and durable daily setup remain incomplete."
+}

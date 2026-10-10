@@ -1,0 +1,15 @@
+test_install_help_has_no_side_effects (__main__.PortabilityTests.test_install_help_has_no_side_effects) ... FAIL
+
+======================================================================
+FAIL: test_install_help_has_no_side_effects (__main__.PortabilityTests.test_install_help_has_no_side_effects)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/guisaliba/agents/pi/test-portability.py", line 13, in test_install_help_has_no_side_effects
+    self.assertTrue(script.is_file(), "The approved Bash installation entry point is missing")
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : The approved Bash installation entry point is missing
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (failures=1)

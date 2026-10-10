@@ -1,0 +1,6 @@
+{
+  "complete": false,
+  "exit": 127,
+  "failure": "The runner invoked the private Pi binary without its private Node PATH. Both installation passes succeeded.",
+  "correction": "Use the private runtime PATH, as the actual pi-port command does."
+}

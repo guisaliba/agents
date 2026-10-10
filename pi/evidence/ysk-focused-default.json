@@ -1,0 +1,5 @@
+{
+  "name": "GPT default",
+  "exit_code": 1,
+  "scope": "unmodified upstream local protocol fixture; not live inference"
+}

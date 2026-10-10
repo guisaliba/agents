@@ -1,0 +1,26 @@
+{
+  "complete": true,
+  "live_model_requests": 0,
+  "synthetic_provider": true,
+  "created": {
+    "handoff_id": "01a1274c-0c85-7460-86ca-1ca987c1b949"
+  },
+  "scope": {
+    "workspace": "default",
+    "project": "agents"
+  },
+  "successor_handoffs": 6,
+  "checks": [
+    "first prompt receives handoff automatically",
+    "next session does not receive it again",
+    "no manual accept or note-file fallback"
+  ],
+  "provider_calls": [
+    {
+      "handoff_seen": true
+    },
+    {
+      "handoff_seen": false
+    }
+  ]
+}

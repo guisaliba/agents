@@ -1,0 +1,9 @@
+{
+  "complete": false,
+  "model_generated_relay": false,
+  "checks": [],
+  "synthetic_replay": true,
+  "root_session_id": "01a126b2-b3d3-7082-8500-5b4ce4da14ab",
+  "failure": "No child observer note reached the parent",
+  "shared_settings_metadata_unchanged": true
+}

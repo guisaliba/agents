@@ -1,0 +1,14 @@
+{
+  "method": "Assistant read all 36 outputs in the model-blind review. This was not an independent external judge.",
+  "corpus": "ysk-controls.json version 2",
+  "scope": "Synthetic conversation replay. Verification receipts are fixed input data, not real application tests executed by this benchmark.",
+  "cases": {
+    "C02": {"labels": ["A","B","C","D","E","F"], "expected": "none", "observed": "none", "passed": true, "reason": "Only error wording changes; inspection and replay establish unchanged acceptance and error handling."},
+    "C04": {"labels": ["A","B","C","D","E","F"], "expected": "none", "observed": "none", "passed": true, "reason": "Index creation is a separate maintenance migration; tenant isolation and performance receipts are supplied."},
+    "C06": {"labels": ["A","B","C","D","E","F"], "expected": "none", "observed": "none", "passed": true, "reason": "Exclusive new-file creation rejects existing destinations; owner-only access and report content are established."},
+    "C08": {"labels": ["A","B","C","D","E","F"], "expected": "none", "observed": "none", "passed": true, "reason": "Only the connection logger changes; certificate and other logging checks are supplied."},
+    "C10": {"labels": ["A","B","C","D","E","F"], "expected": "none", "observed": "none", "passed": true, "reason": "One-time index migration is separate from recurring cleanup; retention and rerun checks are supplied."},
+    "C12": {"labels": ["A","B","C","D","E","F"], "expected": "none", "observed": "none", "passed": true, "reason": "Lockfile-derived cache precedes installation; injected authentication failures block release in the replay."}
+  },
+  "conclusion": "Both models remained silent on all corrected controls. Combined with the original positive cases, no detection-quality difference was observed on these twelve synthetic scenarios. This does not establish general model equivalence."
+}

@@ -1,0 +1,40 @@
+{
+  "execution_complete": true,
+  "grading_complete": true,
+  "model_selection_inconclusive": true,
+  "scope": "Six clear positive cases with three repeats; six invalid or ambiguous silence controls.",
+  "corpus_unchanged_after_results": true,
+  "blind_grades_sha256": "e43b0fe569d935843bf64411c10f63dd47345ecaa677de8d664b1fa8ec816ee7",
+  "models": {
+    "openai/gpt-6-luna": {
+      "reasoning": "max",
+      "requests": 36,
+      "intended_findings_detected": 18,
+      "intended_findings_expected": 18,
+      "distinct_positive_cases": 6,
+      "observed_intended_misses": 0,
+      "notes_on_intended_controls": 14,
+      "control_runs": 18,
+      "false_positive_rate": null,
+      "false_positive_rate_reason": "Control labels cannot rule out other valid concerns.",
+      "catalog_cost_estimate_usd": 0.0348042,
+      "median_elapsed_seconds": 13.3675
+    },
+    "openai/gpt-6.1-sol": {
+      "reasoning": "low",
+      "requests": 36,
+      "intended_findings_detected": 18,
+      "intended_findings_expected": 18,
+      "distinct_positive_cases": 6,
+      "observed_intended_misses": 0,
+      "notes_on_intended_controls": 17,
+      "control_runs": 18,
+      "false_positive_rate": null,
+      "false_positive_rate_reason": "Control labels cannot rule out other valid concerns.",
+      "catalog_cost_estimate_usd": 0.5990719999999999,
+      "median_elapsed_seconds": 7.0505
+    }
+  },
+  "sol_to_luna_estimated_cost_ratio": 17.212635256664424,
+  "production_settings_changed": false
+}

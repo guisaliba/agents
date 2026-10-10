@@ -1,0 +1,21 @@
+{
+  "checks": [
+    {
+      "name": "only original Learn Markdown commands load",
+      "passed": true
+    },
+    {
+      "name": "Markdown preservation",
+      "passed": false
+    }
+  ],
+  "complete": false,
+  "port_complete": false,
+  "scope": "real Pi Markdown command and file preservation; no subagents or visuals",
+  "model": "openai/gpt-6-luna",
+  "extension_sha256": "7b4af8b2fb1562a620c796ac53706a591dc55e8966a1a67931264523c2e3bdb7",
+  "artifacts": [],
+  "failure": "Linking before the first lesson did not refuse a read-only note",
+  "shared_settings_metadata_unchanged": true,
+  "fixture_directory": "/tmp/pi-port-docs/learn-first-link-red-fixtures"
+}

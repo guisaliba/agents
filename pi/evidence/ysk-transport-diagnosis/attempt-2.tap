@@ -1,0 +1,20 @@
+DIAG upgrade received
+DIAG server upgrade socket error ECONNRESET
+DIAG HTTP request main gpt-6-astra
+DIAG HTTP request main gpt-6-astra
+DIAG HTTP request main gpt-6-astra
+DIAG HTTP request main gpt-6-astra
+DIAG HTTP request main gpt-6-astra
+DIAG HTTP request main gpt-6-astra
+DIAG HTTP request main gpt-6-astra
+DIAG HTTP request observer gpt-6.1-sol
+DIAG HTTP request main gpt-6-astra
+✔ GPT default (454.733771ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 510.799234

@@ -1,0 +1,25 @@
+✔ real detection survives idle completion: parent (790.58522ms)
+✔ real detection survives idle completion: flat-child (695.594579ms)
+✔ real detection survives idle completion: nested-child (689.519111ms)
+✔ RPC prompts count ignored notes and back off, but ysk commands do not (8.629116ms)
+✔ a failed atomic replacement preserves the previous session notes (1.303089ms)
+✔ temporary Pi discovery sessions do not create artifacts in the working directory (0.340786ms)
+✔ GPT default (675.622124ms)
+✔ GPT configurable same-model thinking (723.344794ms)
+✔ GPT environment model override (852.287707ms)
+✔ Fable family default (607.300463ms)
+✔ Fable configurable model and thinking (598.562672ms)
+✔ other Claude preserves cache and thinking (571.254248ms)
+✔ unknown configured model does not fall back to main (526.868736ms)
+✔ GPT provider error is not an empty answer (525.267174ms)
+✔ Knew and Undo survive real Pi process restarts (1936.998993ms)
+✔ a stale Pi process cannot erase another session’s Knew or resurrect its Undo (1097.300494ms)
+✔ an idle parent persists a relayed note before its next turn and keeps it after restart (2954.919771ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6060.56973

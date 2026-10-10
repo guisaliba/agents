@@ -1,0 +1,6 @@
+#!/usr/bin/python3
+import os,sys
+a=sys.argv[1:]
+real='/home/guisaliba/.local/share/mise/installs/pi/latest/pi/pi'
+if a!=["--version"]: a[a.index("--"):a.index("--")]=["--extension",'/home/guisaliba/agents/pi/evidence/learn-workflow-live-attempt-1/test-observer.ts']
+os.execv(real,[real,*a])

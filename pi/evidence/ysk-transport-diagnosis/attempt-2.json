@@ -1,0 +1,8 @@
+{
+  "attempt": 2,
+  "kind": "temporary fixture instrumentation with server-socket error listener",
+  "exit_code": 0,
+  "upstream_assertions_unchanged": true,
+  "runtime_extension_unchanged": true,
+  "paid_model_requests": 0
+}

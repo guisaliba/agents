@@ -1,0 +1,54 @@
+{
+  "complete": true,
+  "port_complete": false,
+  "subagent_extension_installed": false,
+  "primary_model": "openai/gpt-6-luna",
+  "observer_model": "openai/gpt-6-luna",
+  "checks": [
+    {
+      "name": "seven controlled real Pi reads",
+      "passed": true
+    },
+    {
+      "name": "scheduled live side inference on the exact approved model",
+      "passed": true
+    },
+    {
+      "name": "no subagent tool is active",
+      "passed": true
+    },
+    {
+      "name": "terminal sample widget, menu, explanation, and normal exit",
+      "passed": true,
+      "model_requests": 0,
+      "sample_not_model_generated": true
+    }
+  ],
+  "session": "01a1233e-30cd-743a-ac2c-1fea186ccc80",
+  "observer_checks": [
+    {
+      "step": 6,
+      "outcome": "none",
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "thinking": "high",
+      "usage": {
+        "input": 25186,
+        "output": 182,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 173,
+        "totalTokens": 25368,
+        "cost": {
+          "input": 0.0025186,
+          "output": 9.099999999999999e-05,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0026096
+        }
+      },
+      "stopReason": "stop"
+    }
+  ],
+  "shared_settings_metadata_unchanged": true
+}

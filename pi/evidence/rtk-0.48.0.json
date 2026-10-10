@@ -1,0 +1,240 @@
+{
+  "rtk_version": "rtk 0.48.0",
+  "model": "opencode-go/deepseek-v4.1-flash",
+  "checks": [
+    {
+      "name": "RTK_DISABLED preserves the original command",
+      "passed": true
+    },
+    {
+      "name": "actual rewriting and output reduction through Pi bash",
+      "passed": true,
+      "raw_bytes": 3299,
+      "reduced_bytes": 1280,
+      "reduction_percent": 61.2
+    },
+    {
+      "name": "unsupported command passes through",
+      "passed": true
+    },
+    {
+      "name": "command failure remains a failed Pi tool result",
+      "passed": true
+    },
+    {
+      "name": "helper-error preserves original execution",
+      "passed": true
+    },
+    {
+      "name": "timeout preserves original execution",
+      "passed": true
+    },
+    {
+      "name": "missing preserves original execution",
+      "passed": true
+    },
+    {
+      "name": "old preserves original execution",
+      "passed": true
+    },
+    {
+      "name": "ai-memory and RTK work together",
+      "passed": true,
+      "session": "01a11ec4-bdd6-7039-8656-2a0a40a53248",
+      "observations_by_kind": {
+        "post-tool-use": 2,
+        "pre-tool-use": 2,
+        "session-end": 1,
+        "session-start": 1,
+        "stop": 1,
+        "user-prompt": 1
+      }
+    },
+    {
+      "name": "shared Pi settings metadata unchanged",
+      "passed": true
+    }
+  ],
+  "cases": [
+    {
+      "mode": "disabled",
+      "requested_command": "git log -20",
+      "executed_command": "git log -20",
+      "rtk_subprocess_arguments": [
+        [
+          "--version"
+        ]
+      ],
+      "output": "commit d4a7d9c4e41ee1e11da4cd9248191c92182806ea\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 19\n\ncommit e9a43da65d60d843e2e737eaaaefb2bf106ccbd8\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 18\n\ncommit 2038d7ad3717444da7bb8555a686f4b41d74ee0e\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 17\n\ncommit 1bcc60a3094cc229cbe1e2e81685390e3f06e2aa\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 16\n\ncommit cd77527450f0c97b462f5224d361b9110c39ad69\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 15\n\ncommit cc4b6fa336e397cfcfccf95776fade5bb9eccb7a\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 14\n\ncommit 89719755f484180d6a7b1876bf28c7efb8dc56ce\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 13\n\ncommit df2f1152cff393823d4e5dc46af55b048c3ae271\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 12\n\ncommit 7d34631edb9d144c9f4ca6ce6eac904634075f06\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 11\n\ncommit 84e09618daa7bb0c727aaeb86483883ad4ab0053\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 10\n\ncommit f512be17ff5f1be04c4830e14f652090ecbb1f4b\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 09\n\ncommit b49442870d5daae1cda6bf855e3e3df899552af1\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 08\n\ncommit 50f911405bebed120d3253d1cd0c822fa0c85b78\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 07\n\ncommit 05b4b9160026a91d2a7fc9e50697b8e610ac033d\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 06\n\ncommit 2845ee236cf80b5c1fa998a7d261fe07c1c419df\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 05\n\ncommit 79421ecf116cf2d0ba9e01fb8a8f4bc273caefab\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 04\n\ncommit 7e29f7b43890614ff6f71f9e8957dc1512d3184c\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 03\n\ncommit 8e1cd76f990f4fea1ffbdabd0084ca18937be6ec\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 02\n\ncommit e70772b478d4b6458bb93b70c5a236558e3dcad5\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 01\n\ncommit 714b007b1e11f17eb3df478caf8f40afa5af6ee6\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 00\n",
+      "output_bytes": 3299,
+      "tool_is_error": false,
+      "session": "01a11ec4-1463-7275-b6ff-a28495000ceb"
+    },
+    {
+      "mode": "enabled",
+      "requested_command": "git log -20",
+      "executed_command": "rtk git log -20",
+      "rtk_subprocess_arguments": [
+        [
+          "--version"
+        ],
+        [
+          "rewrite",
+          "git log -20"
+        ],
+        [
+          "git",
+          "log",
+          "-20"
+        ]
+      ],
+      "output": "d4a7d9c Synthetic fixture commit 19 (9 months ago) <Pi Fixture>\ne9a43da Synthetic fixture commit 18 (9 months ago) <Pi Fixture>\n2038d7a Synthetic fixture commit 17 (9 months ago) <Pi Fixture>\n1bcc60a Synthetic fixture commit 16 (9 months ago) <Pi Fixture>\ncd77527 Synthetic fixture commit 15 (9 months ago) <Pi Fixture>\ncc4b6fa Synthetic fixture commit 14 (9 months ago) <Pi Fixture>\n8971975 Synthetic fixture commit 13 (9 months ago) <Pi Fixture>\ndf2f115 Synthetic fixture commit 12 (9 months ago) <Pi Fixture>\n7d34631 Synthetic fixture commit 11 (9 months ago) <Pi Fixture>\n84e0961 Synthetic fixture commit 10 (9 months ago) <Pi Fixture>\nf512be1 Synthetic fixture commit 09 (9 months ago) <Pi Fixture>\nb494428 Synthetic fixture commit 08 (9 months ago) <Pi Fixture>\n50f9114 Synthetic fixture commit 07 (9 months ago) <Pi Fixture>\n05b4b91 Synthetic fixture commit 06 (9 months ago) <Pi Fixture>\n2845ee2 Synthetic fixture commit 05 (9 months ago) <Pi Fixture>\n79421ec Synthetic fixture commit 04 (9 months ago) <Pi Fixture>\n7e29f7b Synthetic fixture commit 03 (9 months ago) <Pi Fixture>\n8e1cd76 Synthetic fixture commit 02 (9 months ago) <Pi Fixture>\ne70772b Synthetic fixture commit 01 (9 months ago) <Pi Fixture>\n714b007 Synthetic fixture commit 00 (9 months ago) <Pi Fixture>\n",
+      "output_bytes": 1280,
+      "tool_is_error": false,
+      "session": "01a11ec4-4119-72fb-a078-410e7f57bc72"
+    },
+    {
+      "mode": "unsupported",
+      "requested_command": "printf PI_RTK_UNSUPPORTED_OK",
+      "executed_command": "printf PI_RTK_UNSUPPORTED_OK",
+      "rtk_subprocess_arguments": [
+        [
+          "--version"
+        ],
+        [
+          "rewrite",
+          "printf PI_RTK_UNSUPPORTED_OK"
+        ]
+      ],
+      "output": "PI_RTK_UNSUPPORTED_OK",
+      "output_bytes": 21,
+      "tool_is_error": false,
+      "session": "01a11ec4-4e20-71f4-acb2-b19b56630d23"
+    },
+    {
+      "mode": "command-error",
+      "requested_command": "git log --definitely-invalid-pi-test-option",
+      "executed_command": "rtk git log --definitely-invalid-pi-test-option",
+      "rtk_subprocess_arguments": [
+        [
+          "--version"
+        ],
+        [
+          "rewrite",
+          "git log --definitely-invalid-pi-test-option"
+        ],
+        [
+          "git",
+          "log",
+          "--definitely-invalid-pi-test-option"
+        ]
+      ],
+      "output": "fatal: unrecognized argument: --definitely-invalid-pi-test-option\n\n\n\nCommand exited with code 128",
+      "output_bytes": 97,
+      "tool_is_error": true,
+      "session": "01a11ec4-5cdb-74a9-82c6-4e557d84744c"
+    },
+    {
+      "mode": "helper-error",
+      "requested_command": "git log -20",
+      "executed_command": "git log -20",
+      "rtk_subprocess_arguments": [
+        [
+          "--version"
+        ],
+        [
+          "rewrite",
+          "git log -20"
+        ]
+      ],
+      "output": "commit d4a7d9c4e41ee1e11da4cd9248191c92182806ea\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 19\n\ncommit e9a43da65d60d843e2e737eaaaefb2bf106ccbd8\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 18\n\ncommit 2038d7ad3717444da7bb8555a686f4b41d74ee0e\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 17\n\ncommit 1bcc60a3094cc229cbe1e2e81685390e3f06e2aa\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 16\n\ncommit cd77527450f0c97b462f5224d361b9110c39ad69\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 15\n\ncommit cc4b6fa336e397cfcfccf95776fade5bb9eccb7a\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 14\n\ncommit 89719755f484180d6a7b1876bf28c7efb8dc56ce\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 13\n\ncommit df2f1152cff393823d4e5dc46af55b048c3ae271\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 12\n\ncommit 7d34631edb9d144c9f4ca6ce6eac904634075f06\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 11\n\ncommit 84e09618daa7bb0c727aaeb86483883ad4ab0053\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 10\n\ncommit f512be17ff5f1be04c4830e14f652090ecbb1f4b\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 09\n\ncommit b49442870d5daae1cda6bf855e3e3df899552af1\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 08\n\ncommit 50f911405bebed120d3253d1cd0c822fa0c85b78\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 07\n\ncommit 05b4b9160026a91d2a7fc9e50697b8e610ac033d\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 06\n\ncommit 2845ee236cf80b5c1fa998a7d261fe07c1c419df\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 05\n\ncommit 79421ecf116cf2d0ba9e01fb8a8f4bc273caefab\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 04\n\ncommit 7e29f7b43890614ff6f71f9e8957dc1512d3184c\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 03\n\ncommit 8e1cd76f990f4fea1ffbdabd0084ca18937be6ec\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 02\n\ncommit e70772b478d4b6458bb93b70c5a236558e3dcad5\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 01\n\ncommit 714b007b1e11f17eb3df478caf8f40afa5af6ee6\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 00\n",
+      "output_bytes": 3299,
+      "tool_is_error": false,
+      "session": "01a11ec4-6add-76c9-be78-1f60fba5eeb3"
+    },
+    {
+      "mode": "timeout",
+      "requested_command": "git log -20",
+      "executed_command": "git log -20",
+      "rtk_subprocess_arguments": [
+        [
+          "--version"
+        ],
+        [
+          "rewrite",
+          "git log -20"
+        ]
+      ],
+      "output": "commit d4a7d9c4e41ee1e11da4cd9248191c92182806ea\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 19\n\ncommit e9a43da65d60d843e2e737eaaaefb2bf106ccbd8\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 18\n\ncommit 2038d7ad3717444da7bb8555a686f4b41d74ee0e\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 17\n\ncommit 1bcc60a3094cc229cbe1e2e81685390e3f06e2aa\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 16\n\ncommit cd77527450f0c97b462f5224d361b9110c39ad69\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 15\n\ncommit cc4b6fa336e397cfcfccf95776fade5bb9eccb7a\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 14\n\ncommit 89719755f484180d6a7b1876bf28c7efb8dc56ce\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 13\n\ncommit df2f1152cff393823d4e5dc46af55b048c3ae271\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 12\n\ncommit 7d34631edb9d144c9f4ca6ce6eac904634075f06\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 11\n\ncommit 84e09618daa7bb0c727aaeb86483883ad4ab0053\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 10\n\ncommit f512be17ff5f1be04c4830e14f652090ecbb1f4b\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 09\n\ncommit b49442870d5daae1cda6bf855e3e3df899552af1\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 08\n\ncommit 50f911405bebed120d3253d1cd0c822fa0c85b78\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 07\n\ncommit 05b4b9160026a91d2a7fc9e50697b8e610ac033d\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 06\n\ncommit 2845ee236cf80b5c1fa998a7d261fe07c1c419df\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 05\n\ncommit 79421ecf116cf2d0ba9e01fb8a8f4bc273caefab\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 04\n\ncommit 7e29f7b43890614ff6f71f9e8957dc1512d3184c\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 03\n\ncommit 8e1cd76f990f4fea1ffbdabd0084ca18937be6ec\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 02\n\ncommit e70772b478d4b6458bb93b70c5a236558e3dcad5\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 01\n\ncommit 714b007b1e11f17eb3df478caf8f40afa5af6ee6\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 00\n",
+      "output_bytes": 3299,
+      "tool_is_error": false,
+      "session": "01a11ec4-7a8e-7651-a11a-abc724835f29"
+    },
+    {
+      "mode": "missing",
+      "requested_command": "git log -20",
+      "executed_command": "git log -20",
+      "rtk_subprocess_arguments": [
+        [
+          "--version"
+        ]
+      ],
+      "output": "commit d4a7d9c4e41ee1e11da4cd9248191c92182806ea\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 19\n\ncommit e9a43da65d60d843e2e737eaaaefb2bf106ccbd8\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 18\n\ncommit 2038d7ad3717444da7bb8555a686f4b41d74ee0e\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 17\n\ncommit 1bcc60a3094cc229cbe1e2e81685390e3f06e2aa\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 16\n\ncommit cd77527450f0c97b462f5224d361b9110c39ad69\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 15\n\ncommit cc4b6fa336e397cfcfccf95776fade5bb9eccb7a\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 14\n\ncommit 89719755f484180d6a7b1876bf28c7efb8dc56ce\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 13\n\ncommit df2f1152cff393823d4e5dc46af55b048c3ae271\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 12\n\ncommit 7d34631edb9d144c9f4ca6ce6eac904634075f06\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 11\n\ncommit 84e09618daa7bb0c727aaeb86483883ad4ab0053\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 10\n\ncommit f512be17ff5f1be04c4830e14f652090ecbb1f4b\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 09\n\ncommit b49442870d5daae1cda6bf855e3e3df899552af1\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 08\n\ncommit 50f911405bebed120d3253d1cd0c822fa0c85b78\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 07\n\ncommit 05b4b9160026a91d2a7fc9e50697b8e610ac033d\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 06\n\ncommit 2845ee236cf80b5c1fa998a7d261fe07c1c419df\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 05\n\ncommit 79421ecf116cf2d0ba9e01fb8a8f4bc273caefab\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 04\n\ncommit 7e29f7b43890614ff6f71f9e8957dc1512d3184c\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 03\n\ncommit 8e1cd76f990f4fea1ffbdabd0084ca18937be6ec\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 02\n\ncommit e70772b478d4b6458bb93b70c5a236558e3dcad5\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 01\n\ncommit 714b007b1e11f17eb3df478caf8f40afa5af6ee6\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 00\n",
+      "output_bytes": 3299,
+      "tool_is_error": false,
+      "session": "01a11ec4-9f9e-7784-a911-f81cfb781eec"
+    },
+    {
+      "mode": "old",
+      "requested_command": "git log -20",
+      "executed_command": "git log -20",
+      "rtk_subprocess_arguments": [
+        [
+          "--version"
+        ]
+      ],
+      "output": "commit d4a7d9c4e41ee1e11da4cd9248191c92182806ea\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 19\n\ncommit e9a43da65d60d843e2e737eaaaefb2bf106ccbd8\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 18\n\ncommit 2038d7ad3717444da7bb8555a686f4b41d74ee0e\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 17\n\ncommit 1bcc60a3094cc229cbe1e2e81685390e3f06e2aa\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 16\n\ncommit cd77527450f0c97b462f5224d361b9110c39ad69\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 15\n\ncommit cc4b6fa336e397cfcfccf95776fade5bb9eccb7a\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 14\n\ncommit 89719755f484180d6a7b1876bf28c7efb8dc56ce\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 13\n\ncommit df2f1152cff393823d4e5dc46af55b048c3ae271\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 12\n\ncommit 7d34631edb9d144c9f4ca6ce6eac904634075f06\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 11\n\ncommit 84e09618daa7bb0c727aaeb86483883ad4ab0053\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 10\n\ncommit f512be17ff5f1be04c4830e14f652090ecbb1f4b\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 09\n\ncommit b49442870d5daae1cda6bf855e3e3df899552af1\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 08\n\ncommit 50f911405bebed120d3253d1cd0c822fa0c85b78\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 07\n\ncommit 05b4b9160026a91d2a7fc9e50697b8e610ac033d\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 06\n\ncommit 2845ee236cf80b5c1fa998a7d261fe07c1c419df\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 05\n\ncommit 79421ecf116cf2d0ba9e01fb8a8f4bc273caefab\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 04\n\ncommit 7e29f7b43890614ff6f71f9e8957dc1512d3184c\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 03\n\ncommit 8e1cd76f990f4fea1ffbdabd0084ca18937be6ec\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 02\n\ncommit e70772b478d4b6458bb93b70c5a236558e3dcad5\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 01\n\ncommit 714b007b1e11f17eb3df478caf8f40afa5af6ee6\nAuthor: Pi Fixture <fixture@example.invalid>\nDate:   Thu Jan 1 00:00:00 2026 +0000\n\n    Synthetic fixture commit 00\n",
+      "output_bytes": 3299,
+      "tool_is_error": false,
+      "session": "01a11ec4-afb1-75d1-a098-bf99cd49102a"
+    },
+    {
+      "mode": "combined",
+      "requested_command": "git log -20",
+      "executed_command": "rtk git log -20",
+      "rtk_subprocess_arguments": [
+        [
+          "--version"
+        ],
+        [
+          "rewrite",
+          "git log -20"
+        ],
+        [
+          "git",
+          "log",
+          "-20"
+        ]
+      ],
+      "output": "d4a7d9c Synthetic fixture commit 19 (9 months ago) <Pi Fixture>\ne9a43da Synthetic fixture commit 18 (9 months ago) <Pi Fixture>\n2038d7a Synthetic fixture commit 17 (9 months ago) <Pi Fixture>\n1bcc60a Synthetic fixture commit 16 (9 months ago) <Pi Fixture>\ncd77527 Synthetic fixture commit 15 (9 months ago) <Pi Fixture>\ncc4b6fa Synthetic fixture commit 14 (9 months ago) <Pi Fixture>\n8971975 Synthetic fixture commit 13 (9 months ago) <Pi Fixture>\ndf2f115 Synthetic fixture commit 12 (9 months ago) <Pi Fixture>\n7d34631 Synthetic fixture commit 11 (9 months ago) <Pi Fixture>\n84e0961 Synthetic fixture commit 10 (9 months ago) <Pi Fixture>\nf512be1 Synthetic fixture commit 09 (9 months ago) <Pi Fixture>\nb494428 Synthetic fixture commit 08 (9 months ago) <Pi Fixture>\n50f9114 Synthetic fixture commit 07 (9 months ago) <Pi Fixture>\n05b4b91 Synthetic fixture commit 06 (9 months ago) <Pi Fixture>\n2845ee2 Synthetic fixture commit 05 (9 months ago) <Pi Fixture>\n79421ec Synthetic fixture commit 04 (9 months ago) <Pi Fixture>\n7e29f7b Synthetic fixture commit 03 (9 months ago) <Pi Fixture>\n8e1cd76 Synthetic fixture commit 02 (9 months ago) <Pi Fixture>\ne70772b Synthetic fixture commit 01 (9 months ago) <Pi Fixture>\n714b007 Synthetic fixture commit 00 (9 months ago) <Pi Fixture>\n",
+      "output_bytes": 1280,
+      "tool_is_error": false,
+      "session": "01a11ec4-bdd6-7039-8656-2a0a40a53248",
+      "memory_status_succeeded": true
+    }
+  ],
+  "complete": true,
+  "extension_sha256": "48f07e4fd8e38b350cae84fe0116d2bc29932d535e333a307cb9e477f5272de6",
+  "verification": {
+    "pi_version": "1.1.0",
+    "runner": "pi/verify-rtk.py",
+    "runner_sha256": "dc1bf5595f7c20db4cda37e24382b5d0c535b151b2c3ad3bdbb66c29b3f61189",
+    "separate_agent_directory": true,
+    "upstream_tag": "v0.48.0",
+    "upstream_commit": "fde0a8f185945556f51718de0f4c430bb62b3df6",
+    "generated_extension_matches_upstream": true,
+    "test_instrumentation": "Private command gate and RTK audit wrapper; not part of runtime integration.",
+    "raw_output_is_synthetic": true,
+    "port_complete": false
+  }
+}

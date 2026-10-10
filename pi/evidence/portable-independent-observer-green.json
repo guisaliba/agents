@@ -1,0 +1,7 @@
+{
+  "passed": true,
+  "live_model_requests": 0,
+  "status": [
+    "You should know: on \u00b7 0 checks this session \u00b7 skip 0 \u00b7 model openai/gpt-6-luna \u00b7 thinking max \u00b7 config /home/guisaliba/.local/share/pi-port/agent/you-should-know/config.json \u00b7 log /home/guisaliba/.local/share/pi-port/agent/you-should-know/checks.jsonl"
+  ]
+}

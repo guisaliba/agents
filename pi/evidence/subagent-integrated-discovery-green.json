@@ -1,0 +1,90 @@
+{
+  "complete": true,
+  "port_complete": false,
+  "model_requests": 0,
+  "checks": [
+    {
+      "name": "exact approved skill discovery",
+      "passed": true,
+      "skills": [
+        "ai-memory-durable-pages",
+        "ai-memory-handoff",
+        "ai-memory-learning-maintenance",
+        "ai-memory-retrieval",
+        "ai-memory-routing-install",
+        "caveman",
+        "cloudflare",
+        "codebase-design",
+        "daily-tasks",
+        "domain-modeling",
+        "find-skills",
+        "grill-with-docs",
+        "grilling",
+        "improve",
+        "logging-best-practices",
+        "omarchy",
+        "tdd",
+        "teach",
+        "visualize",
+        "wrangler"
+      ]
+    },
+    {
+      "name": "Approved tools and subagent selection",
+      "passed": true,
+      "active_tools": [
+        "agent_output",
+        "agent_pause",
+        "agent_spawn",
+        "agent_status",
+        "agent_steer",
+        "agent_stop",
+        "agent_types",
+        "agent_update",
+        "agent_wait",
+        "ask_user_question",
+        "bash",
+        "edit",
+        "memory_auto_improve",
+        "memory_briefing",
+        "memory_consolidate",
+        "memory_delete_page",
+        "memory_explore",
+        "memory_feedback",
+        "memory_forget_sweep",
+        "memory_handoff_accept",
+        "memory_handoff_begin",
+        "memory_handoff_cancel",
+        "memory_handoff_list",
+        "memory_install_self_routing",
+        "memory_lint",
+        "memory_message_cancel",
+        "memory_message_list",
+        "memory_message_pop",
+        "memory_message_send",
+        "memory_query",
+        "memory_read_page",
+        "memory_read_session_observations",
+        "memory_recent",
+        "memory_status",
+        "memory_write_page",
+        "quiz",
+        "read",
+        "write"
+      ],
+      "commands": [
+        "agents",
+        "md-log",
+        "md-unlog",
+        "ysk"
+      ]
+    },
+    {
+      "name": "upstream sample RPC note and answer commands",
+      "passed": true,
+      "sample_note_not_model_generated": true,
+      "side_model": "openai/gpt-6-luna"
+    }
+  ],
+  "shared_settings_metadata_unchanged": true
+}

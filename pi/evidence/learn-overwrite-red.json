@@ -1,0 +1,29 @@
+{
+  "checks": [
+    {
+      "name": "only original Learn Markdown commands load",
+      "passed": true
+    },
+    {
+      "name": "selected exact model produces a real assistant response",
+      "passed": true
+    },
+    {
+      "name": "Markdown preservation",
+      "passed": false
+    }
+  ],
+  "complete": false,
+  "port_complete": false,
+  "scope": "real Pi Markdown command and file preservation; no subagents or visuals",
+  "model": "openai/gpt-6-luna",
+  "extension_sha256": "48e778ce827124cae020f2c1abd7a85337c528d9ded577505871df21d836d040",
+  "artifacts": [
+    "before.md",
+    "after.md"
+  ],
+  "session": "01a11fa2-119c-74fd-b53e-bc77cfec28b3",
+  "failure": "Existing note content was removed by /md-log",
+  "shared_settings_metadata_unchanged": true,
+  "fixture_directory": "/tmp/pi-port-docs/learn-preservation-red-fixtures"
+}

@@ -1,0 +1,6 @@
+{
+  "complete": false,
+  "failure": "RuntimeError in resource discovery after successful provisioning.",
+  "cause": "The runner used shutil.which(pi), but its PATH did not contain the private Pi binary.",
+  "correction": "Add --pi-binary to the resource verifier and pass the private executable. The corrected full container run passed."
+}

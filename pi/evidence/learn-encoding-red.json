@@ -1,0 +1,25 @@
+{
+  "checks": [
+    {
+      "name": "only original Learn Markdown commands load",
+      "passed": true
+    },
+    {
+      "name": "read-only linking is refused before any lesson history exists",
+      "passed": true
+    },
+    {
+      "name": "Markdown preservation",
+      "passed": false
+    }
+  ],
+  "complete": false,
+  "port_complete": false,
+  "scope": "real Pi Markdown command and file preservation; no subagents or visuals",
+  "model": "openai/gpt-6-luna",
+  "extension_sha256": "df44bee222825f063d57510452b753d543b0c5d605b1bd440921d774daee6f94",
+  "artifacts": [],
+  "failure": "A note with invalid UTF-8 was changed or reported as linked",
+  "shared_settings_metadata_unchanged": true,
+  "fixture_directory": "/tmp/pi-port-docs/learn-encoding-red-fixtures"
+}

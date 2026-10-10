@@ -1,0 +1,388 @@
+{
+  "server_version": "2.6.2",
+  "models": [
+    "opencode-go/deepseek-v4.1-flash"
+  ],
+  "checks": [
+    {
+      "name": "concurrent session-aware routing",
+      "passed": true,
+      "sessions": [
+        "01a11ebc-9312-7075-b92c-0630f67abe54",
+        "01a11ebc-96d4-70fc-80b8-cec8a97e5a76"
+      ]
+    },
+    {
+      "name": "selected models perform real memory-tool calls",
+      "passed": true,
+      "models": [
+        "opencode-go/deepseek-v4.1-flash"
+      ]
+    },
+    {
+      "name": "unscoped project write",
+      "passed": true
+    },
+    {
+      "name": "cross-session retrieval",
+      "passed": true,
+      "session": "01a11ebc-c746-70c7-9db1-97e4919d30d1"
+    },
+    {
+      "name": "natural-language cross-project retrieval",
+      "passed": true,
+      "session": "01a11ebc-eccb-7668-bce0-df666263c571"
+    },
+    {
+      "name": "automatic cross-project profile delivery",
+      "passed": true,
+      "session": "01a11ebd-0f0a-71e1-b027-2d2b25b1e101",
+      "delivery": "upstream ai-memory-handoff custom message",
+      "profile_path": "tools/pi-port-4efb7938c8.md"
+    },
+    {
+      "name": "automatic lifecycle capture and isolated stored observation scopes",
+      "passed": true,
+      "sessions": [
+        {
+          "session": "01a11ebc-9312-7075-b92c-0630f67abe54",
+          "agent": "pi",
+          "ended": true,
+          "workspace": "pi-port-4efb7938c8",
+          "project": "fixture-a-4efb7938c8",
+          "observations_by_kind": {
+            "post-tool-use": 3,
+            "pre-tool-use": 3,
+            "session-end": 1,
+            "session-start": 1,
+            "stop": 3,
+            "user-prompt": 3
+          }
+        },
+        {
+          "session": "01a11ebc-96d4-70fc-80b8-cec8a97e5a76",
+          "agent": "pi",
+          "ended": true,
+          "workspace": "pi-port-4efb7938c8",
+          "project": "fixture-b-4efb7938c8",
+          "observations_by_kind": {
+            "post-tool-use": 1,
+            "pre-tool-use": 1,
+            "session-end": 1,
+            "session-start": 1,
+            "stop": 1,
+            "user-prompt": 1
+          }
+        },
+        {
+          "session": "01a11ebc-c746-70c7-9db1-97e4919d30d1",
+          "agent": "pi",
+          "ended": true,
+          "workspace": "pi-port-4efb7938c8",
+          "project": "fixture-a-4efb7938c8",
+          "observations_by_kind": {
+            "post-tool-use": 3,
+            "pre-tool-use": 3,
+            "session-end": 1,
+            "session-start": 1,
+            "stop": 1,
+            "user-prompt": 1
+          }
+        },
+        {
+          "session": "01a11ebc-eccb-7668-bce0-df666263c571",
+          "agent": "pi",
+          "ended": true,
+          "workspace": "pi-port-4efb7938c8",
+          "project": "fixture-b-4efb7938c8",
+          "observations_by_kind": {
+            "post-tool-use": 4,
+            "pre-tool-use": 4,
+            "session-end": 1,
+            "session-start": 1,
+            "stop": 2,
+            "user-prompt": 2
+          }
+        },
+        {
+          "session": "01a11ebd-0f0a-71e1-b027-2d2b25b1e101",
+          "agent": "pi",
+          "ended": true,
+          "workspace": "pi-port-4efb7938c8",
+          "project": "fixture-a-4efb7938c8",
+          "observations_by_kind": {
+            "session-end": 1,
+            "session-start": 1,
+            "stop": 1,
+            "user-prompt": 1
+          }
+        },
+        {
+          "session": "01a11ebd-17e8-72b1-8d5c-0bfce22d6d2b",
+          "agent": "pi",
+          "ended": true,
+          "workspace": "pi-port-4efb7938c8",
+          "project": "fixture-b-4efb7938c8",
+          "observations_by_kind": {
+            "post-tool-use": 1,
+            "pre-tool-use": 1,
+            "session-end": 1,
+            "session-start": 1,
+            "stop": 1,
+            "user-prompt": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "pre-existing record identifiers preserved",
+      "passed": true,
+      "counts_before": {
+        "pages": 22,
+        "sessions": 19,
+        "observations": 166
+      },
+      "counts_after": {
+        "pages": 29,
+        "sessions": 25,
+        "observations": 220
+      }
+    },
+    {
+      "name": "shared Pi settings metadata unchanged",
+      "passed": true
+    }
+  ],
+  "events": [
+    {
+      "type": "session",
+      "id": "01a11ebc-9312-7075-b92c-0630f67abe54",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "cwd": "<private-test-directory>/fixture-a-4efb7938c8"
+    },
+    {
+      "type": "session",
+      "id": "01a11ebc-96d4-70fc-80b8-cec8a97e5a76",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "cwd": "<private-test-directory>/fixture-b-4efb7938c8"
+    },
+    {
+      "type": "tool_call",
+      "session": "01a11ebc-9312-7075-b92c-0630f67abe54",
+      "name": "memory_status",
+      "arguments": {}
+    },
+    {
+      "type": "tool_result",
+      "session": "01a11ebc-9312-7075-b92c-0630f67abe54",
+      "name": "memory_status",
+      "is_error": false
+    },
+    {
+      "type": "tool_call",
+      "session": "01a11ebc-96d4-70fc-80b8-cec8a97e5a76",
+      "name": "memory_status",
+      "arguments": {}
+    },
+    {
+      "type": "tool_result",
+      "session": "01a11ebc-96d4-70fc-80b8-cec8a97e5a76",
+      "name": "memory_status",
+      "is_error": false
+    },
+    {
+      "type": "tool_call",
+      "session": "01a11ebc-9312-7075-b92c-0630f67abe54",
+      "name": "memory_status",
+      "arguments": {}
+    },
+    {
+      "type": "tool_result",
+      "session": "01a11ebc-9312-7075-b92c-0630f67abe54",
+      "name": "memory_status",
+      "is_error": false
+    },
+    {
+      "type": "tool_call",
+      "session": "01a11ebc-9312-7075-b92c-0630f67abe54",
+      "name": "memory_write_page",
+      "arguments": {
+        "path": "notes/typescript-tool.md",
+        "body": "# Cedar Sieve\n\nCedar Sieve is a tiny TypeScript tool built here to remove duplicate import declarations. It emits a sorted import list. This is synthetic test data, not a real project fact."
+      }
+    },
+    {
+      "type": "tool_result",
+      "session": "01a11ebc-9312-7075-b92c-0630f67abe54",
+      "name": "memory_write_page",
+      "is_error": false
+    },
+    {
+      "type": "session",
+      "id": "01a11ebc-c746-70c7-9db1-97e4919d30d1",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "cwd": "<private-test-directory>/fixture-a-4efb7938c8"
+    },
+    {
+      "type": "tool_call",
+      "session": "01a11ebc-c746-70c7-9db1-97e4919d30d1",
+      "name": "memory_query",
+      "arguments": {
+        "query": "TypeScript tool remove duplicate import declarations"
+      }
+    },
+    {
+      "type": "tool_call",
+      "session": "01a11ebc-c746-70c7-9db1-97e4919d30d1",
+      "name": "memory_status",
+      "arguments": {}
+    },
+    {
+      "type": "tool_result",
+      "session": "01a11ebc-c746-70c7-9db1-97e4919d30d1",
+      "name": "memory_query",
+      "is_error": false
+    },
+    {
+      "type": "tool_result",
+      "session": "01a11ebc-c746-70c7-9db1-97e4919d30d1",
+      "name": "memory_status",
+      "is_error": false
+    },
+    {
+      "type": "tool_call",
+      "session": "01a11ebc-c746-70c7-9db1-97e4919d30d1",
+      "name": "memory_read_page",
+      "arguments": {
+        "path": "notes/typescript-tool.md"
+      }
+    },
+    {
+      "type": "tool_result",
+      "session": "01a11ebc-c746-70c7-9db1-97e4919d30d1",
+      "name": "memory_read_page",
+      "is_error": false
+    },
+    {
+      "type": "session",
+      "id": "01a11ebc-eccb-7668-bce0-df666263c571",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "cwd": "<private-test-directory>/fixture-b-4efb7938c8"
+    },
+    {
+      "type": "tool_call",
+      "session": "01a11ebc-eccb-7668-bce0-df666263c571",
+      "name": "memory_query",
+      "arguments": {
+        "query": "duplicate import declarations TypeScript tool",
+        "global": true
+      }
+    },
+    {
+      "type": "tool_call",
+      "session": "01a11ebc-eccb-7668-bce0-df666263c571",
+      "name": "memory_status",
+      "arguments": {}
+    },
+    {
+      "type": "tool_result",
+      "session": "01a11ebc-eccb-7668-bce0-df666263c571",
+      "name": "memory_query",
+      "is_error": false
+    },
+    {
+      "type": "tool_result",
+      "session": "01a11ebc-eccb-7668-bce0-df666263c571",
+      "name": "memory_status",
+      "is_error": false
+    },
+    {
+      "type": "tool_call",
+      "session": "01a11ebc-eccb-7668-bce0-df666263c571",
+      "name": "memory_read_page",
+      "arguments": {
+        "path": "notes/typescript-tool.md",
+        "workspace": "pi-port-4efb7938c8",
+        "project": "fixture-a-4efb7938c8"
+      }
+    },
+    {
+      "type": "tool_result",
+      "session": "01a11ebc-eccb-7668-bce0-df666263c571",
+      "name": "memory_read_page",
+      "is_error": false
+    },
+    {
+      "type": "tool_call",
+      "session": "01a11ebc-eccb-7668-bce0-df666263c571",
+      "name": "memory_write_page",
+      "arguments": {
+        "scope": "profile",
+        "path": "tools/pi-port-4efb7938c8.md",
+        "body": "# Pi verification label\n\nFor synthetic Pi port verification fixtures only, use the label amber-copper-4efb7938c8. This entry will be deleted after the delivery check."
+      }
+    },
+    {
+      "type": "tool_result",
+      "session": "01a11ebc-eccb-7668-bce0-df666263c571",
+      "name": "memory_write_page",
+      "is_error": false
+    },
+    {
+      "type": "session",
+      "id": "01a11ebd-0f0a-71e1-b027-2d2b25b1e101",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "cwd": "<private-test-directory>/fixture-a-4efb7938c8"
+    },
+    {
+      "type": "session",
+      "id": "01a11ebd-17e8-72b1-8d5c-0bfce22d6d2b",
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "cwd": "<private-test-directory>/fixture-b-4efb7938c8"
+    },
+    {
+      "type": "tool_call",
+      "session": "01a11ebd-17e8-72b1-8d5c-0bfce22d6d2b",
+      "name": "memory_delete_page",
+      "arguments": {
+        "path": "tools/pi-port-4efb7938c8.md",
+        "scope": "profile"
+      }
+    },
+    {
+      "type": "tool_result",
+      "session": "01a11ebd-17e8-72b1-8d5c-0bfce22d6d2b",
+      "name": "memory_delete_page",
+      "is_error": false
+    }
+  ],
+  "profile_fixture_removed": true,
+  "complete": true,
+  "extension_sha256": "cc1aca7b1572aea83d16916c69ed27cdcf174801c31ad2ffd140adc1d954fd3f",
+  "workspace": "pi-port-4efb7938c8",
+  "project_a": "fixture-a-4efb7938c8",
+  "project_b": "fixture-b-4efb7938c8",
+  "sessions": [
+    "01a11ebc-9312-7075-b92c-0630f67abe54",
+    "01a11ebc-96d4-70fc-80b8-cec8a97e5a76",
+    "01a11ebc-c746-70c7-9db1-97e4919d30d1",
+    "01a11ebc-eccb-7668-bce0-df666263c571",
+    "01a11ebd-0f0a-71e1-b027-2d2b25b1e101",
+    "01a11ebd-17e8-72b1-8d5c-0bfce22d6d2b"
+  ],
+  "release": {
+    "tag": "v2.6.2",
+    "archive_sha256": "dc73118f772763a119b03d387f6f44f0b866d85498851b74aa5152944ef2e650",
+    "checksum_verified": true
+  },
+  "verification": {
+    "pi_version": "1.1.0",
+    "runner": "pi/verify-ai-memory.py",
+    "runner_sha256": "25c551d1433eb5201a5942dacd7dd7f784be34de2bf787404dd80b0c344bf901",
+    "separate_agent_directory": true,
+    "authentication": "User-configured API key; resolved by Pi; not read or displayed by the assistant.",
+    "artificial_startup_delay": false,
+    "profile_learning_tested": false,
+    "port_complete": false
+  }
+}

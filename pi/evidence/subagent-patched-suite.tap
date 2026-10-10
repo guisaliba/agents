@@ -1,0 +1,844 @@
+
+> pi-subagent-manager@0.20.0 test
+> tsx --test tests/*.test.ts
+
+✔ first run consent and individual selection enqueue only selected paths, never converted files (89.649744ms)
+✔ decline, empty selection and cancellation never request a model turn (86.098648ms)
+✔ manual import can retry onboarding; project sources require trust (20.313854ms)
+✔ non-TUI does not mark onboarding or send a model turn (32.139079ms)
+✔ skills alone never open the import offer or selector (8.846749ms)
+✔ symlinked onboarding state fails closed without touching its target (8.309416ms)
+✔ Left opens at the beginning of the draft after stock dispatch, preserving text and cursor (174.474801ms)
+✔ Left moves normally inside single, multiline, and wrapped drafts; reaching start does not open (93.291101ms)
+✔ Down never opens: empty, end-of-draft, exhausted history, and ordinary history remain stock (3.276377ms)
+✔ only physical unmodified Left opens, and configured conflicts retain precedence (11.944814ms)
+✔ extension shortcuts and application actions dispatch once and prevent navigation (3.690508ms)
+✔ jump cancellation and bracketed paste, including recursive suffixes, never open (17.368754ms)
+✔ active autocomplete owns input (10.549574ms)
+✔ repeated Left coalesces until the entire browser interaction finishes (7.896316ms)
+✔ queued transitions revalidate generation, focus, ownership, draft, cursor, disposal, and input (12.470033ms)
+✔ navigation failures report errors and release ownership (5.15512ms)
+✔ startup history hydration and replacement history preserve intentional repeated prompts (1.62369ms)
+✔ openTree runs in the validated microtask (3.968876ms)
+✔ global keybinding conflicts disable navigation (3.004964ms)
+✔ Right collapses at the end of the draft after stock dispatch without changing it (59.422392ms)
+✔ Right moves normally and never collapses just by reaching the end (5.755763ms)
+✔ Right respects shortcuts, remappings, focus, paste, jumps and autocomplete (16.109364ms)
+✔ queued collapse is cancelled by new input, disposal, root replacement or changed eligibility (7.51882ms)
+✔ collapse failures report errors and release ownership (8.493188ms)
+✔ host callbacks survive stock dispatch, replacement, and errors (5.09525ms)
+✔ circle progress frames shape-shift deterministically and settled indicators remain static (14.910558ms)
+✔ widgets animate active glyphs, retain role glyphs in every state, and fit narrow widths (84.826174ms)
+✔ full and minimal widgets repaint at animation cadence, dispose timers, and RPC stays static (5.681184ms)
+✔ status tree reuses its polling timer, speeds up only while active, and stops after disposal (7.038604ms)
+✔ settled and disabled live headers allocate no animation timer (10.141311ms)
+✔ live headers animate without transcript events, freeze on settlement, resume and dispose (5.425613ms)
+✔ overflow previews select the most recent agents within a state (46.972075ms)
+✔ status tree honors a sibling comparator but cycle repair stays lexical (2.747373ms)
+✔ agent tree heading, hierarchy, declared parents, and root exclusion (6.230675ms)
+✔ agents sort newest-started first; a branch ranks by its most recent start (3.408984ms)
+✔ shows task and elapsed tokens in one row per agent without status text (3.849831ms)
+✔ omits lifecycle and activity lines for every state without changing retained status (5.598409ms)
+✔ sanitizes controls and clips unicode without dropping right counters (11.348233ms)
+✔ ends below agent rows with running count and browser entry (1.896195ms)
+✔ browser hint appears only for starting or running subagents in either widget mode (12.320956ms)
+✔ bounds the widget to twelve lines and counts every omitted real agent (20.768927ms)
+✔ live branches cannot be hidden by settled descendants (11.727099ms)
+✔ browser strip counts unique real starting/running agents and clips safely (15.642565ms)
+✔ cycle rendering stays finite and keeps both agents with their parent row (1.383833ms)
+✔ updateWidget pins the tree above the editor, clears when empty, and uses strings in RPC (9.761571ms)
+✔ widget collapses only after the root turn ends and every real agent is idle (28.943655ms)
+✔ minimal summary counts unique real agents with semantic colors and active-only token sums (1.681987ms)
+✔ minimal summary handles empty and settled agents, metrics boundaries, and narrow widths (4.462058ms)
+✔ updateWidget retains full default and switches minimal/full in TUI and RPC (3.333419ms)
+✔ full widget status strip resolves the current theme at render time (2.726514ms)
+✔ minimal widget resolves live themes without allocating elapsed-time timers (3.696529ms)
+✔ bundled agents load cleanly, resolve their tools, and carry only advisory suggestions (116.64176ms)
+✔ researcher is non-delegating; tasker stays cheap-first (25.81749ms)
+✔ a missing bundled directory disables packaged defaults without dropping user agents (45.808458ms)
+✖ preview writes CHANGELOG.md and does not publish a release or file (198.488697ms)
+✖ publish creates the current release and updates main with the contents SHA (210.482101ms)
+✖ existing release on a later page is edited, not recreated, and highlights survive (265.793455ms)
+✖ prerelease publish is not marked latest (211.356706ms)
+✖ publish with an empty CHANGELOG_TAG only updates the changelog (175.132417ms)
+✖ HTTP 409 retries with a fresh SHA and refreshed tags without republishing (159.690952ms)
+✖ a missing changelog is created without a SHA (153.775047ms)
+✖ an unchanged changelog does not create another commit (165.971482ms)
+✖ permission errors fail visibly instead of being treated as missing files (166.754238ms)
+node:internal/modules/esm/resolve:271
+    throw new ERR_MODULE_NOT_FOUND(
+          ^
+
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/tmp/pi-port-docs/subagent-patch-work/manager/.github/scripts/changelog.ts' imported from /tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog.test.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:271:11)
+    at moduleResolve (node:internal/modules/esm/resolve:861:10)
+    at defaultResolve (node:internal/modules/esm/resolve:988:11)
+    at #cachedDefaultResolve (node:internal/modules/esm/loader:697:20)
+    at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:714:38)
+    at nextStep (node:internal/modules/customization_hooks:189:26)
+    at resolveBaseSync (file:///tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-nyXW-TH3.mjs:2:11092)
+    at resolveDirectorySync (file:///tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-nyXW-TH3.mjs:2:12398)
+    at resolveTsPathsSync (file:///tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-nyXW-TH3.mjs:2:13605)
+    at resolve (file:///tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-nyXW-TH3.mjs:2:16832) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///tmp/pi-port-docs/subagent-patch-work/manager/.github/scripts/changelog.ts'
+}
+
+Node.js v25.9.0
+✖ tests/changelog.test.ts (319.145772ms)
+node:internal/modules/esm/resolve:310
+  return new ERR_PACKAGE_PATH_NOT_EXPORTED(
+         ^
+
+Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: No "exports" main defined in /tmp/pi-port-docs/subagent-patch-work/node_modules/@earendil-works/pi-coding-agent/package.json
+    at exportsNotFound (node:internal/modules/esm/resolve:310:10)
+    at packageExportsResolve (node:internal/modules/esm/resolve:601:13)
+    at resolveExports (node:internal/modules/cjs/loader:684:36)
+    at Module._findPath (node:internal/modules/cjs/loader:751:31)
+    at node:internal/modules/cjs/loader:1460:27
+    at nextResolveSimple (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1010)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:4512
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:2830
+    at resolveTsPaths (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:762)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1203 {
+  code: 'ERR_PACKAGE_PATH_NOT_EXPORTED'
+}
+
+Node.js v25.9.0
+✖ tests/commands.test.ts (5625.635582ms)
+✔ parse/serialize round-trips fields, canonicalizes legacy model, and drops provenance (52.672004ms)
+✔ parser rejects malformed frontmatter and invalid field values (41.167365ms)
+✔ modelSuggestions are trimmed, keep an explicit empty list, and are omitted when absent (24.041148ms)
+✔ selectTools has exact names, empty allow, block wins and stable available order (1.301445ms)
+✔ selectTools modes ignore irrelevant lists and deduplicate available names in order (2.10931ms)
+✔ precedence, source, filePath, trust switch and defensive copies (25.917097ms)
+✔ malformed overrides block both filename and declared name while other files load (10.215958ms)
+✔ legacy agent directories (including symlinked ones) are ignored (5.63132ms)
+✔ saves write canonical storage, keep existing filenames, and never touch bundled files (23.879242ms)
+✔ symlink definitions fail closed and symlink save destinations are rejected (8.789117ms)
+✔ settings overrides parse, reject bodies, and round-trip sparse fields (6.073855ms)
+✔ merges keep unset fields on the base and null clears optional fields (1.131558ms)
+✔ user .yml merges over bundled, project .yml merges over user, forks win (8.022106ms)
+✔ override conflicts fail closed without dropping other agents (5.57307ms)
+✔ saveOverride writes sparse .yml and removeCustomization restores the base (8.374394ms)
+✔ footer native usage includes caches, tool results, usage entries and compaction across branches (9.038646ms)
+✔ footer shows combined dollars once and refreshes after settlement, preserving stats/statuses (10.55007ms)
+✔ external footer receives only its cost slot; never install or clear its footer (2.950636ms)
+✔ without a footer extension, install fallback only once cost exists and reset between sessions (0.709305ms)
+✔ prompt/skill named footer cannot claim the footer; loaded extension command can (0.528377ms)
+✔ an external footer taking ownership is never cleared by a previous fallback owner (1.030876ms)
+✔ status-key mode registers zero cost for discovery and Pi status mode is labeled (1.763861ms)
+✔ switching transports clears old values and removes only our own fallback footer (1.057535ms)
+✔ start/run/stop/resume/stop rolls up only new dollars, across every inactive state (3.937651ms)
+✔ reload, duplicate entries, rewind, and removed agents cannot recount old dollars (1.247538ms)
+✔ a parent's own cost and nested agents are each counted exactly once (0.48858ms)
+✔ invalid costs are ignored and failed persistence can be retried (1.224293ms)
+node:internal/modules/esm/resolve:310
+  return new ERR_PACKAGE_PATH_NOT_EXPORTED(
+         ^
+
+Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: No "exports" main defined in /tmp/pi-port-docs/subagent-patch-work/node_modules/@earendil-works/pi-coding-agent/package.json
+    at exportsNotFound (node:internal/modules/esm/resolve:310:10)
+    at packageExportsResolve (node:internal/modules/esm/resolve:601:13)
+    at resolveExports (node:internal/modules/cjs/loader:684:36)
+    at Module._findPath (node:internal/modules/cjs/loader:751:31)
+    at node:internal/modules/cjs/loader:1460:27
+    at nextResolveSimple (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1010)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:4512
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:2830
+    at resolveTsPaths (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:762)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1203 {
+  code: 'ERR_PACKAGE_PATH_NOT_EXPORTED'
+}
+
+Node.js v25.9.0
+✖ tests/cost-rollup-integration.test.ts (5629.903304ms)
+✔ frameDialog bounds, sanitizes, borders, and pads to a fixed height (28.905315ms)
+✔ menu restores selection, navigates, selects, saves, and cancels within bounds (10.687523ms)
+✔ menu values keep their warning color and column even on the selected row (29.365528ms)
+✔ menu wraps long help text and reserves space for it (22.237983ms)
+✔ menu and input help preserve explicit newlines while sanitizing and wrapping (3.638515ms)
+✔ multiline editor forwards focus, keeps cursor visible, applies with Ctrl+S, and cancels (14.697988ms)
+✔ multiline editor strips control sequences but returns unchanged prefill verbatim (1.31668ms)
+✔ DialogSession delegates focus and ignores keys after a child finishes (7.010674ms)
+✔ withDialogSession shadows getter-only ui without mutating the original context (1.623547ms)
+✔ a failing child rejects without closing the session (2.247306ms)
+✔ TuiMainScreen: settings transitions keep one overlay mounted without full redraws (335.437142ms)
+✔ TuiMainScreen: a non-overlay custom view restores session focus (6.453287ms)
+✔ TuiMainScreen: immediately finishing workflows leave no overlay (2.15772ms)
+✔ TuiMainScreen: immediately throwing workflows leave no overlay (4.513688ms)
+✔ TuiAltScreen: settings transitions keep one overlay mounted without full redraws (216.082998ms)
+✔ TuiAltScreen: a non-overlay custom view restores session focus (4.845574ms)
+✔ TuiAltScreen: immediately finishing workflows leave no overlay (4.147501ms)
+✔ TuiAltScreen: immediately throwing workflows leave no overlay (3.822179ms)
+node:internal/modules/esm/resolve:310
+  return new ERR_PACKAGE_PATH_NOT_EXPORTED(
+         ^
+
+Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: No "exports" main defined in /tmp/pi-port-docs/subagent-patch-work/node_modules/@earendil-works/pi-coding-agent/package.json
+    at exportsNotFound (node:internal/modules/esm/resolve:310:10)
+    at packageExportsResolve (node:internal/modules/esm/resolve:601:13)
+    at resolveExports (node:internal/modules/cjs/loader:684:36)
+    at Module._findPath (node:internal/modules/cjs/loader:751:31)
+    at node:internal/modules/cjs/loader:1460:27
+    at nextResolveSimple (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1010)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:4512
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:2830
+    at resolveTsPaths (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:762)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1203 {
+  code: 'ERR_PACKAGE_PATH_NOT_EXPORTED'
+}
+
+Node.js v25.9.0
+✖ tests/final-recap-integration.test.ts (5386.60618ms)
+node:internal/modules/esm/resolve:310
+  return new ERR_PACKAGE_PATH_NOT_EXPORTED(
+         ^
+
+Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: No "exports" main defined in /tmp/pi-port-docs/subagent-patch-work/node_modules/@earendil-works/pi-coding-agent/package.json
+    at exportsNotFound (node:internal/modules/esm/resolve:310:10)
+    at packageExportsResolve (node:internal/modules/esm/resolve:601:13)
+    at resolveExports (node:internal/modules/cjs/loader:684:36)
+    at Module._findPath (node:internal/modules/cjs/loader:751:31)
+    at node:internal/modules/cjs/loader:1460:27
+    at nextResolveSimple (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1010)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:4512
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:2830
+    at resolveTsPaths (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:762)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1203 {
+  code: 'ERR_PACKAGE_PATH_NOT_EXPORTED'
+}
+
+Node.js v25.9.0
+✖ tests/footer-slot-integration.test.ts (5095.426104ms)
+✔ discovers user and project paths without package builtins or manager storage (37.912936ms)
+✔ uses the nearest trusted ancestor and skips untrusted or farther roots (11.856563ms)
+✔ expands custom scan dirs, env roots, wildcards and scope-specific excludes (13.435845ms)
+✔ skips chains, symlinks and broken frontmatter; keeps distinct paths and tintin fallbacks (18.145051ms)
+✔ absent paths are silent, explicit extra dirs ignore the host env, and discovery does not write (6.460871ms)
+✔ settings behind symlinked scope directories cannot add scan roots or reach the model (3.258255ms)
+✔ non-YAML tool selectors remain selectable for model interpretation (4.90845ms)
+✔ reports an unreadable definition without failing the rest of discovery (2.712468ms)
+✔ never offers skill trees or SKILL.md files from user, project, configured, or env roots (10.304939ms)
+✔ starts empty, toggles a subset, and submits it in source order (17.393509ms)
+✔ enter with nothing selected skips, escape cancels, and an empty list is inert (2.749601ms)
+✔ ctrl+a toggles every agent on and back off (0.852617ms)
+✔ navigation keys scroll a long list, keep selection, and stay within the frame (10.929678ms)
+✔ long details are capped to the frame width (1.039006ms)
+✔ sanitizes source text in labels and details (3.650486ms)
+✔ preserves trusted resets produced by frame clipping (1.588023ms)
+✔ selectImportAgents opens one checkbox overlay and returns its ids (0.970131ms)
+node:internal/modules/esm/resolve:310
+  return new ERR_PACKAGE_PATH_NOT_EXPORTED(
+         ^
+
+Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: No "exports" main defined in /tmp/pi-port-docs/subagent-patch-work/node_modules/@earendil-works/pi-coding-agent/package.json
+    at exportsNotFound (node:internal/modules/esm/resolve:310:10)
+    at packageExportsResolve (node:internal/modules/esm/resolve:601:13)
+    at resolveExports (node:internal/modules/cjs/loader:684:36)
+    at Module._findPath (node:internal/modules/cjs/loader:751:31)
+    at node:internal/modules/cjs/loader:1460:27
+    at nextResolveSimple (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1010)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:4512
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:2830
+    at resolveTsPaths (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:762)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1203 {
+  code: 'ERR_PACKAGE_PATH_NOT_EXPORTED'
+}
+
+Node.js v25.9.0
+✖ tests/integration.test.ts (5259.345137ms)
+✔ live viewer shows assistant/tool streams and browsing never sends input (103.382239ms)
+✔ bottom input sends Enter to the inspected descendant through the steering service (346.928516ms)
+✔ input cursor editing and Tab browsing preserve the draft and forward focus (62.848268ms)
+✔ pending steering blocks duplicate submissions and preserves edits made while sending (52.834374ms)
+✔ failed steering keeps the draft for retry and sanitizes error feedback (78.171997ms)
+✔ bracketed paste cannot submit, navigate, or inject terminal controls (54.94271ms)
+✔ late steering settlement never repaints a disposed viewer (103.841249ms)
+✔ message Markdown matches pi's renderer, including syntax highlighting and resize (108.068454ms)
+✔ streaming, inherited, custom and visible thinking text use Markdown too (48.903622ms)
+✔ tool calls pair with results using native previews while messages stay complete (69.208524ms)
+✔ transcript has one column of side padding; tool calls and results use pi's tool backgrounds (28.878169ms)
+✔ t cycles preview, compact and full detail for tool calls and thinking (41.310689ms)
+✔ previews count wrapped rows, keep short results intact, and sanitize tool output (42.371831ms)
+✔ long steer and agent messages are not subject to the old tool output size cap (227.672185ms)
+✔ tail following pauses on scroll and per-agent state restores across remount (81.195823ms)
+✔ viewer fits and covers tiny/large terminals and sanitizes all untrusted text (271.310566ms)
+✔ burst updates coalesce renders and disposed/older subscriptions cannot repaint (78.203888ms)
+✔ retry ignores old callbacks and close cleans up late async attachment (79.851963ms)
+✔ nested tool notifications group beneath parents even when arriving out of order (30.123453ms)
+✔ paired tools refresh from partial to committed results without stale output or duplication (30.637014ms)
+✔ collapsed inherited tool results cannot reappear through retained live-tool state (33.836533ms)
+✔ hourglass completion uses a solid check-square rather than a running frame (5.681781ms)
+✔ loader styles default to circle, layer by key, persist in both scopes and reject invalid layers atomically (15.42267ms)
+✔ every family cycles all frames, freezes RPC, and has distinct stable completed/paused/failed/stopped indicators (8.401202ms)
+✔ separate loader prefix never loosens custom-role or terminal-control validation (0.640406ms)
+✔ all surfaces show chosen loader before role icon and selected state in every family (164.30448ms)
+✔ notification failure cannot crash a detached runner: settled (352.98099ms)
+✔ notification failure cannot crash a detached runner: running (357.372959ms)
+✔ notification failure cannot crash a detached runner: failed-prompt (350.831062ms)
+✔ notification failure cannot crash a detached runner: all-events (343.177293ms)
+✔ spawn snapshots only lexical parent; independent roots have no root context (64.694968ms)
+✔ pause stops without handback; completed and paused revive SAME driver (12.017471ms)
+✔ busy steering queues while progress stays nonfinal and goes to parent (2.142746ms)
+✔ concurrent steer after failed startup reserves one restart and queues the next (8.401578ms)
+✔ nested child reopens its parent first; a failed parent open is retried later (8.379735ms)
+✔ restored nested child opens parent first but keeps its saved inherited snapshot (9.318615ms)
+✔ cancelling a wait or timing out does not stop detached child (5.184966ms)
+✔ stop cascades but retains sessions, and children cannot wait on ancestors (6.35652ms)
+✔ duplicate concurrent spawn is rejected and concurrency/depth limits apply (2.276598ms)
+✔ save/restore retains definition snapshot and reopens JSONL on resume (9.793147ms)
+✔ retained thread resumes its saved definition even after the type is removed (3.645609ms)
+✔ startup failure returns a failed thread and does not reject spawn (1.01469ms)
+✔ partial usage is live-only; final usage persists and elapsed freezes across runs (71.437813ms)
+✔ restore defaults missing metrics to zero and resumed usage adds to saved totals (12.248111ms)
+✔ scoped observation attaches while starting, persists no deltas, and disposes independently (13.684102ms)
+✔ restored transcript observation is read-only and enforces scope (2.435624ms)
+✔ reap frees retained slots, disposes drivers, and removes durable records (5.161909ms)
+✔ reap preserves non-completed threads and their completed ancestors (1.811232ms)
+✔ reap keeps completed children available to an active parent (8.844514ms)
+✔ reap preview is read-only and excludes agents completed after confirmation started (3.163456ms)
+✔ confirmed reap revalidates resumed descendants and preserves their ancestors (10.75589ms)
+node:internal/modules/esm/resolve:310
+  return new ERR_PACKAGE_PATH_NOT_EXPORTED(
+         ^
+
+Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: No "exports" main defined in /tmp/pi-port-docs/subagent-patch-work/node_modules/@earendil-works/pi-coding-agent/package.json
+    at exportsNotFound (node:internal/modules/esm/resolve:310:10)
+    at packageExportsResolve (node:internal/modules/esm/resolve:601:13)
+    at resolveExports (node:internal/modules/cjs/loader:684:36)
+    at Module._findPath (node:internal/modules/cjs/loader:751:31)
+    at node:internal/modules/cjs/loader:1460:27
+    at nextResolveSimple (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1010)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:4512
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:2830
+    at resolveTsPaths (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:762)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1203 {
+  code: 'ERR_PACKAGE_PATH_NOT_EXPORTED'
+}
+
+Node.js v25.9.0
+✖ tests/mode-integration.test.ts (5082.680628ms)
+✔ ordered model editor searches, annotates scope, and toggles without leaving the picker (27.796229ms)
+✔ suggested fuzzy matches are ranked scoped first, then unscoped, with an alphabetical remainder (14.313093ms)
+✔ bundled suggestions match version separator variants without changing raw identities (6.84404ms)
+✔ suggestions search display names and provider/id, retaining every match beyond ten (5.862156ms)
+✔ typing fuzzy-filters the suggestion tiers; clearing restores them and annotations aren't searched (7.134393ms)
+✔ missing or unmatched suggestions preserve alphabetical browsing, even with scoped models (6.220734ms)
+✔ selected models come first in preference order without duplicates in suggestion tiers (5.818806ms)
+✔ group headings keep selected models and footer visible on short terminals (19.890484ms)
+✔ ordered model editor warns and annotates portable preferences when scope is empty (8.148295ms)
+✔ ordered model editor keeps raw identities while sanitizing picker labels (3.062043ms)
+✔ Ctrl up/down reorder selected models, preserve selection, and stop at boundaries (3.400057ms)
+✔ search keeps selected models above results and allows reorder while filtering (3.109547ms)
+✔ Escape cancels without committing toggles or reordering (3.302368ms)
+✔ model dialogs keep selected rows, borders and footer visible on short terminals (8.972542ms)
+✔ getModelPreferences accepts omitted, legacy and canonical forms and copies input (4.51205ms)
+✔ getModelPreferences rejects ambiguous or malformed values (0.895876ms)
+✔ selectPreferredModel uses preference order and returns undefined without preferences (0.870039ms)
+✔ selectPreferredModel errors name the agent, preferences and available models per filtering mode (2.302638ms)
+✔ agent_types exposes only names, descriptions and resolved settings in compact text (5.628584ms)
+✔ agent_types keeps unavailable entries without failing the whole listing and handles no types (1.557841ms)
+node:internal/modules/esm/resolve:310
+  return new ERR_PACKAGE_PATH_NOT_EXPORTED(
+         ^
+
+Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: No "exports" main defined in /tmp/pi-port-docs/subagent-patch-work/node_modules/@earendil-works/pi-coding-agent/package.json
+    at exportsNotFound (node:internal/modules/esm/resolve:310:10)
+    at packageExportsResolve (node:internal/modules/esm/resolve:601:13)
+    at resolveExports (node:internal/modules/cjs/loader:684:36)
+    at Module._findPath (node:internal/modules/cjs/loader:751:31)
+    at node:internal/modules/cjs/loader:1460:27
+    at nextResolveSimple (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1010)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:4512
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:2830
+    at resolveTsPaths (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:762)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1203 {
+  code: 'ERR_PACKAGE_PATH_NOT_EXPORTED'
+}
+
+Node.js v25.9.0
+✖ tests/navigation-integration.test.ts (5275.384724ms)
+✔ optional icons round-trip BMP and supplementary glyphs, never glyph names or terminal controls (55.806406ms)
+✔ all six bundled agents carry distinct verified Nerd Fonts glyphs (17.424325ms)
+✔ custom agent icons save and reload in user and trusted project scopes (16.904811ms)
+✔ labs toggle defaults off, layers per key, validates booleans, and persists (7.857365ms)
+✔ badges and full widgets gate icons, preserve names, reject unsafe saved glyphs, and fit narrow widths (15.095624ms)
+✔ RPC widget, browser tree, and live header respect the same labs toggle (11.858297ms)
+✔ spawn, persistence, restore, and retained-definition fallback preserve agent icons (13.885172ms)
+node:internal/modules/esm/resolve:310
+  return new ERR_PACKAGE_PATH_NOT_EXPORTED(
+         ^
+
+Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: No "exports" main defined in /tmp/pi-port-docs/subagent-patch-work/node_modules/@earendil-works/pi-coding-agent/package.json
+    at exportsNotFound (node:internal/modules/esm/resolve:310:10)
+    at packageExportsResolve (node:internal/modules/esm/resolve:601:13)
+    at resolveExports (node:internal/modules/cjs/loader:684:36)
+    at Module._findPath (node:internal/modules/cjs/loader:751:31)
+    at node:internal/modules/cjs/loader:1460:27
+    at nextResolveSimple (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1010)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:4512
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:2830
+    at resolveTsPaths (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:762)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1203 {
+  code: 'ERR_PACKAGE_PATH_NOT_EXPORTED'
+}
+
+Node.js v25.9.0
+✖ tests/parallel.test.ts (5239.92863ms)
+✔ canonical ancestry is structural, not prefix matching or URL normalization (2.422215ms)
+✔ context snapshots strip unfinished/orphaned tool exchanges and clone messages (3.111612ms)
+✔ off produces no subagent system prompt (2.119257ms)
+✔ opportunistic produces a subagent system prompt (0.358094ms)
+✔ orchestration produces a subagent system prompt (0.150416ms)
+node:internal/modules/esm/resolve:310
+  return new ERR_PACKAGE_PATH_NOT_EXPORTED(
+         ^
+
+Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: No "exports" main defined in /tmp/pi-port-docs/subagent-patch-work/node_modules/@earendil-works/pi-coding-agent/package.json
+    at exportsNotFound (node:internal/modules/esm/resolve:310:10)
+    at packageExportsResolve (node:internal/modules/esm/resolve:601:13)
+    at resolveExports (node:internal/modules/cjs/loader:684:36)
+    at Module._findPath (node:internal/modules/cjs/loader:751:31)
+    at node:internal/modules/cjs/loader:1460:27
+    at nextResolveSimple (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1010)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:4512
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:2830
+    at resolveTsPaths (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:762)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1203 {
+  code: 'ERR_PACKAGE_PATH_NOT_EXPORTED'
+}
+
+Node.js v25.9.0
+✖ tests/runtime.test.ts (4775.653472ms)
+node:internal/modules/esm/resolve:310
+  return new ERR_PACKAGE_PATH_NOT_EXPORTED(
+         ^
+
+Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: No "exports" main defined in /tmp/pi-port-docs/subagent-patch-work/node_modules/@earendil-works/pi-coding-agent/package.json
+    at exportsNotFound (node:internal/modules/esm/resolve:310:10)
+    at packageExportsResolve (node:internal/modules/esm/resolve:601:13)
+    at resolveExports (node:internal/modules/cjs/loader:684:36)
+    at Module._findPath (node:internal/modules/cjs/loader:751:31)
+    at node:internal/modules/cjs/loader:1460:27
+    at nextResolveSimple (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1010)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:4512
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:2830
+    at resolveTsPaths (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:762)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1203 {
+  code: 'ERR_PACKAGE_PATH_NOT_EXPORTED'
+}
+
+Node.js v25.9.0
+✖ tests/scoped-model-filtering.test.ts (4846.967326ms)
+✔ [labs] Loader style previews all families and states together, and saves every selection (206.973341ms)
+✔ [labs] Loader style cancel, restore-defaults and narrow layouts preserve draft semantics (98.903991ms)
+✔ [labs] Nerd Font setting toggles, persists, and cancels without saving (49.602996ms)
+✔ invalid numbers are rejected in place and valid edits save once to the user scope (30.695209ms)
+✔ selecting each subagent mode saves it (50.560763ms)
+✔ mode selection and chooser cancellation remain draft-only (30.561543ms)
+✔ mode screen and chooser render bordered frames at width 32 (16.680799ms)
+✔ mode screen and chooser render bordered frames at width 80 (15.943806ms)
+✔ Model Picking saves all three modes (46.396973ms)
+✔ Model Picking and other edits stay draft-only until save; chooser cancellation keeps the value (45.716986ms)
+✔ Model Picking saves to a trusted project (11.123892ms)
+✔ save shows a warning-colored changes value only while the draft is dirty (15.640485ms)
+✔ Model Picking screen and chooser render bordered frames at width 32 (11.223091ms)
+✔ Model Picking screen and chooser render bordered frames at width 80 (9.649575ms)
+✔ changing save scope preserves the draft without saving on cancel (14.310123ms)
+✔ restore defaults resets the whole draft before save (10.443878ms)
+✔ project scope requires trust; trusted projects save to the project file (32.075506ms)
+✔ Global save scope sticks across reopenings and projects without changing precedence (43.313771ms)
+✔ scope selection persists even on cancel; untrusted fallback does not overwrite it (47.47234ms)
+✔ Tool Filtering saves every mode (40.891721ms)
+✔ Tool Filtering selection and chooser cancellation remain draft-only (23.963733ms)
+✔ Tool Filtering saves to a trusted project and restores defaults without saving on cancel (24.039629ms)
+✔ Tool Filtering screen and chooser render bordered frames at width 32 (10.919524ms)
+✔ Tool Filtering screen and chooser render bordered frames at width 80 (24.471148ms)
+✔ Status Widget saves each mode (19.112705ms)
+✔ Status Widget cancellation leaves settings unchanged and defaults restore Full (24.616309ms)
+✔ Status Widget saves to a trusted project (9.543083ms)
+✔ Status Widget screen and chooser render bordered frames at width 32 (8.92117ms)
+✔ Status Widget screen and chooser render bordered frames at width 80 (8.451232ms)
+✔ [labs] Final Recap toggles and saves to both scopes (17.319587ms)
+✔ [labs] Final Recap cancellation, toggle reversal and restore-defaults keep it opt-in (24.288804ms)
+✔ [labs] Final Recap renders a bordered settings frame at width 32 (7.244454ms)
+✔ [labs] Final Recap renders a bordered settings frame at width 80 (7.377164ms)
+✔ [labs] Cost display offers and saves all three transports (27.268362ms)
+✔ save-scope preference persists separately from manager settings with trust fallback (10.366571ms)
+✔ invalid or unsafe save-scope state falls back; writes reject symlinks (3.677187ms)
+✔ missing files return a fresh copy of defaults without diagnostics (2.041649ms)
+✔ project layer overrides global per key; untrusted project and stray files are ignored (3.470674ms)
+✔ invalid layer content is rejected with a diagnostic naming the file (10.343193ms)
+✔ an invalid layer is ignored atomically while other layers still apply (2.961939ms)
+✔ all subagent modes save and load with trusted-project precedence (7.829753ms)
+✔ invalid mode rejects the entire layer and preserves preceding settings (2.294216ms)
+✔ unreadable settings file is ignored (1.666708ms)
+✔ symlinks anywhere in an owned scope path are refused on load and save (18.119328ms)
+✔ symlinked ancestors above the owned scope directories are accepted (2.675044ms)
+✔ wrong file types at scope paths are refused on load and save (2.726908ms)
+✔ save writes canonical 0600 files, creates owned directories, and reloads with precedence (3.501059ms)
+✔ invalid save input never creates or mutates files (6.531485ms)
+✔ untrusted project saves and unknown scopes are rejected without touching disk (0.990696ms)
+✔ all tool filtering modes save and load with trusted-project precedence (8.457518ms)
+✔ invalid tool filtering rejects its entire layer and preserves preceding settings (1.658142ms)
+✔ all model selection modes save and load with trusted-project precedence (5.146347ms)
+✔ legacy filtering migrates per layer; explicit model selection wins and saves canonically (3.273178ms)
+✔ invalid model selection rejects its entire layer and does not fall back to legacy filtering (1.443879ms)
+✔ both widget modes save and load with trusted-project precedence (5.166938ms)
+✔ legacy settings without widgetMode keep full mode; invalid mode ignores its entire layer (1.821347ms)
+✔ Final Recap defaults off, layers by key, and saves in both scopes (3.758152ms)
+✔ Final Recap rejects non-booleans atomically when loading and saving (7.249538ms)
+✔ cost display defaults to a discoverable status key and validates all modes (9.345606ms)
+✔ timeout reports state to the parent without stopping the child (27.749624ms)
+✔ timer is cleared on completion, failure, stop and shutdown (23.116078ms)
+✔ steer timeoutMs-only re-arms from now; invalid ranges are rejected; unset means none (24.859994ms)
+✔ settled events flag detached spawns; outstandingAsync tracks them (13.333702ms)
+✔ tool schemas expose timeoutMs and agent_steer timeoutMs with 30s–5min bounds (4.197157ms)
+✔ steer with message and timeoutMs steers and re-arms (6.260823ms)
+✔ stop sees reserved children during lazy parent reopen and startup cannot strand shutdown (21.734161ms)
+✔ stopped idle restore reopens read-only with a fresh controller and tracks leaf checkpoints (9.224815ms)
+✔ status tree sorts siblings, draws branch prefixes, and collapses descendants (3.541841ms)
+✔ status tree shows independent roots, missing-parent placeholders, and depth 32 (1.99875ms)
+✔ status dialog renders live, sanitized hierarchy and keeps the selected path (16.163257ms)
+✔ status dialog folds, pages, and confirms only real threads (52.532186ms)
+✔ status dialog stays inside short and narrow terminals (6.199602ms)
+✔ showAgentStatus refreshes, reopens on the chosen thread, and clears its timer (2.399321ms)
+✔ showAgentStatus inspects through thread select by default; both dialogs decline non-TUI (1.23199ms)
+✔ showAgentTree uses one dialog session, shows live updates, and returns to the same selection (23.69938ms)
+✔ tree inspection steers a nested agent in place and preserves tree navigation (32.176106ms)
+✔ showAgentTree opens on a requested path and scrolls every node with a row range (15.376476ms)
+✔ showAgentTree clears the refresh timer on dispose, close, and open failure (6.994304ms)
+✔ navigation root Enter closes with no execution effect; empty tree has a useful hint (6.194389ms)
+✔ controller coalesces opens and rejects stale factories after lifecycle close (0.986485ms)
+✔ real alt-screen input cannot stack host search while navigation owns the overlay (27.999043ms)
+✔ i Actions retains existing operations in the same overlay and saves folds on reopen (9.207867ms)
+✔ host mount rejection restores scoped keybindings even without component disposal (0.746116ms)
+✔ agent tree shows the type badge and mutes inactive agents with the pi muted token (1.391018ms)
+✔ agent tree uses two lines for right-aligned identity metrics and full-width activity (1.54063ms)
+✔ Ctrl+C in the tree stops every live agent once via its top-most live ancestor and is hinted (4.921697ms)
+node:internal/modules/esm/resolve:310
+  return new ERR_PACKAGE_PATH_NOT_EXPORTED(
+         ^
+
+Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: No "exports" main defined in /tmp/pi-port-docs/subagent-patch-work/node_modules/@earendil-works/pi-coding-agent/package.json
+    at exportsNotFound (node:internal/modules/esm/resolve:310:10)
+    at packageExportsResolve (node:internal/modules/esm/resolve:601:13)
+    at resolveExports (node:internal/modules/cjs/loader:684:36)
+    at Module._findPath (node:internal/modules/cjs/loader:751:31)
+    at node:internal/modules/cjs/loader:1460:27
+    at nextResolveSimple (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1010)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:4512
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:2830
+    at resolveTsPaths (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:762)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1203 {
+  code: 'ERR_PACKAGE_PATH_NOT_EXPORTED'
+}
+
+Node.js v25.9.0
+✖ tests/tool-filtering.test.ts (4136.016505ms)
+node:internal/modules/esm/resolve:310
+  return new ERR_PACKAGE_PATH_NOT_EXPORTED(
+         ^
+
+Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: No "exports" main defined in /tmp/pi-port-docs/subagent-patch-work/node_modules/@earendil-works/pi-coding-agent/package.json
+    at exportsNotFound (node:internal/modules/esm/resolve:310:10)
+    at packageExportsResolve (node:internal/modules/esm/resolve:601:13)
+    at resolveExports (node:internal/modules/cjs/loader:684:36)
+    at Module._findPath (node:internal/modules/cjs/loader:751:31)
+    at node:internal/modules/cjs/loader:1460:27
+    at nextResolveSimple (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1010)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:4512
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:22:2830
+    at resolveTsPaths (/tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:762)
+    at /tmp/pi-port-docs/subagent-manager-research/node_modules/tsx/dist/register-B1c7OH6V.cjs:23:1203 {
+  code: 'ERR_PACKAGE_PATH_NOT_EXPORTED'
+}
+
+Node.js v25.9.0
+✖ tests/tool-inheritance.test.ts (4049.845322ms)
+✔ tool picker searches names and descriptions and toggles checked rows without closing (21.899018ms)
+✔ saved unavailable entries remain checked across search and save; names cannot collide with actions (3.466837ms)
+✔ unset, explicit empty, Done, Ctrl+S and cancellation retain their distinct meanings (1.719279ms)
+✔ notices appear at the top exactly when the current policy ignores the list (12.569835ms)
+✔ empty/no-match and hostile text render safely within resized bounds (5.533764ms)
+✔ editor obtains all tools freshly, including inactive session tools, and guards RPC (2.153676ms)
+✔ mcp tools group under a collapsed aggregate row with expand/collapse and toggle-all (1.457056ms)
+✔ observer shell rendering matches pi's native component in preview and full detail (18.508746ms)
+✔ observer edit rendering uses the recorded diff and never reads current files (19.448774ms)
+✔ observer strips controls from arguments, details and results; images remain placeholders (8.188016ms)
+✔ cyclic tool args, metadata and unknown content cannot crash the observer (1.199519ms)
+✔ atomic mid-stream snapshots reconcile final messages without duplicate rows (6.474077ms)
+✔ parallel tools retain arguments and partial/final output until committed (4.27979ms)
+✔ compaction reconciles replaced history and clears obsolete inherited prefix (0.930301ms)
+✔ broken renderers and noncloneable custom results never fail execution (0.960735ms)
+✔ aborted compaction preserves inherited context and completed nested tools are bounded (12.005507ms)
+✔ duplicate listener registrations have independent unsubscribe handles (0.576506ms)
+✔ widget is compact, excludes current root, and reports hidden threads (12.303706ms)
+✔ widget sanitizes hostile text, fits narrow widths, and keeps counters right-aligned (3.409206ms)
+✔ widget counter literals cover duration steps and count boundaries (1.492448ms)
+✔ thread pills use the type color with contrasting text; state colors only the state label (10.112332ms)
+✔ widget resolves the theme at render time (5.716663ms)
+✔ widget timer rerenders live elapsed and does not run when settled or headless (5.884175ms)
+✔ editor command accepts quoted argv but rejects shell operators (3.080299ms)
+✔ thread dialogs exclude root, discard viewer edits, and resume through steer (1.405332ms)
+✔ agent editor is a bordered two-column form and edits the prompt body in a dialog (103.670135ms)
+✔ agent editor scope field and source are modal and do not modify the draft on cancel (18.213684ms)
+✔ type field editor handles YAML fields without changing Markdown (52.390155ms)
+✔ model picker uses current draft suggestions, including unsaved edits to them (29.042712ms)
+✔ legacy scalar model opens the ordered picker and cancel keeps the saved definition (14.551387ms)
+✔ saving model preferences stores canonical ordered models after add and reorder (16.553242ms)
+✔ agent picker uses runtime name pills with definition colors and no brackets (47.24783ms)
+✔ color picker shows background pills, previews the draft name, and cancel keeps the saved color (9.482518ms)
+✔ color picker default unsets a configured color (8.533676ms)
+✔ invalid field edits and untrusted project saves leave configuration unchanged (11.564837ms)
+✔ editing a noncanonical filename in preferred storage updates that file in place (9.236621ms)
+✔ renaming a type cannot overwrite an existing definition (11.515254ms)
+✔ external invalid edit restores draft, reports diagnostics, and restarts TUI (59.381388ms)
+✔ frontmatter editor retries invalid YAML and preserves Markdown on save (9.136949ms)
+✔ edit menu shows current values, ordered models, legacy scalars, and tool policy states (15.933752ms)
+✔ field editor prefills current values and cancelled or invalid edits keep the visible draft (37.563265ms)
+✔ agent save shows warning-colored changes for edited and new drafts, clearing on revert (13.59597ms)
+✔ description editor prefills sanitized text and unchanged submits keep the raw original (10.115058ms)
+✔ agent definition edits including model, color, and text use one overlay (14.109538ms)
+✔ nested definition editor from settings uses one overlay (7.149842ms)
+✔ custom icon editor validates, cancels, saves, prefills, and removes optional glyphs (23.224984ms)
+✔ model suggestion editor shows sanitized names and preserves them across cancel and other edits (9.050966ms)
+✔ model suggestion edits save display names, reject duplicates, empty clears, and other saves keep an explicit empty list (27.392897ms)
+✔ bundled tweak-settings saves a sparse .yml and locks prompt and name (15.032351ms)
+✔ Reset to bundled deletes the override and restores the shipped agent (16.485136ms)
+✔ bundled fork copies the full definition including prompt edits (23.280212ms)
+✔ cancelling the customization picker leaves bundled definitions untouched (3.824846ms)
+✔ tool picker unset removes fields, preserves other lists, and cleans an empty tools object on save (11.988004ms)
+✔ nested tool pickers use the settings draft policy and freshly fetch session tools (10.563606ms)
+ℹ tests 361
+ℹ suites 0
+ℹ pass 339
+ℹ fail 22
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 14251.362889
+
+✖ failing tests:
+
+test at tests/changelog-publishing.test.ts:189:1
+✖ preview writes CHANGELOG.md and does not publish a release or file (198.488697ms)
+  Error: ENOENT: no such file or directory, open '/tmp/changelog-cli-OGHauM/CHANGELOG.md'
+      at readFileSync (node:fs:436:20)
+      at run (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:178:16)
+      at use (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:183:18)
+      at TestContext.<anonymous> (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:190:18)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.start (node:internal/test_runner/test:1096:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:385:17) {
+    errno: -2,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: '/tmp/changelog-cli-OGHauM/CHANGELOG.md'
+  }
+
+test at tests/changelog-publishing.test.ts:202:1
+✖ publish creates the current release and updates main with the contents SHA (210.482101ms)
+  Error: ENOENT: no such file or directory, open '/tmp/changelog-cli-LCg4YQ/CHANGELOG.md'
+      at readFileSync (node:fs:436:20)
+      at run (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:178:16)
+      at use (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:183:18)
+      at TestContext.<anonymous> (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:203:18)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    errno: -2,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: '/tmp/changelog-cli-LCg4YQ/CHANGELOG.md'
+  }
+
+test at tests/changelog-publishing.test.ts:228:1
+✖ existing release on a later page is edited, not recreated, and highlights survive (265.793455ms)
+  Error: ENOENT: no such file or directory, open '/tmp/changelog-cli-FIgaRH/CHANGELOG.md'
+      at readFileSync (node:fs:436:20)
+      at run (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:178:16)
+      at use (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:183:18)
+      at TestContext.<anonymous> (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:229:18)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    errno: -2,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: '/tmp/changelog-cli-FIgaRH/CHANGELOG.md'
+  }
+
+test at tests/changelog-publishing.test.ts:246:1
+✖ prerelease publish is not marked latest (211.356706ms)
+  Error: ENOENT: no such file or directory, open '/tmp/changelog-cli-MSKAAC/CHANGELOG.md'
+      at readFileSync (node:fs:436:20)
+      at run (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:178:16)
+      at use (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:183:18)
+      at TestContext.<anonymous> (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:247:33)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    errno: -2,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: '/tmp/changelog-cli-MSKAAC/CHANGELOG.md'
+  }
+
+test at tests/changelog-publishing.test.ts:256:1
+✖ publish with an empty CHANGELOG_TAG only updates the changelog (175.132417ms)
+  Error: ENOENT: no such file or directory, open '/tmp/changelog-cli-mCRYK1/CHANGELOG.md'
+      at readFileSync (node:fs:436:20)
+      at run (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:178:16)
+      at use (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:183:18)
+      at TestContext.<anonymous> (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:257:18)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    errno: -2,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: '/tmp/changelog-cli-mCRYK1/CHANGELOG.md'
+  }
+
+test at tests/changelog-publishing.test.ts:270:1
+✖ HTTP 409 retries with a fresh SHA and refreshed tags without republishing (159.690952ms)
+  Error: ENOENT: no such file or directory, open '/tmp/changelog-cli-8C06fm/CHANGELOG.md'
+      at readFileSync (node:fs:436:20)
+      at run (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:178:16)
+      at use (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:183:18)
+      at TestContext.<anonymous> (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:271:18)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    errno: -2,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: '/tmp/changelog-cli-8C06fm/CHANGELOG.md'
+  }
+
+test at tests/changelog-publishing.test.ts:301:1
+✖ a missing changelog is created without a SHA (153.775047ms)
+  Error: ENOENT: no such file or directory, open '/tmp/changelog-cli-ikv7VU/CHANGELOG.md'
+      at readFileSync (node:fs:436:20)
+      at run (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:178:16)
+      at use (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:183:18)
+      at TestContext.<anonymous> (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:302:18)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    errno: -2,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: '/tmp/changelog-cli-ikv7VU/CHANGELOG.md'
+  }
+
+test at tests/changelog-publishing.test.ts:312:1
+✖ an unchanged changelog does not create another commit (165.971482ms)
+  Error: ENOENT: no such file or directory, open '/tmp/changelog-cli-du5WoQ/CHANGELOG.md'
+      at readFileSync (node:fs:436:20)
+      at run (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:178:16)
+      at use (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:183:18)
+      at TestContext.<anonymous> (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:313:19)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    errno: -2,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: '/tmp/changelog-cli-du5WoQ/CHANGELOG.md'
+  }
+
+test at tests/changelog-publishing.test.ts:322:1
+✖ permission errors fail visibly instead of being treated as missing files (166.754238ms)
+  Error: ENOENT: no such file or directory, open '/tmp/changelog-cli-OmEMWX/CHANGELOG.md'
+      at readFileSync (node:fs:436:20)
+      at run (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:178:16)
+      at use (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:183:18)
+      at TestContext.<anonymous> (/tmp/pi-port-docs/subagent-patch-work/manager/tests/changelog-publishing.test.ts:323:18)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1201:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+      at Test.postRun (node:internal/test_runner/test:1330:19)
+      at Test.run (node:internal/test_runner/test:1258:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:831:7) {
+    errno: -2,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: '/tmp/changelog-cli-OmEMWX/CHANGELOG.md'
+  }
+
+test at tests/changelog.test.ts:1:1
+✖ tests/changelog.test.ts (319.145772ms)
+  'test failed'
+
+test at tests/commands.test.ts:1:1
+✖ tests/commands.test.ts (5625.635582ms)
+  'test failed'
+
+test at tests/cost-rollup-integration.test.ts:1:1
+✖ tests/cost-rollup-integration.test.ts (5629.903304ms)
+  'test failed'
+
+test at tests/final-recap-integration.test.ts:1:1
+✖ tests/final-recap-integration.test.ts (5386.60618ms)
+  'test failed'
+
+test at tests/footer-slot-integration.test.ts:1:1
+✖ tests/footer-slot-integration.test.ts (5095.426104ms)
+  'test failed'
+
+test at tests/integration.test.ts:1:1
+✖ tests/integration.test.ts (5259.345137ms)
+  'test failed'
+
+test at tests/mode-integration.test.ts:1:1
+✖ tests/mode-integration.test.ts (5082.680628ms)
+  'test failed'
+
+test at tests/navigation-integration.test.ts:1:1
+✖ tests/navigation-integration.test.ts (5275.384724ms)
+  'test failed'
+
+test at tests/parallel.test.ts:1:1
+✖ tests/parallel.test.ts (5239.92863ms)
+  'test failed'
+
+test at tests/runtime.test.ts:1:1
+✖ tests/runtime.test.ts (4775.653472ms)
+  'test failed'
+
+test at tests/scoped-model-filtering.test.ts:1:1
+✖ tests/scoped-model-filtering.test.ts (4846.967326ms)
+  'test failed'
+
+test at tests/tool-filtering.test.ts:1:1
+✖ tests/tool-filtering.test.ts (4136.016505ms)
+  'test failed'
+
+test at tests/tool-inheritance.test.ts:1:1
+✖ tests/tool-inheritance.test.ts (4049.845322ms)
+  'test failed'

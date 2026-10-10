@@ -1,0 +1,6 @@
+{
+  "gpt": {
+    "model": "openai/gpt-6-luna",
+    "thinking": "max"
+  }
+}

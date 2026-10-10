@@ -1,0 +1,44 @@
+{
+  "execution_complete": true,
+  "grading_complete": true,
+  "control_requests": 36,
+  "workers": 6,
+  "elapsed_seconds": 40.17178336800134,
+  "important_case_source": "../ysk-quality-pilot/results.json",
+  "excluded_source": "Original pilot control cases remain inconclusive and are excluded from quality scores.",
+  "distinct_scenarios": 12,
+  "repetitions": 3,
+  "models": {
+    "openai/gpt-6-luna": {
+      "reasoning": "max",
+      "important_findings_detected": 18,
+      "important_findings_expected": 18,
+      "correct_silence": 18,
+      "silence_expected": 18,
+      "missed_important_findings": 0,
+      "false_alerts_on_corrected_controls": 0,
+      "control_cost_estimate_usd": 0.015143700000000001,
+      "control_median_seconds": 6.673,
+      "valid_positive_and_control_cost_estimate_usd": 0.03070876
+    },
+    "openai/gpt-6.1-sol": {
+      "reasoning": "low",
+      "important_findings_detected": 18,
+      "important_findings_expected": 18,
+      "correct_silence": 18,
+      "silence_expected": 18,
+      "missed_important_findings": 0,
+      "false_alerts_on_corrected_controls": 0,
+      "control_cost_estimate_usd": 0.2645284,
+      "control_median_seconds": 2.847,
+      "valid_positive_and_control_cost_estimate_usd": 0.5635344
+    }
+  },
+  "shared_settings_metadata_unchanged": true,
+  "ysk_feedback_metadata_unchanged": true,
+  "production_model_choice_changed": false,
+  "transport_failure_resolved": false,
+  "control_estimated_cost_ratio_sol_to_luna": 17.467884334739857,
+  "valid_case_estimated_cost_ratio_sol_to_luna": 18.350933088799415,
+  "conclusion": "Equal observed detection outcomes on these short synthetic scenarios; supports Luna max as a provisional observer choice, not proof of general equivalence."
+}

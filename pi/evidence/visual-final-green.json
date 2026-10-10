@@ -1,0 +1,24 @@
+{
+  "passed": true,
+  "model_requests": 0,
+  "checks": [
+    {
+      "group": "svg",
+      "source_paths_distinct": true,
+      "rendered_images_distinct": true,
+      "artifacts": [
+        "/tmp/pi-visual-tools/svg-test-a-svg/render-1791650776952.png",
+        "/tmp/pi-visual-tools/svg-test-b-svg/render-1791650776957.png"
+      ]
+    },
+    {
+      "group": "mermaid",
+      "source_paths_distinct": true,
+      "rendered_images_distinct": true,
+      "artifacts": [
+        "/tmp/pi-visual-tools/mermaid-test-a-mermaid/render-1791650777126.png",
+        "/tmp/pi-visual-tools/mermaid-test-b-mermaid/render-1791650777128.png"
+      ]
+    }
+  ]
+}

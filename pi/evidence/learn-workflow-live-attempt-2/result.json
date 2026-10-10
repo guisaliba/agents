@@ -1,0 +1,9 @@
+{
+  "complete": false,
+  "synthetic_student": true,
+  "native_ui": true,
+  "checks": [],
+  "answers": [],
+  "failure": "TimeoutExpired",
+  "shared_settings_metadata_unchanged": true
+}

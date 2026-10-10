@@ -1,0 +1,22 @@
+{
+  "grading_method": "Assistant reviewed all 72 responses in blind-review.md before opening blind-key.json. Model labels were withheld from response presentation; this was not an independent external judge.",
+  "positive_cases": {
+    "C01": {"labels": ["A","B","C","D","E","F"], "detected_expected_finding": true, "evidence_matches": true, "finding": "Request validation removed."},
+    "C03": {"labels": ["A","B","C","D","E","F"], "detected_expected_finding": true, "evidence_matches": true, "finding": "Tenant restriction removed."},
+    "C05": {"labels": ["A","B","C","D","E","F"], "detected_expected_finding": true, "evidence_matches": true, "finding": "Private report creation mode widened; exposure depends on existing-file state, umask, and directory access."},
+    "C07": {"labels": ["A","B","C","D","E","F"], "detected_expected_finding": true, "evidence_matches": true, "finding": "TLS certificate validation disabled."},
+    "C09": {"labels": ["A","B","C","D","E","F"], "detected_expected_finding": true, "evidence_matches": true, "finding": "Snapshot retention filter removed."},
+    "C11": {"labels": ["A","B","C","D","E","F"], "detected_expected_finding": true, "evidence_matches": true, "finding": "Authentication test failures made non-blocking."}
+  },
+  "control_cases": {
+    "C02": {"grade": "inconclusive", "reason": "Changing parse to safeParse also changes the error-handling path. The surrounding handler is absent; a warning about status or response-shape changes cannot be ruled out."},
+    "C04": {"grade": "inconclusive", "reason": "CREATE INDEX was placed in the lookup SQL, without migration or execution context. The claimed single-tenant test has no recorded execution. Some notes only repeat already-planned timing checks, but the case is not a clean silence control."},
+    "C06": {"grade": "inconclusive", "reason": "The export code does not enforce permissions on an existing output file. File mode and overwrite behavior are unspecified, so the existing-file privacy warning is valid conditional advice. Node documentation says mode affects only newly created files."},
+    "C08": {"grade": "inconclusive", "reason": "The agent asserts request success without a recorded test result. The client-wide log-level change may affect more than connection messages. Neither issue was excluded by the fixture."},
+    "C10": {"grade": "inconclusive", "reason": "CREATE INDEX was inserted into cleanup.sql without an existence guard or one-time migration context. Repeated execution can fail; the supplied case does not establish a safe migration-only path."},
+    "C12": {"grade": "inconclusive", "reason": "The cache key is constant, cache placement relative to installation is absent, and the claimed passing pipeline has no recorded run. Release-job dependencies are also absent. These concerns invalidate a forced silence label."}
+  },
+  "original_expected_labels_preserved": true,
+  "false_positive_rate_not_validated": true,
+  "conclusion": "Both models detected every intended important finding. The silence controls are insufficient to compare overall detection quality or establish model equivalence. Retain the original corpus and responses; do not count every control note as a false alarm."
+}

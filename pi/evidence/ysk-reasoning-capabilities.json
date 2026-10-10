@@ -1,0 +1,47 @@
+{
+  "model_requests": 0,
+  "models": [
+    {
+      "model": "openai/gpt-6-luna",
+      "api": "openai-responses",
+      "available_thinking_levels": [
+        "off",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "thinkingLevelMap": {
+        "off": "none",
+        "minimal": null,
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "xhigh": "xhigh",
+        "max": "max"
+      }
+    },
+    {
+      "model": "openai/gpt-6.1-sol",
+      "api": "openai-responses",
+      "available_thinking_levels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "thinkingLevelMap": {
+        "off": null,
+        "minimal": null,
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "xhigh": "xhigh",
+        "max": "max"
+      }
+    }
+  ],
+  "shared_settings_metadata_unchanged": true
+}

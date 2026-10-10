@@ -1,0 +1,54 @@
+{
+  "complete": true,
+  "port_complete": false,
+  "subagent_extension_installed": false,
+  "primary_model": "openai/gpt-6.1-sol",
+  "observer_model": "openai/gpt-6.1-sol",
+  "checks": [
+    {
+      "name": "seven controlled real Pi reads",
+      "passed": true
+    },
+    {
+      "name": "scheduled live side inference on the exact approved model",
+      "passed": true
+    },
+    {
+      "name": "no subagent tool is active",
+      "passed": true
+    },
+    {
+      "name": "terminal sample widget, menu, explanation, and normal exit",
+      "passed": true,
+      "model_requests": 0,
+      "sample_not_model_generated": true
+    }
+  ],
+  "session": "01a1232d-bcf9-739f-ac44-26584059ffc7",
+  "observer_checks": [
+    {
+      "step": 6,
+      "outcome": "none",
+      "provider": "openai",
+      "model": "gpt-6.1-sol",
+      "thinking": "high",
+      "usage": {
+        "input": 25204,
+        "output": 7,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 25211,
+        "cost": {
+          "input": 0.050407999999999994,
+          "output": 7.000000000000001e-05,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.050477999999999995
+        }
+      },
+      "stopReason": "stop"
+    }
+  ],
+  "shared_settings_metadata_unchanged": true
+}

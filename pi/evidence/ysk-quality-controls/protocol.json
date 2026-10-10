@@ -1,0 +1,20 @@
+{
+  "complete": false,
+  "port_complete": false,
+  "grading_complete": false,
+  "requests_planned": 36,
+  "corpus": "controls",
+  "corpus_scope": "Corrected synthetic silence controls. Test receipts are fixed replay data, not tests executed on a real application by this benchmark.",
+  "workers": 6,
+  "repetitions": 3,
+  "upstream_commit": "4ffe3daec322de069bd15e174f23b6d4a5c45419",
+  "template_sha256": "baf0cf2c7595bde639f32aa9bd62f14f1f2d309cf6f603d2cab46b23e7a80a86",
+  "corpus_sha256": "bba233b59558a6ce15c37e2cdabdcebf7285d1564d0cd4185f9762643c868bb5",
+  "driver_sha256": "1b780672f6adbc7034a170189354277a0ea92338cfedb372b1a18301e1515ab1",
+  "scope": "Detector prompt and side-call contract; no scheduler/UI/feedback test; no paid main calls",
+  "settings": {
+    "openai/gpt-6-luna": "max",
+    "openai/gpt-6.1-sol": "low"
+  },
+  "results": []
+}

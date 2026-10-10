@@ -1,0 +1,146 @@
+[
+  {
+    "label": "C02-A",
+    "id": "C02-r1-gpt-6.1-sol"
+  },
+  {
+    "label": "C02-B",
+    "id": "C02-r2-gpt-6-luna"
+  },
+  {
+    "label": "C02-C",
+    "id": "C02-r1-gpt-6-luna"
+  },
+  {
+    "label": "C02-D",
+    "id": "C02-r2-gpt-6.1-sol"
+  },
+  {
+    "label": "C02-E",
+    "id": "C02-r3-gpt-6.1-sol"
+  },
+  {
+    "label": "C02-F",
+    "id": "C02-r3-gpt-6-luna"
+  },
+  {
+    "label": "C04-A",
+    "id": "C04-r2-gpt-6-luna"
+  },
+  {
+    "label": "C04-B",
+    "id": "C04-r3-gpt-6.1-sol"
+  },
+  {
+    "label": "C04-C",
+    "id": "C04-r3-gpt-6-luna"
+  },
+  {
+    "label": "C04-D",
+    "id": "C04-r1-gpt-6.1-sol"
+  },
+  {
+    "label": "C04-E",
+    "id": "C04-r1-gpt-6-luna"
+  },
+  {
+    "label": "C04-F",
+    "id": "C04-r2-gpt-6.1-sol"
+  },
+  {
+    "label": "C06-A",
+    "id": "C06-r3-gpt-6.1-sol"
+  },
+  {
+    "label": "C06-B",
+    "id": "C06-r3-gpt-6-luna"
+  },
+  {
+    "label": "C06-C",
+    "id": "C06-r2-gpt-6.1-sol"
+  },
+  {
+    "label": "C06-D",
+    "id": "C06-r1-gpt-6.1-sol"
+  },
+  {
+    "label": "C06-E",
+    "id": "C06-r1-gpt-6-luna"
+  },
+  {
+    "label": "C06-F",
+    "id": "C06-r2-gpt-6-luna"
+  },
+  {
+    "label": "C08-A",
+    "id": "C08-r1-gpt-6.1-sol"
+  },
+  {
+    "label": "C08-B",
+    "id": "C08-r3-gpt-6.1-sol"
+  },
+  {
+    "label": "C08-C",
+    "id": "C08-r1-gpt-6-luna"
+  },
+  {
+    "label": "C08-D",
+    "id": "C08-r2-gpt-6-luna"
+  },
+  {
+    "label": "C08-E",
+    "id": "C08-r2-gpt-6.1-sol"
+  },
+  {
+    "label": "C08-F",
+    "id": "C08-r3-gpt-6-luna"
+  },
+  {
+    "label": "C10-A",
+    "id": "C10-r2-gpt-6.1-sol"
+  },
+  {
+    "label": "C10-B",
+    "id": "C10-r1-gpt-6-luna"
+  },
+  {
+    "label": "C10-C",
+    "id": "C10-r2-gpt-6-luna"
+  },
+  {
+    "label": "C10-D",
+    "id": "C10-r1-gpt-6.1-sol"
+  },
+  {
+    "label": "C10-E",
+    "id": "C10-r3-gpt-6-luna"
+  },
+  {
+    "label": "C10-F",
+    "id": "C10-r3-gpt-6.1-sol"
+  },
+  {
+    "label": "C12-A",
+    "id": "C12-r3-gpt-6.1-sol"
+  },
+  {
+    "label": "C12-B",
+    "id": "C12-r1-gpt-6-luna"
+  },
+  {
+    "label": "C12-C",
+    "id": "C12-r2-gpt-6.1-sol"
+  },
+  {
+    "label": "C12-D",
+    "id": "C12-r3-gpt-6-luna"
+  },
+  {
+    "label": "C12-E",
+    "id": "C12-r1-gpt-6.1-sol"
+  },
+  {
+    "label": "C12-F",
+    "id": "C12-r2-gpt-6-luna"
+  }
+]

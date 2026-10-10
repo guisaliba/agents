@@ -1,0 +1,60 @@
+{
+  "complete": false,
+  "synthetic_student": true,
+  "native_ui": true,
+  "checks": [],
+  "answers": [
+    {
+      "tool": "quiz",
+      "question": "First, check the ordering we need. Which number is greater?",
+      "answer_policy": "correct"
+    },
+    {
+      "tool": "quiz",
+      "question": "What is $\\operatorname{clamp}(9,2,8)$?",
+      "answer_policy": "dont_know"
+    },
+    {
+      "tool": "quiz",
+      "question": "Check the gap more closely. Is 9 within the range from 2 through 8, including both limits?",
+      "answer_policy": "correct"
+    },
+    {
+      "tool": "ask_user_question",
+      "question": "Which learning goal do you prefer?",
+      "answer_policy": "first_goal_option"
+    },
+    {
+      "tool": "ask_user_question",
+      "question": "Shall we use this short plan?",
+      "answer_policy": "first_goal_option"
+    },
+    {
+      "tool": "quiz",
+      "question": "Which is the upper limit in $\\operatorname{clamp}(9,2,8)$?",
+      "answer_policy": "correct"
+    },
+    {
+      "tool": "quiz",
+      "question": "When the input is above the upper limit, what does clamp return?",
+      "answer_policy": "correct"
+    },
+    {
+      "tool": "quiz",
+      "question": "What is $\\operatorname{clamp}(9,2,8)$?",
+      "answer_policy": "correct"
+    },
+    {
+      "tool": "quiz",
+      "question": "Moving down from 9, which limit do you reach first?",
+      "answer_policy": "correct"
+    },
+    {
+      "tool": "quiz",
+      "question": "Apply that connection again. What is $\\operatorname{clamp}(9,2,8)$?",
+      "answer_policy": "correct"
+    }
+  ],
+  "failure": "Research, plan approval, and coder visual delegation were not all observed",
+  "shared_settings_metadata_unchanged": true
+}

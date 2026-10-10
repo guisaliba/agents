@@ -1,0 +1,74 @@
+{
+  "complete": true,
+  "synthetic_student": true,
+  "native_ui": true,
+  "checks": [
+    {
+      "name": "native quiz and goal answers",
+      "passed": true
+    },
+    {
+      "name": "researcher and coder delegation",
+      "passed": true
+    },
+    {
+      "name": "plan checkpoint approved",
+      "passed": true
+    },
+    {
+      "name": "rendered PNG embedded in logged lesson",
+      "passed": true
+    },
+    {
+      "name": "existing note preserved",
+      "passed": true
+    },
+    {
+      "name": "normal terminal exit",
+      "passed": true
+    }
+  ],
+  "answers": [
+    {
+      "tool": "quiz",
+      "question": "To find your starting point: which number is greater?",
+      "answer_policy": "correct"
+    },
+    {
+      "tool": "quiz",
+      "question": "What does clamp(9, 2, 8) return?",
+      "answer_policy": "dont_know"
+    },
+    {
+      "tool": "quiz",
+      "question": "Which number is above the interval from 2 through 8?",
+      "answer_policy": "correct"
+    },
+    {
+      "tool": "ask_user_question",
+      "question": "Which learning goal do you want?",
+      "answer_policy": "first_goal_option"
+    },
+    {
+      "tool": "ask_user_question",
+      "question": "Shall we use this plan?",
+      "answer_policy": "first_goal_option"
+    },
+    {
+      "tool": "quiz",
+      "question": "In clamp(9, 2, 8), which number is the upper bound?",
+      "answer_policy": "correct"
+    },
+    {
+      "tool": "quiz",
+      "question": "When the input is above the upper bound, what does clamp return?",
+      "answer_policy": "correct"
+    },
+    {
+      "tool": "quiz",
+      "question": "What does clamp(9, 2, 8) return?",
+      "answer_policy": "correct"
+    }
+  ],
+  "shared_settings_metadata_unchanged": true
+}

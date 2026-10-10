@@ -1,0 +1,149 @@
+--- a/extensions/md-log.ts
++++ b/extensions/md-log.ts
+@@ -21,8 +21,9 @@
+  *   /md-log <filepath>  — Link a markdown file and backfill the session.
+  *   /md-unlog           — Stop logging.
+  *
+- * Append-only. No send-back-to-agent functionality (that lived in the old
+- * .md-link extension this was modeled on).
++ * Each session owns a marked section. Linking refreshes that section; live
++ * events append within it. All text outside the section is preserved.
++ * No send-back-to-agent functionality.
+  */
+ 
+ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+@@ -33,10 +34,12 @@
+ 
+ export default function mdLog(pi: ExtensionAPI) {
+ 	let logFile: string | null = null;
++	let logSession: string | null = null;
+ 
+ 	// --- State restoration on session restart ---
+ 
+ 	pi.on("session_start", async (_event, ctx) => {
++		logSession = ctx.sessionManager.getSessionId();
+ 		let lastLinkData: { file: string | null } | undefined;
+ 		for (const entry of ctx.sessionManager.getEntries()) {
+ 			if (entry.type === "custom" && entry.customType === "md-log") {
+@@ -65,17 +68,46 @@
+ 		return prev.then(fn).finally(() => release!());
+ 	}
+ 
+-	function appendToFile(text: string): void {
+-		if (!logFile) return;
++	function appendToFile(text: string, replace = false): void {
++		if (!logFile || !logSession) return;
++		const bytes = fs.readFileSync(logFile);
++		const current = bytes.toString("utf-8");
++		if (!Buffer.from(current, "utf-8").equals(bytes)) {
++			throw new Error("The note is not valid UTF-8; its bytes were not changed.");
++		}
++		const start = `<!-- pi-md-log:${logSession}:start -->`;
++		const end = `<!-- pi-md-log:${logSession}:end -->`;
++		const first = current.indexOf(start);
++		const last = current.indexOf(end);
++		let updated: string;
++		if (first === -1 && last === -1) {
++			const separator = current.length === 0 || current.endsWith("\n\n") ? ""
++				: current.endsWith("\n") ? "\n" : "\n\n";
++			updated = current + separator + start + "\n\n" + text + "\n\n" + end + "\n";
++		} else {
++			if (first === -1 || last < first + start.length
++				|| current.indexOf(start, first + start.length) !== -1
++				|| current.indexOf(end, last + end.length) !== -1) {
++				throw new Error("Invalid md-log section markers; the note was not changed.");
++			}
++			const previous = current.slice(first + start.length, last).trim();
++			const body = replace || !previous ? text : previous + "\n\n" + text;
++			updated = current.slice(0, first + start.length) + "\n\n" + body + "\n\n"
++				+ current.slice(last);
++		}
++		// Replace only after the complete new file has been written. Keep the
++		// original note intact if staging fails, and retain its permission bits.
++		const target = fs.realpathSync(logFile);
++		fs.accessSync(target, fs.constants.W_OK);
++		const mode = fs.statSync(target).mode & 0o777;
++		const staging = fs.mkdtempSync(path.join(path.dirname(target), ".pi-md-log-"));
+ 		try {
+-			let current = "";
+-			if (fs.existsSync(logFile)) {
+-				current = fs.readFileSync(logFile, "utf-8");
+-			}
+-			const prefix = current.trim().length > 0 ? "\n\n" : "";
+-			fs.writeFileSync(logFile, current + prefix + text + "\n", "utf-8");
+-		} catch {
+-			// File may have been deleted externally; ignore.
++			const candidate = path.join(staging, "note.md");
++			fs.writeFileSync(candidate, updated, { encoding: "utf-8", mode });
++			fs.chmodSync(candidate, mode);
++			fs.renameSync(candidate, target);
++		} finally {
++			fs.rmSync(staging, { recursive: true, force: true });
+ 		}
+ 	}
+ 
+@@ -305,11 +337,20 @@
+ 				return;
+ 			}
+ 
++			const previousFile = logFile;
++			const previousSession = logSession;
+ 			logFile = resolved;
++			logSession = ctx.sessionManager.getSessionId();
++			let written: number;
++			try {
++				written = backfill(ctx);
++			} catch {
++				logFile = previousFile;
++				logSession = previousSession;
++				ctx.ui.notify("Could not link the note. Check its UTF-8 encoding, permissions, and md-log section markers.", "error");
++				return;
++			}
+ 			pi.appendEntry("md-log", { file: resolved });
+-
+-			// Backfill the active branch.
+-			const written = backfill(ctx);
+ 
+ 			const theme = ctx.ui.theme;
+ 			ctx.ui.setStatus(
+@@ -339,8 +380,11 @@
+ 
+ 	function backfill(ctx: any): number {
+ 		if (!logFile) return 0;
+-		const entries: any[] = ctx.sessionManager.getEntries();
+-		if (entries.length === 0) return 0;
++		const entries: any[] = ctx.sessionManager.getBranch();
++		if (entries.length === 0) {
++			appendToFile("", true);
++			return 0;
++		}
+ 
+ 		const byId = new Map<string, any>();
+ 		for (const e of entries) if (e.id) byId.set(e.id, e);
+@@ -353,7 +397,10 @@
+ 				break;
+ 			}
+ 		}
+-		if (!leaf) return 0;
++		if (!leaf) {
++			appendToFile("", true);
++			return 0;
++		}
+ 
+ 		// Walk parent chain to root.
+ 		const chain: any[] = [];
+@@ -431,13 +478,7 @@
+ 			}
+ 		}
+ 
+-		if (blocks.length > 0) {
+-			try {
+-				fs.writeFileSync(logFile, blocks.join("\n\n") + "\n", "utf-8");
+-			} catch {
+-				// ignore
+-			}
+-		}
++		appendToFile(blocks.join("\n\n"), true);
+ 		return count;
+ 	}
+ }

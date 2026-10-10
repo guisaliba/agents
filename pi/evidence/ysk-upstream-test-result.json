@@ -1,0 +1,7 @@
+{
+  "commit": "4ffe3daec322de069bd15e174f23b6d4a5c45419",
+  "exit_code": 1,
+  "uses_real_pi": true,
+  "model_responses": "local protocol fixtures; not live-model verification",
+  "subagent_relay": "artifact-layout fixtures; no subagent extension installed"
+}

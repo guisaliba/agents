@@ -1,0 +1,41 @@
+{
+  "learn": {
+    "repository": "amosblomqvist/learn",
+    "commit": "7cfd8942f82ab9476e63572387e1fe9bcea5082c",
+    "files": {
+      ".gitignore": "9ee24818a48b374f15f90500f1202b624198609fe1c9334ebf57b286299719ed",
+      "README.md": "259105a848716bb60d4c176f937e3fcac86a4f382132cbc607c54299dfdb1e50",
+      "agents/mermaid-maker.md": "75581c2d49ff8177c1bf891bf2dcfde0d8b359ead38171b356cf87a42c3e4e9b",
+      "agents/researcher.md": "37b59661e5ef7df20632576da0f105c66ab91f107bbca4cfb7676a36886a32cb",
+      "agents/svg-maker.md": "78fb459098866bb11c68081fbdc3ac8902b47abe97923a491f4191098d50f021",
+      "extensions/ask-user-question.ts": "62bc3eddf919b40b60b9a55d2b262eeb9d77b61558ac69a589dbc4debf768645",
+      "extensions/md-log.ts": "48e778ce827124cae020f2c1abd7a85337c528d9ded577505871df21d836d040",
+      "extensions/quiz.ts": "a0f6f26da530f266024254b11b02cd38a7dedbd9892189d84f033a0a0bc1b1da",
+      "extensions/visual-tools/.gitignore": "4d56952b0fb13bf8f9b6c13a6d4c34a075bac3af447636a1df4335d7576e2f97",
+      "extensions/visual-tools/index.ts": "ae35173b1cc261f3ee6541cf52eef80fc2f918d71a8fd698efa0ae02cfe1c3f8",
+      "extensions/visual-tools/package-lock.json": "d3d947e54366dfa3ab9337b360ce8ce9f2b1731bb1175267a729badcab6e9eb5",
+      "extensions/visual-tools/package.json": "5420a9dee05bf392f8a383726e4f89b680f1573b4ca1b2505a0a89dd860738a5",
+      "extensions/visual-tools/tools/_common.ts": "d04850539bb800135c6e590b827851765e87ed6e398465c3c6c54bf5319cd08f",
+      "extensions/visual-tools/tools/mermaid_tools.ts": "9326bc9c8128086638ae28789f9a3a7f920ec325b805a06f0af5f87991ee5360",
+      "extensions/visual-tools/tools/svg_tools.ts": "bbb7f88fe8753cef0c28d370bb0740f263cb4ee0446cb47a23b88f58e3b4a690",
+      "skills/teach/SKILL.md": "180d78f5bd65e2f251dab60c716ac5874727595a28377e58590c1aac526ada80",
+      "skills/visualize/SKILL.md": "56cd3eabc9d4a2ff44d9251a11d1b18a4179f28bc13a0ca8cd5d484785241855"
+    },
+    "patched_logger_sha256": "4562688efecff6f1257043e06c9861dd2e99cb142f442be1373f3354cba676c4"
+  },
+  "you-should-know": {
+    "repository": "aliceisjustplaying/pi-you-should-know",
+    "commit": "4ffe3daec322de069bd15e174f23b6d4a5c45419",
+    "files": {
+      ".gitignore": "4d56952b0fb13bf8f9b6c13a6d4c34a075bac3af447636a1df4335d7576e2f97",
+      "README.md": "a90c32fdfe41a15a285b0a165b1f17bf1929ac7689114b0e849eeb30c8789d3c",
+      "extensions/you-should-know/detect-prompt.md": "baf0cf2c7595bde639f32aa9bd62f14f1f2d309cf6f603d2cab46b23e7a80a86",
+      "extensions/you-should-know/index.ts": "b4b88cb82359f1313092acd10f0b508f69e93e02fa54b392f05930315e26dc02",
+      "package.json": "7d4137982ba4a4893f48e933c032439847e3eac548d5aced6d86606873cfe1c2",
+      "tests/detection.test.mjs": "6773a277b7c140b5a045de1e200bd2522aacd99025d193b04e8328a542bcd8fe",
+      "tests/notes.test.mjs": "d49cd16e4137c0e02a5edb944ea50fd0ff48462750068b12b12b7d247b85f62a",
+      "tests/routing.test.mjs": "3d2d222f160cb16be28f646a714348eae0b611e997bb7bf460657b8f96099c8a",
+      "tests/rpc.test.mjs": "597f69f91ed61ba24ce438e4f6de71f9e676b8694331d69b4bd57fc9df4f66db"
+    }
+  }
+}

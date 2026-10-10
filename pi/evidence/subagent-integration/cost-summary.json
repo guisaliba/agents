@@ -1,0 +1,348 @@
+{
+  "estimates_not_bills": true,
+  "limitations": [
+    "Only reported usage is counted; unsuccessful requests with absent usage cannot be priced.",
+    "Legacy root observer records without session IDs are excluded, not guessed.",
+    "Subscription limits, retrieval charges and actual invoices are not measured."
+  ],
+  "runs": [
+    {
+      "run": "pi/evidence/subagent-live-attempt-1",
+      "sessions": [
+        {
+          "id": "01a12686-f05c-730c-97c8-8487c82233ac",
+          "name": "writer /root/user-documentation",
+          "assistant_messages": 7,
+          "reported_tokens": 81630,
+          "catalog_usd": 0.008420962,
+          "provider_models": [
+            "opencode-go/mimo-v2.6-pro"
+          ]
+        },
+        {
+          "id": "01a12686-d587-730c-97c8-848470851fa7",
+          "name": "reviewer /root/implementation-review",
+          "assistant_messages": 19,
+          "reported_tokens": 220198,
+          "catalog_usd": 0.0715416,
+          "provider_models": [
+            "openai/gpt-6.1-sol"
+          ]
+        },
+        {
+          "id": "01a12683-d12b-730c-97c8-8483b9386589",
+          "name": "coder /root/clamp-implementation",
+          "assistant_messages": 19,
+          "reported_tokens": 269255,
+          "catalog_usd": 0.0115643,
+          "provider_models": [
+            "openai/gpt-6-luna"
+          ]
+        },
+        {
+          "id": "01a12683-ab6f-730c-97c8-8481660c621f",
+          "name": "tasker /root/exact-fixture-extraction",
+          "assistant_messages": 3,
+          "reported_tokens": 25324,
+          "catalog_usd": 0.001690035,
+          "provider_models": [
+            "opencode-go/claude-haiku-5-5"
+          ]
+        },
+        {
+          "id": "01a12683-933c-730c-97c8-847fdcdaddad",
+          "name": "researcher /root/local-contract-brief",
+          "assistant_messages": 18,
+          "reported_tokens": 482811,
+          "catalog_usd": 0.018263454,
+          "provider_models": [
+            "opencode-go/deepseek-v4.1-flash"
+          ]
+        },
+        {
+          "id": "01a12683-72e5-730c-97c8-847cd6ff875a",
+          "name": "architect /root/acceptance-plan",
+          "assistant_messages": 5,
+          "reported_tokens": 26373,
+          "catalog_usd": 0.0245668,
+          "provider_models": [
+            "openai/gpt-6.1-sol"
+          ]
+        },
+        {
+          "id": "01a12683-17b1-730c-97c8-847b0cb33959",
+          "name": "main",
+          "assistant_messages": 32,
+          "reported_tokens": 873716,
+          "catalog_usd": 0.2789152,
+          "provider_models": [
+            "openai/gpt-6.1-sol"
+          ]
+        }
+      ],
+      "observers": [
+        {
+          "scope": "child",
+          "model": "openai/gpt-6-luna",
+          "thinking": "max",
+          "catalog_usd": 0.0024930000000000004
+        },
+        {
+          "scope": "child",
+          "model": "openai/gpt-6-luna",
+          "thinking": "max",
+          "catalog_usd": 0.0021201
+        },
+        {
+          "scope": "child",
+          "model": "openai/gpt-6-luna",
+          "thinking": "max",
+          "catalog_usd": 0.0021320600000000003
+        },
+        {
+          "scope": "child",
+          "model": "openai/gpt-6-luna",
+          "thinking": "max",
+          "catalog_usd": 0.0018615
+        },
+        {
+          "scope": "child",
+          "model": "openai/gpt-6-luna",
+          "thinking": "max",
+          "catalog_usd": 0.00249146
+        },
+        {
+          "scope": "child",
+          "model": "openai/gpt-6-luna",
+          "thinking": "max",
+          "catalog_usd": 0.0027057
+        },
+        {
+          "scope": "child",
+          "model": "openai/gpt-6-luna",
+          "thinking": "max",
+          "catalog_usd": 0.004974360000000001
+        }
+      ],
+      "session_catalog_usd": 0.41496235099999995,
+      "observer_catalog_usd": 0.018778180000000002,
+      "reported_catalog_usd": 0.43374053099999993
+    },
+    {
+      "run": "pi/evidence/child-relay-live-attempt-1",
+      "sessions": [
+        {
+          "id": "01a1268c-fabc-70ca-b6f6-2bde705de45e",
+          "name": "tasker /root/count-receipt-files",
+          "assistant_messages": 2,
+          "reported_tokens": 15132,
+          "catalog_usd": 0.001205085,
+          "provider_models": [
+            "opencode-go/claude-haiku-5-5"
+          ]
+        },
+        {
+          "id": "01a1268c-e550-70ca-b6f6-2bdd2316e198",
+          "name": "tasker /root/extract-receipt-chain",
+          "assistant_messages": 9,
+          "reported_tokens": 62305,
+          "catalog_usd": 0.00243224,
+          "provider_models": [
+            "opencode-go/claude-haiku-5-5"
+          ]
+        },
+        {
+          "id": "01a1268c-ab74-70ca-b6f6-2bdbc12d1081",
+          "name": "main",
+          "assistant_messages": 9,
+          "reported_tokens": 191328,
+          "catalog_usd": 0.11643039999999999,
+          "provider_models": [
+            "openai/gpt-6.1-sol"
+          ]
+        }
+      ],
+      "observers": [
+        {
+          "scope": "child",
+          "model": "openai/gpt-6-luna",
+          "thinking": "max",
+          "catalog_usd": 0.0017230000000000001
+        }
+      ],
+      "session_catalog_usd": 0.12006772499999999,
+      "observer_catalog_usd": 0.0017230000000000001,
+      "reported_catalog_usd": 0.12179072499999999
+    },
+    {
+      "run": "pi/evidence/learn-workflow-live-attempt-1",
+      "sessions": [
+        {
+          "id": "01a12696-8399-7222-9720-cec7e56d13cd",
+          "name": "coder /root/clamp-rule-visual",
+          "assistant_messages": 6,
+          "reported_tokens": 114251,
+          "catalog_usd": 0.0036169400000000003,
+          "provider_models": [
+            "openai/gpt-6-luna"
+          ]
+        },
+        {
+          "id": "01a12695-a5aa-7222-9720-cec55e1b4ae2",
+          "name": "researcher /root/verify-clamp-reference",
+          "assistant_messages": 3,
+          "reported_tokens": 44207,
+          "catalog_usd": 0.003475542,
+          "provider_models": [
+            "opencode-go/deepseek-v4.1-flash"
+          ]
+        },
+        {
+          "id": "01a12694-f8e8-7222-9720-cec22f74faec",
+          "name": "main",
+          "assistant_messages": 18,
+          "reported_tokens": 547746,
+          "catalog_usd": 0.1454168,
+          "provider_models": [
+            "openai/gpt-6.1-sol"
+          ]
+        }
+      ],
+      "observers": [
+        {
+          "scope": "main",
+          "model": "openai/gpt-6-luna",
+          "thinking": "max",
+          "catalog_usd": 0.0037317000000000006
+        },
+        {
+          "scope": "main",
+          "model": "openai/gpt-6-luna",
+          "thinking": "max",
+          "catalog_usd": 0.0024439
+        }
+      ],
+      "session_catalog_usd": 0.15250928200000002,
+      "observer_catalog_usd": 0.006175600000000001,
+      "reported_catalog_usd": 0.15868488200000003
+    },
+    {
+      "run": "pi/evidence/learn-workflow-live-attempt-2",
+      "sessions": [
+        {
+          "id": "01a12698-b2d8-76d6-8ce7-83d29be0bd58",
+          "name": "main",
+          "assistant_messages": 2,
+          "reported_tokens": 50753,
+          "catalog_usd": 0.0585988,
+          "provider_models": [
+            "openai/gpt-6.1-sol"
+          ]
+        }
+      ],
+      "observers": [],
+      "session_catalog_usd": 0.0585988,
+      "observer_catalog_usd": 0,
+      "reported_catalog_usd": 0.0585988
+    },
+    {
+      "run": "pi/evidence/learn-workflow-live-attempt-3",
+      "sessions": [
+        {
+          "id": "01a126a6-b094-722a-adb2-455e5b25f9f3",
+          "name": "coder /root/clamp-rule-picture",
+          "assistant_messages": 6,
+          "reported_tokens": 89684,
+          "catalog_usd": 0.00298984,
+          "provider_models": [
+            "openai/gpt-6-luna"
+          ]
+        },
+        {
+          "id": "01a126a5-c21b-722a-adb2-455db35be0a6",
+          "name": "researcher /root/verify-clamp-reference",
+          "assistant_messages": 3,
+          "reported_tokens": 32092,
+          "catalog_usd": 0.0028512599999999996,
+          "provider_models": [
+            "opencode-go/deepseek-v4.1-flash"
+          ]
+        },
+        {
+          "id": "01a126a5-17b1-722a-adb2-455bb8aa1f8c",
+          "name": "main",
+          "assistant_messages": 16,
+          "reported_tokens": 420881,
+          "catalog_usd": 0.17581,
+          "provider_models": [
+            "openai/gpt-6.1-sol"
+          ]
+        }
+      ],
+      "observers": [
+        {
+          "scope": "main",
+          "model": "openai/gpt-6-luna",
+          "thinking": "max",
+          "catalog_usd": 0.0033152000000000004
+        },
+        {
+          "scope": "main",
+          "model": "openai/gpt-6-luna",
+          "thinking": "max",
+          "catalog_usd": 0.0020466
+        }
+      ],
+      "session_catalog_usd": 0.18165109999999998,
+      "observer_catalog_usd": 0.0053618,
+      "reported_catalog_usd": 0.18701289999999998
+    },
+    {
+      "run": "pi/evidence/child-relay-live-attempt-2",
+      "sessions": [
+        {
+          "id": "01a126b3-0cb6-7082-8500-5b5087d2422d",
+          "name": "tasker /root/count-receipt-files",
+          "assistant_messages": 2,
+          "reported_tokens": 15020,
+          "catalog_usd": 0.001102175,
+          "provider_models": [
+            "opencode-go/claude-haiku-5-5"
+          ]
+        },
+        {
+          "id": "01a126b2-f085-7082-8500-5b4ed952b778",
+          "name": "tasker /root/extract-receipt-chain",
+          "assistant_messages": 9,
+          "reported_tokens": 64529,
+          "catalog_usd": 0.002512915,
+          "provider_models": [
+            "opencode-go/claude-haiku-5-5"
+          ]
+        },
+        {
+          "id": "01a126b2-b3d3-7082-8500-5b4ce4da14ab",
+          "name": "main",
+          "assistant_messages": 12,
+          "reported_tokens": 266034,
+          "catalog_usd": 0.110612,
+          "provider_models": [
+            "openai/gpt-6.1-sol"
+          ]
+        }
+      ],
+      "observers": [
+        {
+          "scope": "child",
+          "model": "openai/gpt-6-luna",
+          "thinking": "max",
+          "catalog_usd": 0.0014912
+        }
+      ],
+      "session_catalog_usd": 0.11422709,
+      "observer_catalog_usd": 0.0014912,
+      "reported_catalog_usd": 0.11571829
+    }
+  ],
+  "reported_catalog_usd": 1.0755461279999998
+}

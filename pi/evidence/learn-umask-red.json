@@ -1,0 +1,59 @@
+{
+  "checks": [
+    {
+      "name": "only original Learn Markdown commands load",
+      "passed": true
+    },
+    {
+      "name": "selected exact model produces a real assistant response",
+      "passed": true
+    },
+    {
+      "name": "linking preserves existing note content and records session history",
+      "passed": true
+    },
+    {
+      "name": "relinking preserves prefix and suffix without duplicate history",
+      "passed": true
+    },
+    {
+      "name": "live logging updates only its session section",
+      "passed": true
+    },
+    {
+      "name": "a new session does not retain the previous note link",
+      "passed": true
+    },
+    {
+      "name": "damaged section markers preserve the note and report an error",
+      "passed": true
+    },
+    {
+      "name": "read-only notes remain unchanged and linking reports an error",
+      "passed": true
+    },
+    {
+      "name": "private note permission bits are preserved",
+      "passed": true
+    },
+    {
+      "name": "Markdown preservation",
+      "passed": false
+    }
+  ],
+  "complete": false,
+  "port_complete": false,
+  "scope": "real Pi Markdown command and file preservation; no subagents or visuals",
+  "model": "openai/gpt-6-luna",
+  "extension_sha256": "e40cc8137d5fdd666bb47999b335da9ab2b99b51438afe8d7c7d3d5c392a968a",
+  "artifacts": [
+    "before.md",
+    "after.md",
+    "relinked.md",
+    "live.md"
+  ],
+  "session": "01a12330-b2d9-7556-b00c-605c019f9be1",
+  "failure": "The process umask changed the existing note's permission bits",
+  "shared_settings_metadata_unchanged": true,
+  "fixture_directory": "/tmp/pi-port-docs/learn-umask-red-fixtures"
+}

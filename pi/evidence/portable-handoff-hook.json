@@ -1,0 +1,26 @@
+{
+  "complete": true,
+  "live_model_requests": 0,
+  "synthetic_provider": true,
+  "created": {
+    "handoff_id": "01a1271d-3314-7b51-bf76-3b2a0f1f1182"
+  },
+  "scope": {
+    "workspace": "pi-port-verification",
+    "project": "handoff-4fcaad21f69c"
+  },
+  "successor_handoffs": 1,
+  "checks": [
+    "first prompt receives handoff automatically",
+    "next session does not receive it again",
+    "no manual accept or note-file fallback"
+  ],
+  "provider_calls": [
+    {
+      "handoff_seen": true
+    },
+    {
+      "handoff_seen": false
+    }
+  ]
+}

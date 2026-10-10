@@ -1,0 +1,205 @@
+{
+  "complete": true,
+  "model_generated_relay": true,
+  "checks": [
+    {
+      "name": "model-generated child note delivered once",
+      "passed": true
+    },
+    {
+      "name": "child observer independently uses Luna/max",
+      "passed": true
+    }
+  ],
+  "synthetic_replay": true,
+  "root_session_id": "01a1268c-ab74-70ca-b6f6-2bdbc12d1081",
+  "notes": [
+    {
+      "role": "custom",
+      "customType": "you-should-know",
+      "content": "Your subagent \"/root/extract-receipt-chain\" raised a note its side agent thinks you (and the user) should know. It's about the subagent's work; you can't see its conversation. Weigh it and act or mention it if it matters:\n> Heads up \u00b7 The synthetic receipts conflict about the old billing formula, so they cannot establish what code or deployment actually used.\n> Evidence: receipt-1.md; receipt-2.md; receipt-6.md\n>\n> **Receipts conflict on the formula**\n>\n> Receipt R1 says the old formula divided by 100. Receipt R2 says the patch changed it from dividing by 1000 to dividing by 100. Receipt R6 says these are synthetic replay receipts, not a real deployment. Report the conflict; do not treat it as proof of deployed behavior.",
+      "display": true,
+      "details": {
+        "line": "The synthetic receipts conflict about the old billing formula, so they cannot establish what code or deployment actually used.",
+        "tag": "Heads up",
+        "evidence": "receipt-1.md; receipt-2.md; receipt-6.md",
+        "explanation": "**Receipts conflict on the formula**\n\nReceipt R1 says the old formula divided by 100. Receipt R2 says the patch changed it from dividing by 1000 to dividing by 100. Receipt R6 says these are synthetic replay receipts, not a real deployment. Report the conflict; do not treat it as proof of deployed behavior.",
+        "from": "/root/extract-receipt-chain",
+        "relayId": "1791648156833-443023-ohsjoa.json"
+      },
+      "timestamp": 1791648175885
+    }
+  ],
+  "observer_checks": [
+    {
+      "step": 6,
+      "outcome": "relayed",
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "thinking": "max",
+      "line": "The synthetic receipts conflict about the old billing formula, so they cannot establish what code or deployment actually used."
+    }
+  ],
+  "observer_requests": [
+    {
+      "sessionId": "01a1268c-e550-70ca-b6f6-2bdd2316e198",
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "thinking": "max",
+      "usage": {
+        "input": 13095,
+        "output": 827,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 703,
+        "totalTokens": 13922,
+        "cost": {
+          "input": 0.0013095000000000001,
+          "output": 0.00041349999999999997,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0017230000000000001
+        }
+      },
+      "stopReason": "stop"
+    }
+  ],
+  "main_usage": [
+    {
+      "input": 19127,
+      "output": 14,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "reasoning": 0,
+      "totalTokens": 19141,
+      "cost": {
+        "input": 0.038253999999999996,
+        "output": 0.00014000000000000001,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 0.038394
+      }
+    },
+    {
+      "input": 535,
+      "output": 169,
+      "cacheRead": 18944,
+      "cacheWrite": 0,
+      "reasoning": 0,
+      "totalTokens": 19648,
+      "cost": {
+        "input": 0.00107,
+        "output": 0.00169,
+        "cacheRead": 0.0018944,
+        "cacheWrite": 0,
+        "total": 0.0046544
+      }
+    },
+    {
+      "input": 640,
+      "output": 125,
+      "cacheRead": 19328,
+      "cacheWrite": 0,
+      "reasoning": 0,
+      "totalTokens": 20093,
+      "cost": {
+        "input": 0.0012799999999999999,
+        "output": 0.00125,
+        "cacheRead": 0.0019328000000000001,
+        "cacheWrite": 0,
+        "total": 0.0044628
+      }
+    },
+    {
+      "input": 525,
+      "output": 43,
+      "cacheRead": 19840,
+      "cacheWrite": 0,
+      "reasoning": 0,
+      "totalTokens": 20408,
+      "cost": {
+        "input": 0.00105,
+        "output": 0.00043000000000000004,
+        "cacheRead": 0.001984,
+        "cacheWrite": 0,
+        "total": 0.003464
+      }
+    },
+    {
+      "input": 208,
+      "output": 14,
+      "cacheRead": 20224,
+      "cacheWrite": 0,
+      "reasoning": 0,
+      "totalTokens": 20446,
+      "cost": {
+        "input": 0.000416,
+        "output": 0.00014000000000000001,
+        "cacheRead": 0.0020224,
+        "cacheWrite": 0,
+        "total": 0.0025784000000000002
+      }
+    },
+    {
+      "input": 21511,
+      "output": 31,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "reasoning": 0,
+      "totalTokens": 21542,
+      "cost": {
+        "input": 0.043022,
+        "output": 0.00031,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 0.043331999999999996
+      }
+    },
+    {
+      "input": 2313,
+      "output": 490,
+      "cacheRead": 20352,
+      "cacheWrite": 0,
+      "reasoning": 21,
+      "totalTokens": 23155,
+      "cost": {
+        "input": 0.004626,
+        "output": 0.004900000000000001,
+        "cacheRead": 0.0020352,
+        "cacheWrite": 0,
+        "total": 0.0115612
+      }
+    },
+    {
+      "input": 803,
+      "output": 54,
+      "cacheRead": 22528,
+      "cacheWrite": 0,
+      "reasoning": 24,
+      "totalTokens": 23385,
+      "cost": {
+        "input": 0.001606,
+        "output": 0.00054,
+        "cacheRead": 0.0022528,
+        "cacheWrite": 0,
+        "total": 0.0043988
+      }
+    },
+    {
+      "input": 269,
+      "output": 73,
+      "cacheRead": 23168,
+      "cacheWrite": 0,
+      "reasoning": 0,
+      "totalTokens": 23510,
+      "cost": {
+        "input": 0.000538,
+        "output": 0.0007300000000000001,
+        "cacheRead": 0.0023168000000000004,
+        "cacheWrite": 0,
+        "total": 0.0035848000000000004
+      }
+    }
+  ],
+  "shared_settings_metadata_unchanged": true
+}

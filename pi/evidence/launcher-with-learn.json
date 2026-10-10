@@ -1,0 +1,102 @@
+{
+  "checks": [
+    {
+      "name": "endpoint rejects remote hosts, credentials, paths, queries, and invalid ports",
+      "passed": true
+    },
+    {
+      "name": "unselected resource flags are rejected",
+      "passed": true
+    },
+    {
+      "name": "selected exact model produced real assistant responses",
+      "passed": true,
+      "model": "openai/gpt-6-luna"
+    },
+    {
+      "name": "approved instructions reach the real Pi system prompt without project instructions",
+      "passed": true
+    },
+    {
+      "name": "only approved resources load; project session-directory override is ignored",
+      "passed": true
+    },
+    {
+      "name": "RTK rewrites the real Pi bash tool and reduces output",
+      "passed": true,
+      "raw_bytes": 3279,
+      "reduced_bytes": 1260
+    },
+    {
+      "name": "marker-free projects capture both tool calls and an ended session",
+      "passed": true,
+      "capture": [
+        {
+          "session": "01a1234b-5ffb-7432-b9e6-26388a6d7e4a",
+          "agent": "pi",
+          "ended": true,
+          "workspace": "default",
+          "project": "launcher-fixture-edf7742d89",
+          "observations_by_kind": {
+            "post-tool-use": 2,
+            "pre-tool-use": 2,
+            "session-end": 1,
+            "session-start": 1,
+            "stop": 1,
+            "user-prompt": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "normal persistent session is saved in the chosen agent directory",
+      "passed": true
+    },
+    {
+      "name": "temporary generated resources are removed after Pi exits",
+      "passed": true
+    },
+    {
+      "name": "interactive terminal delivers instructions, rewrites bash, captures both tools, and exits normally",
+      "passed": true,
+      "capture": [
+        {
+          "session": "01a1234b-92c6-76e8-bbc0-726bb08de74d",
+          "agent": "pi",
+          "ended": true,
+          "workspace": "default",
+          "project": "launcher-fixture-edf7742d89",
+          "observations_by_kind": {
+            "post-tool-use": 2,
+            "pre-tool-use": 2,
+            "session-end": 1,
+            "session-start": 1,
+            "stop": 1,
+            "user-prompt": 1
+          }
+        }
+      ],
+      "terminal_output_bytes": 107018
+    },
+    {
+      "name": "shared Pi settings, OpenCode configuration, and original instructions are unchanged",
+      "passed": true
+    }
+  ],
+  "complete": true,
+  "daily_primary_models_verified": false,
+  "model": "openai/gpt-6-luna",
+  "primary_model_verified": true,
+  "launcher_sha256": "532c836194cf6a1228c656de88a1c1133960ab289eb90a8a9e9d8ded3ad33126",
+  "instructions_sha256": "b7a5f2887289e867c8dce84c119f210383e22a5161fbf8d6bff122353a320f4e",
+  "port_complete": false,
+  "generated_extension_sha256": [
+    "86c2e3dc2f00b473f0c75a28bb906436bdbdcc60c9beeba1614e8e8b219b820b",
+    "48f07e4fd8e38b350cae84fe0116d2bc29932d535e333a307cb9e477f5272de6",
+    "4562688efecff6f1257043e06c9861dd2e99cb142f442be1373f3354cba676c4"
+  ],
+  "session": "01a1234b-5ffb-7432-b9e6-26388a6d7e4a",
+  "interactive_session": "01a1234b-92c6-76e8-bbc0-726bb08de74d",
+  "primary_model_authentication": "ready",
+  "primary_model_check": "selected primary passed print and interactive checks"
+}

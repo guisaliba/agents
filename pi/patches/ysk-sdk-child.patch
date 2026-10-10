@@ -1,0 +1,122 @@
+diff --git a/ysk/index.ts b/ysk/index.ts
+index 188ac3c..eb2134c 100644
+--- a/ysk/index.ts
++++ b/ysk/index.ts
+@@ -34,9 +34,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
+ const DETECT_TEMPLATE = readFileSync(join(HERE, "detect-prompt.md"), "utf8");
+ const AGENT_DIR = process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), ".pi", "agent");
+ const CONFIG_FILE = join(AGENT_DIR, "you-should-know", "config.json");
+-const STATE_FILE = join(AGENT_DIR, "you-should-know", "state.json");
+ const KNOWLEDGE_FILE = join(AGENT_DIR, "you-should-know", "knowledge.jsonl");
+-const LOG_FILE = join(AGENT_DIR, "you-should-know", "checks.jsonl");
+ const WIDGET = "you-should-know";
+ const DEBUG = !!process.env.YSK_DEBUG;
+ 
+@@ -51,8 +49,8 @@ const CHILD_ACTIVITY = process.env.PI_SUBAGENT_ACTIVITY_FILE?.trim();
+ const CHILD_ARTIFACT_DIR = CHILD_ACTIVITY
+ 	? basename(dirname(CHILD_ACTIVITY)) === "subagent-activity" ? dirname(dirname(CHILD_ACTIVITY)) : dirname(CHILD_ACTIVITY)
+ 	: undefined;
+-const CHILD_INBOX = CHILD_ARTIFACT_DIR ? join(CHILD_ARTIFACT_DIR, INBOX) : undefined;
+-const CHILD_NAME = process.env.PI_SUBAGENT_NAME?.trim() || process.env.PI_SUBAGENT_ID?.trim() || "subagent";
++const DEFAULT_CHILD_INBOX = CHILD_ARTIFACT_DIR ? join(CHILD_ARTIFACT_DIR, INBOX) : undefined;
++const DEFAULT_CHILD_NAME = process.env.PI_SUBAGENT_NAME?.trim() || process.env.PI_SUBAGENT_ID?.trim() || "subagent";
+ 
+ // ---- prompts (verbatim from the CC mod) ----
+ const PREAMBLE = DETECT_TEMPLATE.slice(0, DETECT_TEMPLATE.indexOf("</system-reminder>") + "</system-reminder>".length);
+@@ -86,6 +84,21 @@ const explainPrompt = (line: string, prev?: { direction: Exclude<Direction, "fir
+ 	shape(DIRECTION_RULE[prev?.direction ?? "first"]) +
+ 	"\nOutput only the explanation."; // mn()
+ 
++// Explicit SDK-child options avoid process-wide environment changes.
++export interface ChildObserverOptions {
++	stateDirectory?: string;
++	relayInbox?: string;
++	name?: string;
++	observerModel?: string;
++	observerThinking?: "max";
++	parentStateFile?: string;
++}
++export default function (pi: ExtensionAPI, options: ChildObserverOptions = {}) {
++	const STATE_FILE = join(options.stateDirectory ?? join(AGENT_DIR, "you-should-know"), "state.json");
++	const LOG_FILE = join(options.stateDirectory ?? join(AGENT_DIR, "you-should-know"), "checks.jsonl");
++	const CHILD_INBOX = options.relayInbox ?? DEFAULT_CHILD_INBOX;
++	const CHILD_NAME = options.name ?? DEFAULT_CHILD_NAME;
++
+ // ---- persistent state (across sessions, like CC's plugin store) ----
+ type State = { enabled: boolean; seen: string[]; known: string[]; ignoredInARow: number; skip: number };
+ // Each feedback write is one append, so another Pi process cannot overwrite it
+@@ -163,11 +176,11 @@ const textOf = (msg: { content: unknown }) =>
+ 				.trim()
+ 		: "";
+ 
+-export default function (pi: ExtensionAPI) {
+ 	let state = loadState();
+ 	let notes: Note[] = []; // oldest first; notes[0] is the one /ysk and alt+x act on
+ 	let answered = new Map<string, { note: Note; action: string }>();
+ 	let inFlight: AbortController | undefined;
++	let pendingCheck: Promise<void> | undefined;
+ 	let promptCounter = 0; // stands in for CC's turnId staleness check
+ 	let checks = 0;
+ 	const remember = (line: string, known: boolean) => {
+@@ -187,14 +200,14 @@ export default function (pi: ExtensionAPI) {
+ 		const family = /^gpt-/i.test(id) ? "gpt" : /^claude-fable(?:-|$)/i.test(id) ? "fable" : undefined;
+ 		const config = existsSync(CONFIG_FILE) ? JSON.parse(readFileSync(CONFIG_FILE, "utf8")) : {};
+ 		const route = family ? { ...defaultRoutes[family], ...config[family] } : undefined;
+-		const override = process.env.YSK_MODEL?.trim();
++		const override = options.observerModel ?? process.env.YSK_MODEL?.trim();
+ 		if (!override && !route) return { model: ctx.model, thinking: undefined };
+ 		const requested = override || route?.model;
+ 		if (typeof requested !== "string" || !requested.includes("/")) throw new Error("YSK model must be provider/model-id");
+ 		const at = requested.indexOf("/");
+ 		const model = ctx.modelRegistry.find(requested.slice(0, at), requested.slice(at + 1));
+ 		if (!model) throw new Error(`YSK model not found: ${requested}`);
+-		const thinking = route?.thinking;
++		const thinking = options.observerThinking ?? route?.thinking;
+ 		if (thinking !== undefined && !thinkingLevels.includes(thinking)) throw new Error("Invalid YSK thinking level in " + CONFIG_FILE);
+ 		return { model, thinking };
+ 	};
+@@ -263,6 +276,8 @@ export default function (pi: ExtensionAPI) {
+ 		const res = thinking === undefined && model.api === "anthropic-messages"
+ 			? await ctx.modelRegistry.complete(model, context, options)
+ 			: await ctx.modelRegistry.streamSimple(model, context, { ...options, reasoning: thinking, toolChoice: "none" }).result();
++		mkdirSync(dirname(LOG_FILE), { recursive: true });
++		appendFileSync(join(dirname(LOG_FILE), "requests.jsonl"), JSON.stringify({ sessionId: ctx.sessionManager.getSessionId(), provider: model.provider, model: model.id, thinking, usage: res.usage, stopReason: res.stopReason }) + "\n");
+ 		return { text: textOf(res), usage: res.usage, stopReason: res.stopReason, error: res.errorMessage, provider: model.provider, model: model.id, thinking };
+ 	}
+ 
+@@ -427,8 +442,15 @@ export default function (pi: ExtensionAPI) {
+ 		}
+ 	});
+ 
+-	pi.on("session_shutdown", () => {
++	pi.on("agent_before_settle", async (_event, ctx) => {
++		if (options.relayInbox) {
++			if (ctx.signal?.aborted) inFlight?.abort();
++			await pendingCheck;
++		}
++	});
++	pi.on("session_shutdown", async () => {
+ 		inFlight?.abort();
++		await pendingCheck;
+ 		inFlight = undefined;
+ 		if (inboxTimer) clearInterval(inboxTimer);
+ 		inboxTimer = undefined;
+@@ -467,7 +489,8 @@ export default function (pi: ExtensionAPI) {
+ 
+ 	pi.on("turn_end", (e, ctx) => {
+ 		lastLlmMessages = e.context.llmMessages as any[];
+-		if (!state.enabled || !ctx.hasUI) return;
++		if (!state.enabled || (!ctx.hasUI && !options.relayInbox)) return;
++		if (options.parentStateFile && existsSync(options.parentStateFile) && !JSON.parse(readFileSync(options.parentStateFile, "utf8")).enabled) return;
+ 		const step = e.turnIndex;
+ 		if (!(step > 0 && step % CHECK_EVERY_STEPS === 0)) return;
+ 		if (inFlight) return;
+@@ -485,7 +508,7 @@ export default function (pi: ExtensionAPI) {
+ 		const t0 = Date.now();
+ 		checks++;
+ 		// Fire and forget: never block the main agent.
+-		void (async () => {
++		pendingCheck = (async () => {
+ 			let outcome = "error";
+ 			let extra: Record<string, unknown> = {};
+ 			try {

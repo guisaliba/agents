@@ -1,0 +1,35 @@
+diff --git a/manager/src/orch/runtime.ts b/manager/src/orch/runtime.ts
+index a908730..1d70958 100644
+--- a/manager/src/orch/runtime.ts
++++ b/manager/src/orch/runtime.ts
+@@ -1,4 +1,5 @@
+ import path from "node:path";
++import { childExtensions, childToolNames, childSystemPrompt } from "../../port-child.ts";
+ import type { AssistantMessage } from "@earendil-works/pi-ai";
+ import { clampThinkingLevel } from "@earendil-works/pi-ai/compat";
+ import { existsSync } from "node:fs";
+@@ -377,7 +378,7 @@ export function createDriverFactory(
+     };
+     const model = await resolveRuntimeModel(provider, id, initialScopedModels);
+     const inherited = getInheritedTools();
+-    const localNames = new Set([...BUILTINS, ...options.tools.map((tool) => tool.name)]);
++    const localNames = new Set([...BUILTINS, ...options.tools.map((tool) => tool.name), ...childToolNames(options.type.name)]);
+     const externalTools = inherited.tools.filter((tool) => !localNames.has(tool.name));
+     const toolNames = selectTools(
+       options.type.tools,
+@@ -414,6 +415,7 @@ export function createDriverFactory(
+       noThemes: true,
+       systemPrompt: [
+         options.type.systemPrompt,
++        childSystemPrompt(),
+         `Your thread path is ${options.path}.`,
+         options.parentPath
+           ? `Your lexical parent is ${options.parentPath}; inherited conversation comes only from that parent.`
+@@ -428,6 +430,7 @@ export function createDriverFactory(
+       ].join("\n\n"),
+       appendSystemPromptOverride: () => [],
+       extensionFactories: [
++        ...childExtensions(ctx, options.path, options.type.name, sessionManager, allowed),
+         // These orchestrators must see the CHILD loadout. Forwarding root codemode would
+         // let scripts discover/call tools outside the child's allow/block policy.
+         ...(allowed.has("codemode") ? [createCodemodeExtension()] : []),

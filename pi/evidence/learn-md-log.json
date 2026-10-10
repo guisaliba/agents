@@ -1,0 +1,66 @@
+{
+  "checks": [
+    {
+      "name": "only original Learn Markdown commands load",
+      "passed": true
+    },
+    {
+      "name": "read-only linking is refused before any lesson history exists",
+      "passed": true
+    },
+    {
+      "name": "unsupported note encoding is refused without changing its bytes",
+      "passed": true
+    },
+    {
+      "name": "selected exact model produces a real assistant response",
+      "passed": true
+    },
+    {
+      "name": "linking preserves existing note content and records session history",
+      "passed": true
+    },
+    {
+      "name": "relinking preserves prefix and suffix without duplicate history",
+      "passed": true
+    },
+    {
+      "name": "live logging updates only its session section",
+      "passed": true
+    },
+    {
+      "name": "a new session does not retain the previous note link",
+      "passed": true
+    },
+    {
+      "name": "damaged section markers preserve the note and report an error",
+      "passed": true
+    },
+    {
+      "name": "read-only notes remain unchanged and linking reports an error",
+      "passed": true
+    },
+    {
+      "name": "private note permission bits are preserved",
+      "passed": true
+    },
+    {
+      "name": "existing permission bits are retained under a restrictive process umask",
+      "passed": true
+    }
+  ],
+  "complete": true,
+  "port_complete": false,
+  "scope": "real Pi Markdown command and file preservation; no subagents or visuals",
+  "model": "openai/gpt-6-luna",
+  "extension_sha256": "4562688efecff6f1257043e06c9861dd2e99cb142f442be1373f3354cba676c4",
+  "artifacts": [
+    "before.md",
+    "after.md",
+    "relinked.md",
+    "live.md"
+  ],
+  "session": "01a12343-35c9-77f3-ae9c-d6cbfb891a1c",
+  "shared_settings_metadata_unchanged": true,
+  "fixture_directory": "/tmp/pi-port-docs/learn-final-encoding-fixtures"
+}

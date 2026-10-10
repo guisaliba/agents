@@ -1,0 +1,29 @@
+{
+  "provider": "opencode-go",
+  "requested_test_model": "opencode-go/deepseek-v4.1-flash",
+  "separate_agent_directory": true,
+  "environment_check": {
+    "variable": "OPENCODE_API_KEY",
+    "present_and_nonempty": false,
+    "value_read_or_displayed": false
+  },
+  "normal_pi_authentication_check": {
+    "status": "ready",
+    "authType": "api_key",
+    "refresh_disabled": true
+  },
+  "separate_pi_authentication_check": {
+    "status": "not_ready",
+    "reason": "credentials_not_configured",
+    "refresh_disabled": true
+  },
+  "direct_model_request": {
+    "prompt": "Reply with exactly PI_AUTH_TEST_OK. Do not use tools.",
+    "exit_code": 1,
+    "failure": "No API key found for opencode-go.",
+    "provider_request_completed": false
+  },
+  "memory_verification_run": false,
+  "reason": "The running test process has no inherited OpenCode API key. API-key authentication in normal Pi does not establish an environment variable in the separate process.",
+  "complete": false
+}

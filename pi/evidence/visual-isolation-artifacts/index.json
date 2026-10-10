@@ -1,0 +1,9 @@
+{
+  "synthetic": true,
+  "artifacts": [
+    "pi/evidence/visual-isolation-artifacts/svg-session-1.png",
+    "pi/evidence/visual-isolation-artifacts/svg-session-2.png",
+    "pi/evidence/visual-isolation-artifacts/mermaid-session-1.png",
+    "pi/evidence/visual-isolation-artifacts/mermaid-session-2.png"
+  ]
+}

@@ -1,0 +1,6 @@
+
+> pi-subagent-manager@0.20.0 check
+> tsc --noEmit
+
+../ysk/index.ts(37,7): error TS6133: 'STATE_FILE' is declared but its value is never read.
+../ysk/index.ts(39,7): error TS6133: 'LOG_FILE' is declared but its value is never read.

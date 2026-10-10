@@ -1,0 +1,7 @@
+{
+  "model_requests": 0,
+  "main_model": "openai/gpt-6.1-sol",
+  "observer_model": "openai/gpt-6-luna",
+  "observer_thinking": "max",
+  "upstream_status_verified": true
+}

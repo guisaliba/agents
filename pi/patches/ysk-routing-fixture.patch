@@ -1,0 +1,15 @@
+--- a/tests/routing.test.mjs
++++ b/tests/routing.test.mjs
+@@ -74,7 +74,11 @@
+     response.end();
+   });
+   // Codex auto transport falls back to SSE without waiting for a WS timeout.
+-  server.on('upgrade', (_request, socket) => { socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n'); });
++  server.on('upgrade', (_request, socket) => {
++    // The client can reset this deliberately rejected connection during fallback.
++    socket.on('error', error => { if (error.code !== 'ECONNRESET') throw error; });
++    socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n');
++  });
+   try {
+     server.listen(0, '127.0.0.1'); await once(server, 'listening');
+     const key = scenario.api === 'openai-codex-responses' ? `fixture.${Buffer.from(JSON.stringify({ 'https://api.openai.com/auth': { chatgpt_account_id: 'local-fixture' } })).toString('base64url')}.fixture` : 'local-only';

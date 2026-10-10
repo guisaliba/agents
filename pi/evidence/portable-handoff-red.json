@@ -1,0 +1,7 @@
+{
+  "complete": false,
+  "live_model_requests": 0,
+  "failure": "The consumed fixture remains open",
+  "diagnosis": "The runner incorrectly required an empty open-handoff list. Session-end had created a new automatic successor handoff. The original fixture reached the first provider context and did not reach the next session.",
+  "correction": "Check that the original unique fixture is absent, not that no successor handoff exists."
+}

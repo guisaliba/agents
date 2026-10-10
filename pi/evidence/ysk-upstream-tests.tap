@@ -1,0 +1,36 @@
+✔ real detection survives idle completion: parent (1611.564195ms)
+✔ real detection survives idle completion: flat-child (1005.683988ms)
+✔ real detection survives idle completion: nested-child (972.633411ms)
+✔ RPC prompts count ignored notes and back off, but ysk commands do not (10.909382ms)
+✔ a failed atomic replacement preserves the previous session notes (2.781167ms)
+✔ temporary Pi discovery sessions do not create artifacts in the working directory (0.636651ms)
+✖ GPT default (1213.539953ms)
+✔ GPT configurable same-model thinking (1246.875652ms)
+✔ GPT environment model override (976.867375ms)
+✔ Fable family default (960.977124ms)
+✔ Fable configurable model and thinking (992.177661ms)
+✔ other Claude preserves cache and thinking (878.478783ms)
+✔ unknown configured model does not fall back to main (929.29361ms)
+✔ GPT provider error is not an empty answer (895.744197ms)
+✔ Knew and Undo survive real Pi process restarts (3370.583268ms)
+✔ a stale Pi process cannot erase another session’s Knew or resurrect its Undo (1739.418916ms)
+✔ an idle parent persists a relayed note before its next turn and keeps it after restart (3519.4109ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 16
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8723.610836
+
+✖ failing tests:
+
+test at tests/routing.test.mjs:25:31
+✖ GPT default (1213.539953ms)
+  Error: read ECONNRESET
+      at TCP.onStreamRead (node:internal/stream_base_commons:216:20) {
+    errno: -104,
+    code: 'ECONNRESET',
+    syscall: 'read'
+  }

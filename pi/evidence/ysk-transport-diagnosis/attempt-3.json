@@ -1,0 +1,9 @@
+{
+  "attempt": 3,
+  "kind": "full upstream suite with only expected ECONNRESET handling on rejected upgrade socket",
+  "exit_code": 0,
+  "upstream_assertions_unchanged": true,
+  "runtime_extension_unchanged": true,
+  "paid_model_requests": 0,
+  "diagnosis_stopped_after_this_attempt": true
+}

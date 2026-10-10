@@ -1,0 +1,54 @@
+{
+	"settings": {
+		"subagentMode": "opportunistic",
+		"modelSelection": "pick-first-scoped",
+		"toolFiltering": "allowed",
+		"maxLevels": 3,
+		"maxConcurrent": 16,
+		"maxThreads": 64,
+		"costDisplay": "pi-status",
+		"finalRecap": false
+	},
+	"agents": {
+		"architect": {
+			"models": ["openai/gpt-6.1-sol"],
+			"thinkingLevel": "medium"
+		},
+		"coder": {
+			"models": ["openai/gpt-6-luna"],
+			"thinkingLevel": "max",
+			"tools": {
+				"allow": [
+					"read",
+					"bash",
+					"edit",
+					"write",
+					"grep",
+					"find",
+					"ls",
+					"agent_update",
+					"agent_pause",
+					"write_mermaid",
+					"edit_mermaid",
+					"render_mermaid",
+					"write_svg",
+					"edit_svg",
+					"render_svg"
+				]
+			}
+		},
+		"researcher": {
+			"models": ["opencode-go/deepseek-v4.1-flash"],
+			"thinkingLevel": "high"
+		},
+		"reviewer": { "models": ["openai/gpt-6.1-sol"], "thinkingLevel": "low" },
+		"tasker": {
+			"models": ["opencode-go/claude-haiku-5-5"],
+			"thinkingLevel": "high"
+		},
+		"writer": {
+			"models": ["opencode-go/mimo-v2.6-pro"],
+			"thinkingLevel": "medium"
+		}
+	}
+}
