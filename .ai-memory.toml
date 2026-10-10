@@ -1,0 +1,3 @@
+# Stable scope for this repository and its next-session handoff.
+workspace = "default"
+project = "agents"

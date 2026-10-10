@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Normal user workflow. All resources remain explicitly selected.
+set -Eeuo pipefail
+REPO=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+ROOT=${PI_PORT_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/pi-port}
+if [[ ${1:-} == --help || ${1:-} == -h ]]; then
+  printf '%s\n' 'Usage: pi-port [login|doctor] [launcher options] [prompt]' \
+    'Default: new coding session, Sol main model, six roles, Luna/max observer.' \
+    'login: authenticate this isolated profile with /login; no handoff is consumed.' \
+    'doctor: check installed versions, memory health, and credential readiness only.' \
+    '--resume: choose the main session to restore its managed children.'
+  exit 0
+fi
+[[ -f $ROOT/install.json && -f $ROOT/.managed ]] || { printf 'Install this checkout with ./install.sh first.\n' >&2; exit 1; }
+export PATH="$ROOT/bin:$ROOT/runtime/node/bin:$ROOT/runtime/rtk:$ROOT/packages/runtime/node_modules/.bin:$PATH"
+export PI_CODING_AGENT_DIR="$ROOT/agent"
+PI="$ROOT/packages/runtime/node_modules/.bin/pi"
+MEMORY="$ROOT/runtime/ai-memory/ai-memory"
+ENDPOINT=$(python3 -B -c 'import json,sys; print(json.load(open(sys.argv[1]))["endpoint"])' "$ROOT/install.json")
+case "${1:-}" in
+  login)
+    shift
+    [[ $# == 0 ]] || { printf 'login takes no arguments; use Pi /login.\n' >&2; exit 2; }
+    exec "$PI" --offline --no-extensions --no-mcp --no-skills --no-context-files --no-prompt-templates --no-themes --no-session
+    ;;
+  doctor)
+    shift
+    [[ $# == 0 ]] || { printf 'doctor takes no arguments.\n' >&2; exit 2; }
+    python3 -B "$REPO/lib/pi_port.py" versions "$ROOT"
+    [[ $("$PI" --version) == 1.1.0 ]] || { printf 'Unexpected Pi version.\n' >&2; exit 1; }
+    python3 -B "$REPO/lib/pi_port.py" health "$ROOT"
+    status=0
+    for provider in openai opencode-go; do
+      PI_OFFLINE=1 "$PI" auth check --provider "$provider" --json --no-refresh || status=1
+    done
+    exit "$status"
+    ;;
+esac
+# A model argument is explicit. Supply the selected default only when absent.
+MODEL=true
+for arg in "$@"; do
+  case "$arg" in --model|--model=*|--verification-model|--verification-model=*) MODEL=false ;; esac
+done
+DEFAULT=()
+"$MODEL" && DEFAULT=(--model openai/gpt-6.1-sol)
+exec python3 -B "$REPO/pi/launch.py" --agent-dir "$ROOT/agent" \
+  --memory-binary "$MEMORY" --memory-endpoint "$ENDPOINT" --pi-binary "$PI" \
+  --subagents --ysk-model openai/gpt-6-luna "${DEFAULT[@]}" "$@"

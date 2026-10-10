@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# One dedicated service. Never start a second server with --force.
+set -Eeuo pipefail
+ROOT=${PI_PORT_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/pi-port}
+[[ -f $ROOT/.managed && -f $ROOT/memory.toml ]] || { printf 'Pi memory service is not provisioned.\n' >&2; exit 1; }
+# The approved existing store has a fixed location, independent of the new profile.
+exec env -i HOME="$HOME" PATH=/usr/bin:/bin LANG=C.UTF-8 \
+  "$ROOT/runtime/ai-memory/ai-memory" --data-dir "$HOME/.local/share/ai-memory" \
+  --config "$ROOT/memory.toml" serve --transport http --bind 127.0.0.1:49375 --no-watcher
