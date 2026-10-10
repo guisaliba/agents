@@ -1,0 +1,22 @@
+# Selected unchanged skill files. Selection does not approve new dependencies.
+# name<TAB>provider<TAB>source
+find-skills	local	skills/find-skills
+daily-tasks	local	skills/daily-tasks
+caveman	upstream	JuliusBrussee/caveman
+codebase-design	upstream	mattpocock/skills@engineering/codebase-design
+domain-modeling	upstream	mattpocock/skills@engineering/domain-modeling
+grill-with-docs	upstream	mattpocock/skills@engineering/grill-with-docs
+grilling	upstream	mattpocock/skills@productivity/grilling
+tdd	upstream	mattpocock/skills@engineering/tdd
+improve	upstream	shadcn/improve
+logging-best-practices	upstream	boristane/agent-skills
+ai-memory-retrieval	ai-memory	ai-memory install-skills
+ai-memory-handoff	ai-memory	ai-memory install-skills
+ai-memory-durable-pages	ai-memory	ai-memory install-skills
+ai-memory-learning-maintenance	ai-memory	ai-memory install-skills
+ai-memory-routing-install	ai-memory	ai-memory install-skills
+cloudflare	cloudflare	https://github.com/cloudflare/skills
+wrangler	cloudflare	https://github.com/cloudflare/skills
+omarchy	system	/usr/share/omarchy/default/agents/skills/omarchy
+teach	upstream	amosblomqvist/learn@7cfd8942f82ab9476e63572387e1fe9bcea5082c/skills/teach
+visualize	upstream	amosblomqvist/learn@7cfd8942f82ab9476e63572387e1fe9bcea5082c/skills/visualize

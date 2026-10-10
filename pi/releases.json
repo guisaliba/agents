@@ -1,0 +1,38 @@
+{
+  "node": {
+    "x86_64": {
+      "archive": "node-v24.21.0-linux-x64.tar.xz",
+      "sha256": "fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6",
+      "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.xz"
+    },
+    "aarch64": {
+      "archive": "node-v24.21.0-linux-arm64.tar.xz",
+      "sha256": "6ad1325edbdb5649c379b75a237147a666c95d4f9ae8d340fef2d1575d289ad2",
+      "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-arm64.tar.xz"
+    }
+  },
+  "ai-memory": {
+    "x86_64": {
+      "archive": "ai-memory-linux-x86_64.tar.gz",
+      "sha256": "dc73118f772763a119b03d387f6f44f0b866d85498851b74aa5152944ef2e650",
+      "url": "https://github.com/akitaonrails/ai-memory/releases/download/v2.6.2/ai-memory-linux-x86_64.tar.gz"
+    },
+    "aarch64": {
+      "archive": "ai-memory-linux-aarch64.tar.gz",
+      "sha256": "587cb5d3ee2afcbadc282db1d7ee955157224d706d52bf89b18df5e2769f7e9c",
+      "url": "https://github.com/akitaonrails/ai-memory/releases/download/v2.6.2/ai-memory-linux-aarch64.tar.gz"
+    }
+  },
+  "rtk": {
+    "x86_64": {
+      "archive": "rtk-x86_64-unknown-linux-musl.tar.gz",
+      "sha256": "e4e650fa1677c0de2f6839a6040d7b17f312d32f163c402b75af70e9e5af1a91",
+      "url": "https://github.com/rtk-ai/rtk/releases/download/v0.48.0/rtk-x86_64-unknown-linux-musl.tar.gz"
+    },
+    "aarch64": {
+      "archive": "rtk-aarch64-unknown-linux-gnu.tar.gz",
+      "sha256": "5ed65486a96077bd6bba7c87fdc9d0e4a1918d19619be3c87380888389a30c7c",
+      "url": "https://github.com/rtk-ai/rtk/releases/download/v0.48.0/rtk-aarch64-unknown-linux-gnu.tar.gz"
+    }
+  }
+}

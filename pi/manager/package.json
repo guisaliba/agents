@@ -1,0 +1,10 @@
+{
+  "name": "pi-port-manager",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "fuzzysort": "4.0.2",
+    "shell-quote": "1.8.3",
+    "yaml": "2.8.1"
+  }
+}
