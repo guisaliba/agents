@@ -1,0 +1,34 @@
+test_backend_must_match_version_and_selected_store (__main__.LauncherTests.test_backend_must_match_version_and_selected_store) ... ok
+test_child_exit_code_and_selected_resources_are_preserved (__main__.LauncherTests.test_child_exit_code_and_selected_resources_are_preserved) ... ok
+test_generator_diagnostics_are_not_disclosed (__main__.LauncherTests.test_generator_diagnostics_are_not_disclosed) ... ok
+test_incompatible_session_options_are_rejected (__main__.LauncherTests.test_incompatible_session_options_are_rejected) ... ok
+test_loopback_endpoint (__main__.LauncherTests.test_loopback_endpoint) ... ok
+test_other_endpoints_are_rejected (__main__.LauncherTests.test_other_endpoints_are_rejected) ... ok
+test_primary_model_requires_explicit_selection (__main__.LauncherTests.test_primary_model_requires_explicit_selection) ... ok
+test_redirect_is_not_followed (__main__.LauncherTests.test_redirect_is_not_followed) ... ok
+test_resource_overrides_are_not_accepted (__main__.LauncherTests.test_resource_overrides_are_not_accepted) ... ok
+test_subagent_scope_and_child_observer_require_explicit_selection (__main__.LauncherTests.test_subagent_scope_and_child_observer_require_explicit_selection) ... ok
+test_unapproved_global_prompt_or_model_overrides_are_rejected (__main__.LauncherTests.test_unapproved_global_prompt_or_model_overrides_are_rejected) ... ok
+test_unavailable_backend_is_a_clear_failure (__main__.LauncherTests.test_unavailable_backend_is_a_clear_failure) ... ok
+test_verification_cannot_use_shared_agent_or_resume (__main__.LauncherTests.test_verification_cannot_use_shared_agent_or_resume) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.046s
+
+OK
+test_arch_derivative_is_supported (__main__.PortabilityTests.test_arch_derivative_is_supported) ... ok
+test_archive_traversal_is_rejected (__main__.PortabilityTests.test_archive_traversal_is_rejected) ... ok
+test_catalog_has_exactly_twenty_skills_with_support_files (__main__.PortabilityTests.test_catalog_has_exactly_twenty_skills_with_support_files) ... ok
+test_foreign_installation_root_is_preserved (__main__.PortabilityTests.test_foreign_installation_root_is_preserved) ... ok
+test_foreign_service_is_not_replaced (__main__.PortabilityTests.test_foreign_service_is_not_replaced) ... ok
+test_install_help_has_no_side_effects (__main__.PortabilityTests.test_install_help_has_no_side_effects) ... ok
+test_manifest_conflict_does_not_overwrite (__main__.PortabilityTests.test_manifest_conflict_does_not_overwrite) ... ok
+test_private_root_is_idempotent (__main__.PortabilityTests.test_private_root_is_idempotent) ... ok
+test_runtime_versions_are_pinned (__main__.PortabilityTests.test_runtime_versions_are_pinned) ... ok
+test_supported_platforms_and_unknown_family (__main__.PortabilityTests.test_supported_platforms_and_unknown_family) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.037s
+
+OK
+PASS: Python syntax and Bash syntax

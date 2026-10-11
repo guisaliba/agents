@@ -64,7 +64,7 @@ def main():
               "launcher_sha256": hashlib.sha256((directory/"launch.py").read_bytes()).hexdigest(),
               "instructions_sha256": hashlib.sha256((directory/"AGENTS.md").read_bytes()).hexdigest(),
               "port_complete": False}
-    base = [sys.executable, "-B", str(directory/"launch.py"), "--agent-dir", str(agent),
+    base = [sys.executable, "-B", str(directory/"launch.py"), "--no-context-files", "--agent-dir", str(agent),
             "--memory-binary", str(args.memory_binary.resolve()), "--memory-endpoint", args.memory_endpoint]
     model_option = ["--model" if args.model in launcher.PRIMARY_MODELS else "--verification-model", args.model]
     expected_provider, expected_model = args.model.split("/", 1)

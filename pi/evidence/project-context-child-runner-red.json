@@ -1,0 +1,9 @@
+{
+  "complete": false,
+  "live_model_requests": 0,
+  "main_parent_context": true,
+  "main_nested_context": true,
+  "child_status": "ENOENT: no such file or directory, mkdir ''",
+  "cause": "The test used --no-session while spawning a managed child. The manager requires a persistent parent session path.",
+  "correction": "Run the fixture with the normal persistent-session behavior."
+}

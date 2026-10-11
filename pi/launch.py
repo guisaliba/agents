@@ -88,6 +88,8 @@ def main():
     parser.add_argument("--mode", choices=("text", "json", "rpc"), default="text")
     parser.add_argument("--print", dest="print_mode", action="store_true")
     parser.add_argument("--no-session", action="store_true", help="Use an in-memory Pi session")
+    parser.add_argument("--no-context-files", action="store_true",
+                        help="Disable instruction-file discovery for controlled verification")
     parser.add_argument("--continue", dest="continue_session", action="store_true")
     parser.add_argument("--resume", action="store_true", help="Open Pi's session picker; select the managed main session")
     parser.add_argument("messages", nargs="*")
@@ -151,12 +153,15 @@ def main():
                 config = json.loads(Path(__file__).with_name("subagent-config.json").read_text())
                 scoped = list(dict.fromkeys(scoped + [m for a in config["agents"].values() for m in a["models"]]))
             command = [pi_binary, "--offline", "--no-extensions", "--extension", str(memory_extension),
-                       "--extension", str(rtk_extension), "--no-mcp", "--no-skills", "--no-context-files",
+                       "--extension", str(rtk_extension), "--no-mcp", "--no-skills",
                        "--no-prompt-templates", "--no-themes", "--no-approve",
                        "--append-system-prompt", str(instructions), "--model", model,
                        "--models", ",".join(scoped),
                        "--tools", "read,bash,edit,write,memory_*,ask_user_question,quiz" + (",agent_*" if args.subagents else ""), "--mode", args.mode,
                        "--session-dir", str(agent_dir/"sessions")]
+            no_context = args.no_context_files or bool(args.verification_model)
+            if no_context:
+                command.append("--no-context-files")
             for extension in extensions:
                 command += ["--extension", str(extension)]
             for skill in skills:
@@ -174,6 +179,7 @@ def main():
                            "AI_MEMORY_DATA_DIR": str(Path.home()/".local/share/ai-memory")}
             # Child observation follows explicit launcher selection, not inherited overrides.
             environment.pop("PI_PORT_CHILD_YSK_MODEL", None)
+            environment["PI_PORT_NO_CONTEXT_FILES"] = "1" if no_context else "0"
             if args.ysk_model:
                 environment["YSK_MODEL"] = args.ysk_model
                 if args.subagents:

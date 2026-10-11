@@ -10,6 +10,10 @@ The goal is a normal coding and learning workflow with explicit resources,
 portable installation, and automatic cross-session handoff. Appearance changes
 remain a later task.
 
+`pi-port` is the permanent configured entry point. Plain `pi` currently starts
+the separately installed CLI, not this profile. The command name can be changed
+later by explicit agreement; validation does not change it automatically.
+
 ## Before/after
 
 Before, verification depended on a temporary authenticated profile and a
@@ -55,7 +59,9 @@ documentation.
 - Six bundled manager roles with the approved per-role models/thinking.
 - Unmodified generated ai-memory lifecycle hooks and tools; unmodified generated
   RTK hook. The memory hook injects a pending handoff on the **first normal prompt**.
-- No automatic extension, skill, prompt, theme, MCP, or context-file discovery.
+- Automatic instruction-file discovery in normal sessions, including project `AGENTS.md`.
+- No automatic extension, skill, prompt, theme, or MCP discovery.
+- `pi-port --no-context-files` disables instruction discovery for controlled tests.
   Project instruction discovery remains off under the approved explicit-resource
   contract; tell Pi to read the project's rules before working when needed.
 - No additional MCP servers, Plannotator, imported OpenCode roles, or TUI changes.

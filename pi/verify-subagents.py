@@ -54,7 +54,7 @@ def main():
     work.mkdir()
     (work/"contract.md").write_text("# Fixture contract\nAdd a Python clamp(value, low, high) function.\nReject low > high with ValueError. Return low/high for values outside the interval.\nNo dependencies, network, credentials, commits, or changes outside this fixture.\n")
     (work/"fixture.json").write_text('{"label":"AUTOMATIC-TEAM-TEST","items":[2,3,5]}\n')
-    command = [sys.executable, "-B", str(HERE/"launch.py"), "--agent-dir", str(args.agent_dir.resolve()),
+    command = [sys.executable, "-B", str(HERE/"launch.py"), "--no-context-files", "--agent-dir", str(args.agent_dir.resolve()),
                "--memory-binary", str(args.memory_binary.resolve()), "--memory-endpoint", args.memory_endpoint,
                "--model", "openai/gpt-6.1-sol", "--subagents", "--ysk-model", "openai/gpt-6-luna", "--mode", "rpc"]
     report = {"complete": False, "port_complete": False, "automatic_delegation": True, "checks": [], "threads": []}

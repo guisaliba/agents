@@ -42,7 +42,7 @@ def ui_smoke(args, root, report):
                      f'if a!=["--version"]: a[a.index("--"):a.index("--")]=["--extension",{str(observer)!r}]\n'
                      'os.execv(real,[real,*a])\n')
     proxy.chmod(0o700)
-    command = [sys.executable, "-B", str(HERE/"launch.py"), "--agent-dir", str(args.agent_dir.resolve()),
+    command = [sys.executable, "-B", str(HERE/"launch.py"), "--no-context-files", "--agent-dir", str(args.agent_dir.resolve()),
                "--memory-binary", str(args.memory_binary.resolve()), "--memory-endpoint", args.memory_endpoint,
                "--pi-binary", str(proxy), "--model", args.model, "--ysk-model", args.model, "--no-session"]
     master, slave = pty.openpty()
@@ -129,7 +129,7 @@ def main():
                              f'if a!=["--version"]: a[a.index("--"):a.index("--")]=["--extension",{str(observer)!r}]\n'
                              'os.execv(real,[real,*a])\n')
             proxy.chmod(0o700)
-            command = [sys.executable, "-B", str(HERE/"launch.py"), "--agent-dir", str(agent),
+            command = [sys.executable, "-B", str(HERE/"launch.py"), "--no-context-files", "--agent-dir", str(agent),
                        "--memory-binary", str(args.memory_binary.resolve()), "--memory-endpoint", args.memory_endpoint,
                        "--pi-binary", str(proxy), "--model", args.model, "--ysk-model", args.model,
                        "--mode", "rpc", "--no-session"]

@@ -62,7 +62,7 @@ def main():
                      f'if a!=["--version"]: a[a.index("--"):a.index("--")]=["--extension",{str(observer)!r}]\n'
                      'os.execv(real,[real,*a])\n')
     proxy.chmod(0o700)
-    command = [sys.executable, "-B", str(HERE/"launch.py"), "--agent-dir", str(args.agent_dir.resolve()),
+    command = [sys.executable, "-B", str(HERE/"launch.py"), "--no-context-files", "--agent-dir", str(args.agent_dir.resolve()),
                "--memory-binary", str(args.memory_binary.resolve()), "--memory-endpoint", args.memory_endpoint,
                "--pi-binary", str(proxy), "--model", "openai/gpt-6.1-sol", "--subagents", "--ysk-model", "openai/gpt-6-luna"]
     report = {"complete": False, "synthetic_student": True, "native_ui": True, "checks": [], "answers": []}

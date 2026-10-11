@@ -1,0 +1,7 @@
+{
+  "complete": false,
+  "live_model_requests": 0,
+  "cause": "The synthetic provider read context.systemPrompt. Pi 1.1 normalizes provider context into transcript system messages; the shorthand field is absent.",
+  "evidence": "@earendil-works/pi-ai/dist/types.d.ts:543-563",
+  "correction": "Inspect the normalized context.messages for the synthetic instruction markers."
+}

@@ -17,7 +17,9 @@ index a908730..1d70958 100644
      const externalTools = inherited.tools.filter((tool) => !localNames.has(tool.name));
      const toolNames = selectTools(
        options.type.tools,
-@@ -414,6 +415,7 @@ export function createDriverFactory(
+@@ -413,7 +414,8 @@ export function createDriverFactory(
+-      noContextFiles: true,
++      noContextFiles: process.env.PI_PORT_NO_CONTEXT_FILES === "1",
        noThemes: true,
        systemPrompt: [
          options.type.systemPrompt,

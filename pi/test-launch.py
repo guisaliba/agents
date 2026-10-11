@@ -115,11 +115,15 @@ class LauncherTests(unittest.TestCase):
                     file.write_text("synthetic RTK fixture")
                     return ""
                 return 'const TOKEN: string | null = null;\nconst CAPTURE_MODE: "allowlist" | "denylist" = "denylist";'
-            for subagents, observer, resume in ((False, False, False), (True, False, False),
-                                                (True, True, False), (True, True, True)):
+            for subagents, observer, resume, no_context, verification in (
+                    (False, False, False, False, False), (True, False, False, False, False),
+                    (True, True, False, False, False), (True, True, True, False, False),
+                    (True, True, False, True, False), (False, False, False, False, True)):
                 extra = (["--subagents"] if subagents else []) + (["--ysk-model", "openai/gpt-6-luna"] if observer else [])
                 extra += ["--resume"] if resume else []
-                args = self.arguments(agent, "--model", launcher.PRIMARY_MODELS[0], *extra)
+                extra += ["--no-context-files"] if no_context else []
+                model_args = ["--verification-model", launcher.VERIFICATION_MODEL] if verification else ["--model", launcher.PRIMARY_MODELS[0]]
+                args = self.arguments(agent, *model_args, *extra)
                 with self.subTest(subagents=subagents, observer=observer), patch.object(sys, "argv", args), \
                         patch.object(launcher, "executable", side_effect=str), patch.object(launcher, "check_server"), \
                         patch.object(launcher, "generate", side_effect=generator), \
@@ -133,6 +137,10 @@ class LauncherTests(unittest.TestCase):
                     self.assertEqual(env.get("PI_PORT_CHILD_YSK_MODEL"), "openai/gpt-6-luna" if observer else None)
                     self.assertEqual("agent_*" in command[command.index("--tools")+1], subagents)
                     self.assertEqual("--resume" in command, resume)
+                    self.assertEqual("--no-context-files" in command, no_context or verification)
+                    self.assertEqual(env["PI_PORT_NO_CONTEXT_FILES"], "1" if no_context or verification else "0")
+                    for flag in ("--no-extensions", "--no-skills", "--no-mcp", "--no-prompt-templates", "--no-themes"):
+                        self.assertIn(flag, command)
                     if subagents:
                         scoped = set(command[command.index("--models")+1].split(","))
                         self.assertTrue({"openai/gpt-6.1-sol", "openai/gpt-6-luna", "opencode-go/deepseek-v4.1-flash",

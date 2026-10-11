@@ -84,7 +84,7 @@ export default function(pi:any) {
         report["scope"] = scope
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(report, indent=2)+"\n")
-        command = [str(HERE.parent/"bin/pi-port"), "--pi-binary", str(proxy), "--mode", "rpc", "--no-session"]
+        command = [str(HERE.parent/"bin/pi-port"), "--pi-binary", str(proxy), "--mode", "rpc", "--no-session", "--no-context-files"]
         previous = os.environ.get("PI_PORT_HOME")
         os.environ["PI_PORT_HOME"] = str(root)
         try:

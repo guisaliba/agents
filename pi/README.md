@@ -13,6 +13,10 @@ not depend on another machine's shared `~/.agents/skills` tree.
 
 ## Before/after
 
+`pi-port` is the permanent configured entry point, not a test-only alias. Plain
+`pi` currently uses the separately installed CLI and does not select this setup.
+Changing the public command to `pi` remains a separate user decision.
+
 Before, the launcher's selected skills came from this workstation's shared
 installation. After, seventeen skills and their supporting files come from the
 checked repository catalog, one comes from its exact private upstream checkout,
@@ -38,8 +42,11 @@ observer checks; `/ysk on` enables them. `/agents` edits manager settings;
 `/agents tree` inspects progress and provides stop/steer controls. See
 [`SUBAGENTS.md`](SUBAGENTS.md) for all role assignments, limits, and costs.
 
-Automatic resource and context-file discovery stays disabled. Read project
-instructions explicitly when they apply. Six bundled roles only; no imported
+Normal sessions automatically discover applicable `AGENTS.md` and `CLAUDE.md`
+instruction files. Managed children use the same discovery policy. Controlled
+verification uses `--no-context-files`; the dedicated verification-model mode
+also disables this discovery. Extension, skill, prompt, theme, and MCP discovery
+remain disabled. Six bundled roles only; no imported
 OpenCode agents or separate visual-maker roles.
 
 ### Resources and state
@@ -114,7 +121,17 @@ python3 -B pi/verify-resources.py --agent-dir "$ROOT/agent" \
   --pi-binary "$ROOT/packages/runtime/node_modules/.bin/pi" \
   --subagents --ysk-model openai/gpt-6-luna --output /tmp/pi-resource-check.json
 python3 -B pi/verify-handoff.py --root "$ROOT" --output /tmp/pi-handoff-check.json
+python3 -B pi/verify-context.py --root "$ROOT" --output /tmp/pi-context-check.json
 ```
+
+The context check verifies parent/nested instructions in both main and managed
+child sessions. It also verifies child discovery of an instruction added after
+the parent snapshot. Both normal and controlled modes are checked without paid
+requests. Evidence: `evidence/project-context-discovery.json`.
+
+Managed children require persistent parent sessions. Do not use `--no-session`
+when delegation is needed; normal sessions already use persistent storage.
+The context runner's two failed attempts remain in `evidence/project-context-*-red.json`.
 
 The handoff check creates a synthetic fixture in its own project and uses a
 synthetic provider. Do not run the `--repository-cwd` variant after saving a real

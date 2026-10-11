@@ -44,7 +44,7 @@ def main():
     for i, fact in enumerate(facts, 1):
         following = f"receipt-{i+1}.md" if i < len(facts) else "END"
         (work/f"receipt-{i}.md").write_text(f"Label: R{i}\nFact: {fact}\nNext receipt: {following}\n")
-    command = [sys.executable, "-B", str(HERE/"launch.py"), "--agent-dir", str(args.agent_dir.resolve()),
+    command = [sys.executable, "-B", str(HERE/"launch.py"), "--no-context-files", "--agent-dir", str(args.agent_dir.resolve()),
                "--memory-binary", str(args.memory_binary.resolve()), "--memory-endpoint", args.memory_endpoint,
                "--model", "openai/gpt-6.1-sol", "--subagents", "--ysk-model", "openai/gpt-6-luna", "--mode", "rpc"]
     report = {"complete": False, "model_generated_relay": False, "checks": [], "synthetic_replay": True}

@@ -1,0 +1,71 @@
+.........FFFFusage: launch.py [-h] --agent-dir AGENT_DIR --memory-binary MEMORY_BINARY
+                 --memory-endpoint MEMORY_ENDPOINT [--pi-binary PI_BINARY]
+                 (--model {openai/gpt-6.1-sol,openai/gpt-6-luna} |
+                 --verification-model {opencode-go/deepseek-v4.1-flash})
+                 [--subagents]
+                 [--ysk-model {openai/gpt-6.1-sol,openai/gpt-6-luna}]
+                 [--mode {text,json,rpc}] [--print] [--no-session]
+                 [--continue] [--resume]
+                 [messages ...]
+launch.py: error: unrecognized arguments: --no-context-files
+E...
+======================================================================
+ERROR: test_subagent_scope_and_child_observer_require_explicit_selection (__main__.LauncherTests.test_subagent_scope_and_child_observer_require_explicit_selection) (subagents=True, observer=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/guisaliba/agents/pi/test-launch.py", line 132, in test_subagent_scope_and_child_observer_require_explicit_selection
+    self.assertEqual(launcher.main(), 0)
+                     ~~~~~~~~~~~~~^^
+  File "/home/guisaliba/agents/pi/launch.py", line 94, in main
+    args = parser.parse_args()
+  File "/usr/lib/python3.14/argparse.py", line 2012, in parse_args
+    self.error(msg)
+    ~~~~~~~~~~^^^^^
+  File "/usr/lib/python3.14/argparse.py", line 2785, in error
+    self.exit(2, _('%(prog)s: error: %(message)s\n') % args)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/argparse.py", line 2772, in exit
+    _sys.exit(status)
+    ~~~~~~~~~^^^^^^^^
+SystemExit: 2
+
+======================================================================
+FAIL: test_subagent_scope_and_child_observer_require_explicit_selection (__main__.LauncherTests.test_subagent_scope_and_child_observer_require_explicit_selection) (subagents=False, observer=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/guisaliba/agents/pi/test-launch.py", line 138, in test_subagent_scope_and_child_observer_require_explicit_selection
+    self.assertEqual("--no-context-files" in command, no_context)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: True != False
+
+======================================================================
+FAIL: test_subagent_scope_and_child_observer_require_explicit_selection (__main__.LauncherTests.test_subagent_scope_and_child_observer_require_explicit_selection) (subagents=True, observer=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/guisaliba/agents/pi/test-launch.py", line 138, in test_subagent_scope_and_child_observer_require_explicit_selection
+    self.assertEqual("--no-context-files" in command, no_context)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: True != False
+
+======================================================================
+FAIL: test_subagent_scope_and_child_observer_require_explicit_selection (__main__.LauncherTests.test_subagent_scope_and_child_observer_require_explicit_selection) (subagents=True, observer=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/guisaliba/agents/pi/test-launch.py", line 138, in test_subagent_scope_and_child_observer_require_explicit_selection
+    self.assertEqual("--no-context-files" in command, no_context)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: True != False
+
+======================================================================
+FAIL: test_subagent_scope_and_child_observer_require_explicit_selection (__main__.LauncherTests.test_subagent_scope_and_child_observer_require_explicit_selection) (subagents=True, observer=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/guisaliba/agents/pi/test-launch.py", line 138, in test_subagent_scope_and_child_observer_require_explicit_selection
+    self.assertEqual("--no-context-files" in command, no_context)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: True != False
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.045s
+
+FAILED (failures=4, errors=1)
