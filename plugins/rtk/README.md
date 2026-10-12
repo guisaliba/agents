@@ -4,8 +4,19 @@
 
 This repository installs a temporary RTK adapter for OpenCode V2. An adapter is
 a plugin that changes a shell command by calling RTK before the shell tool runs.
-The official RTK V2 pull request is still open. The latest stable RTK release
-checked for this change is `v0.50.0`; it does not include the V2 plugin.
+The official [RTK V2 PR #4187](https://github.com/rtk-ai/rtk/pull/4187)
+merged on **12 October 2026 at 07:21:45 UTC**. Stable replacement is still pending.
+The latest official stable release checked on 12 October is
+[`v0.51.0`](https://github.com/rtk-ai/rtk/releases/tag/v0.51.0). Its
+[source payload](https://github.com/rtk-ai/rtk/blob/v0.51.0/hooks/opencode/rtk.ts)
+is V1-only. The stable tag is not a descendant of the V2 merge, and the payload
+has no equivalent V2 implementation.
+
+**Forecast:** `v0.52.0` is the likely next stable target. Upstream publishes
+[`dev-0.52.0-rc.525`](https://github.com/rtk-ai/rtk/releases/tag/dev-0.52.0-rc.525);
+the [release policy](https://github.com/rtk-ai/rtk/blob/master/release-please-config.json)
+bumps the minor version for pre-1.0 features. This is not a confirmed stable
+version or publication date. Keep the temporary adapter until stable validation.
 
 The RTK command-line program remains separate from the plugin. Use it as usual:
 
@@ -159,18 +170,91 @@ replaced, copy the selected backup from
 `~/.config/opencode/plugins/rtk.ts`, then reload the tool-running process. A
 restored V1 plugin does not provide V2 behavior.
 
+## Upstream merge evidence
+
+The [merge commit](https://github.com/rtk-ai/rtk/commit/311ebcbfd8efdb09b03219e7615a153b5b5e3c97)
+is `311ebcbfd8efdb09b03219e7615a153b5b5e3c97`. Its
+[plugin](https://github.com/rtk-ai/rtk/blob/311ebcbfd8efdb09b03219e7615a153b5b5e3c97/hooks/opencode/rtk.ts)
+has blob SHA `a523caf3e2b8540202491d5e5e6ed11f4f3fb95f`, identical to the
+checked develop payload. The PR body describes an older design; use this code.
+
+| Contract | Temporary adapter | Merged upstream |
+| --- | --- | --- |
+| V2 loader | Default object `id/setup` | Same working shape |
+| Command mutation | `execute.before` changes `event.input.command` | Same, restricted to bash/shell and nonblank strings |
+| Transport | `rtk rewrite <command>` | Shell-free `rtk hook opencode [--agent <name>] <command>` |
+| Output | Trimmed changed stdout, exit 0/3 | JSON command on exit 0; any nonzero exit, including 3, passes through |
+| Binary | RTK_BIN, PATH and fallback directories | PATH only, Windows PATHEXT; skips directories |
+| Setup | Found binary | Also probes `hook opencode --help` once per usable binary |
+| Failure | Missing binary/error/signal/timeout passes through | Missing or incompatible binary registers no hook; error/timeout/invalid JSON passes through |
+| Timeout | 3 seconds | 3 seconds for probe and hook |
+| Permissions | Generic rewrite; OpenCode evaluates final command | Forwards V2 agent name and tries to preserve OpenCode rule verdict |
+| Session off switch | No plugin environment check | OpenCode process `RTK_DISABLED=1` skips rewrites |
+
+The [Rust protocol](https://github.com/rtk-ai/rtk/blob/311ebcbfd8efdb09b03219e7615a153b5b5e3c97/src/hooks/hook_cmd.rs)
+returns JSON with exit 0 for rewrite and passthrough. Thus exit-3 rejection is a
+transport change, not an unchanged copy of the temporary exit-3 contract.
+An old CLI can pass this repository's rewrite probe but lack the new subcommand.
+
+[Node tests](https://github.com/rtk-ai/rtk/blob/311ebcbfd8efdb09b03219e7615a153b5b5e3c97/hooks/opencode/rtk.test.mjs)
+cover both hook shapes, command mutation, exact argv, agent forwarding, absent
+or old binary, capability caching, off switch, guards, invalid JSON, failure and
+timeout. These use a mock context; they do not prove real V2 loader execution on
+this repository's hosts.
+[Installer tests](https://github.com/rtk-ai/rtk/blob/311ebcbfd8efdb09b03219e7615a153b5b5e3c97/src/hooks/init/opencode.rs)
+cover embedded payload installation and the OpenCode 1.18.29 floor.
+
+Permission parity is not guaranteed. Check follow-ups
+[#4522](https://github.com/rtk-ai/rtk/pull/4522) (global config lookup),
+[#4528](https://github.com/rtk-ai/rtk/pull/4528) (JSONC),
+[#4533](https://github.com/rtk-ai/rtk/pull/4533) (Windows discovery), and
+[#4534](https://github.com/rtk-ai/rtk/pull/4534) (installer probe).
+Verify their status and inclusion in the selected stable tag.
+
 ## Replace this adapter with an official release
 
-1. Confirm an official stable RTK release contains a working V2 default export
-   and rewrite hook. A merged pull request or prerelease is not enough.
-2. Compare the released behavior with this adapter. Run the loader, rewrite,
-   timeout, fail-open, and permission checks.
-3. Back up the installed temporary file. Remove this payload and its temporary
-   installer and test assumptions in a reviewable change.
-4. Update the CLI pin. Use the official release's documented plugin installer.
-   Re-enable `rtk init -g --opencode` only if it generates a V2-compatible
-   plugin and remains the documented install method.
-5. Check that exactly one official RTK plugin loads. Remove old local or config
-   entries. Reload the process that runs tools through its existing lifecycle.
-6. Re-run apply, idempotency, and runtime tests. Keep a tested rollback to this
-   pinned adapter in case the official behavior regresses.
+This handoff changes documentation only. Main contains the temporary payload
+and its pinned blob matches the provenance above. This does not prove that any
+host has run apply.
+
+1. **Verify a stable payload first.** Select an official non-draft,
+   non-prerelease tag. Inspect its V2 default object, hook, command mutation,
+   CLI hook capability and embedded installer payload. Generate the plugin in
+   an isolated home. The merged installer uses `rtk init -g --opencode`; use
+   that command only if the chosen stable release still generates verified V2
+   code. A merge or release candidate is not enough.
+2. **Prepare a later implementation PR.** Remove the tracked temporary
+   `plugins/rtk/rtk.ts` and source-specific tests after equivalent official
+   tests exist. Replace `apply.sh:install_rtk_plugin` and its call with the
+   official flow. Preserve guarded writes, backup and duplicate detection.
+   Update RTK config cleanup and `test.sh` assumptions that require the pinned
+   blob or `v0.50.0`, or forbid official init. Keep provenance documentation.
+3. **Update CLI pin and capability checks.** Set `RTK_VERSION` to the verified
+   stable tag. Update `install_rtk`: its current rewrite check retains old
+   CLIs. Require the stable minimum and `rtk hook opencode --help`, or the new
+   plugin can disable itself. Ensure the tool host's PATH selects that binary;
+   upstream does not honor RTK_BIN or fallback directories.
+4. **Back up on each shell-tool host.** Save the installed regular
+   `~/.config/opencode/plugins/rtk.ts`, its digest and CLI version under
+   `~/.local/share/opencode/plugin-backups/`, outside plugin discovery.
+   If absent, record that fact and treat the official installation as fresh.
+5. **Install one official plugin.** After the implementation change, install
+   the verified stable CLI and use its documented plugin installer. Remove
+   obsolete global/config/project registrations, `rtk.js`, `rtk/` and other
+   modules with ID `rtk`. Preserve unrelated plugins. Do not run the current
+   apply after replacement: it restores the temporary payload.
+6. **Reload the tool host through its existing lifecycle.** Local TUI and
+   remote server tool hosts can differ. Coordinate shared-service restarts.
+   Preserve topology and OpenCode permissions; do not add Orca.
+7. **Verify behavior.** Run revised `./test.sh --repo-only` fixtures and adapt
+   `plugins/rtk/smoke-test.py`, which currently loads the tracked file, to
+   exercise the generated official file with a real V2 loader and shell tool.
+   Check shell-only mutation; agent/global/project allow/ask/deny and JSONC
+   rules; missing/incompatible binary; launch error; invalid JSON; timeout
+   with partial stdout; and session off switch. Check generic rewrite exit
+   0/3 separately from official JSON exit 0 and nonzero exit-3 passthrough.
+   Run apply twice: content must remain stable without extra backups or
+   duplicate registrations.
+8. **Test rollback.** Restore the prior agents revision, compatible CLI and
+   backed up temporary file as a set. Remove official duplicate registration,
+   reload the same host and rerun temporary smoke and idempotency tests.
