@@ -1,0 +1,15 @@
+# OpenCode Go worker roster for go-worker and ~/.claude/rules/pstack-go.md.
+# alias<TAB>go_model_id<TAB>family<TAB>go_monthly_allowance_usd
+# A pstack role names a worker as go/<alias>. go-worker resolves the alias to the
+# OpenCode Go model id. `go-worker doctor` checks every id against the live
+# https://opencode.ai/inference/go/v1/models list. Allowances are the Go plan
+# values documented on 2026-11-02 (https://opencode.ai/docs/go/); Go Plus is higher.
+kimi-k3.1	kimi-k3.1-pro	kimi	15
+kimi-k2.7-code	kimi-k2.7-code	kimi	60
+glm-5.3	glm-5.3	glm	15
+glm-5.3-flash	glm-5.3-flash	glm	60
+deepseek-v4.1-flash	deepseek-v4.1-flash	deepseek	100
+gpt-6-luna	gpt-6-luna	gpt	15
+minimax-m3	minimax-m3	minimax	60
+mimo-v2.6-flash	mimo-v2.6-flash	mimo	60
+qwen3.8-max	qwen3.8-max	qwen	15
