@@ -56,22 +56,24 @@ environment change. After the daemon is active, apply removes the retired
 LaunchAgent from `~/Library/LaunchAgents/`. Linux continues to use the systemd
 user service.
 
-The ai-memory binary owns the generated OpenCode plugin, instructions, and
-five ai-memory skills. Do not edit generated files by hand.
+The ai-memory binary owns the generated Claude Code hooks in
+`~/.claude/settings.json`, the MCP registration in `~/.claude.json`, the routing
+instructions in `~/.claude/rules/ai-memory.md`, and five ai-memory skills in
+`~/.claude/skills/`. Do not edit generated files by hand. The OpenCode Go worker
+profile (`~/.claude-go`) never receives these hooks, so worker runs do not write
+into the coordinator's workstream.
 
 `DOTFILES_AI_MEMORY_LLM_PROFILE` is the single profile for a local service. It
-sets that service's LLM provider and model **and** the local OpenCode `general`,
-`explore` and `title` agents, so the values cannot drift apart. Set it on each
-host that runs a local service. In remote mode, the remote service owns the
-profile; the local host carries no copy. See
-[../opencode/README.md](../opencode/README.md) for the ownership rule and change
-procedure.
+sets that service's LLM provider and model. Set it on each host that runs a
+local service. In remote mode, the remote service owns the profile; the local
+host carries no copy.
 
 The default profile is `opencode-go-deepseek-v4.1-flash`, which uses
 `opencode-go/deepseek-v4.1-flash`. The alternative profile is
 `opencode-go-muse-spark-1.3-contributor`, which uses
 `opencode-go/muse-spark-1.3-contributor`. Both profiles stay in zero-LLM mode
-until `OPENCODE_API_KEY` is present in the environment file.
+until `OPENCODE_API_KEY` is present in the environment file. The same key also
+feeds the pstack OpenCode Go workers through `bin/go-key`.
 
 Set `DOTFILES_AI_MEMORY_LLM_PROFILE` in `~/.config/ai-memory/env` to select
 a profile. Apply preserves an explicit valid selection; remove the assignment
@@ -81,8 +83,6 @@ Set `AGENTS_AI_MEMORY_LLM_ENABLED=false` in the same file to pause LLM jobs
 without removing `OPENCODE_API_KEY`. After usage is restored, remove that
 assignment, run `source ./apply.sh && configure_ai_memory_env_file`, and
 restart the service with `systemctl --user restart ai-memory` on Linux.
-Subagent selection is independent; see
-[`../opencode/README.md`](../opencode/README.md).
 
 The `DOTFILES_AI_MEMORY_LLM_ENABLED` name is retired; `apply.sh` migrates its
 value once to the new name and removes the old line.
@@ -103,8 +103,7 @@ ai-memory token pepper outside Git.
 
 ```sh
 ai-memory status --json
-opencode mcp list
-opencode mcp debug ai-memory
+claude mcp list
 ```
 
 On macOS, also verify the system service:
