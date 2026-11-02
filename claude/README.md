@@ -2,11 +2,9 @@
 
 ## Context
 
-- `rules/` holds the three rule files that apply.sh copies to
+- `rules/` holds the two rule files that apply.sh copies to
   `~/.claude/rules/`. Claude Code loads every file in that directory into each
   session.
-  - `harness-map.md` maps the OpenCode names in `AGENTS.md` to Claude Code
-    names, so `AGENTS.md` stays unchanged.
   - `pstack-models.md` is the pstack role table. pstack reads it in place of the
     `/pstack:setup-pstack` output.
   - `pstack-go.md` tells the coordinator how to run a `go/<alias>` role through
@@ -103,8 +101,7 @@ this branch to `main`.
 
 ## Known open decision
 
-`AGENTS.md` says: ask three motivation questions before a plan.
+`CLAUDE.md` says: ask three motivation questions before a plan.
 `/pstack:poteto-mode` says: restate the goal and proceed without waiting. Both
-load into the same session. This setup does not resolve the conflict, because
-`AGENTS.md` stays unchanged for now. Decide which rule wins when you refine
-`AGENTS.md`.
+load into the same session. This setup does not resolve the conflict. Decide
+which rule wins when you refine `CLAUDE.md`.

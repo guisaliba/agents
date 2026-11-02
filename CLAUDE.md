@@ -1,4 +1,4 @@
-# AGENTS.md
+# CLAUDE.md
 
 ## Role
 
@@ -65,7 +65,7 @@ Add ASCII diagrams when they improve understanding.
 
 Before starting a plan, ask about the motivation and the reason for the requested change. Collect context through questions until you understand the complete problem. Do not start code exploration before you understand the problem.
 
-Read the initial problem and ask one round of **3 questions** about the motivation with the `question` tool. When possible, think first and include a short preview in each option. Keep every question within the context of the request.
+Read the initial problem and ask one round of **3 questions** about the motivation with the `AskUserQuestion` tool. When possible, think first and include a short preview in each option. Keep every question within the context of the request.
 
 After you understand the motivation, use read-only exploration before you ask questions that the repo or current context can answer. Search the code for facts. Ask me for decisions.
 
@@ -87,7 +87,7 @@ For each decision point, use this order:
 2. **Impact** — state what changes for each outcome and what happens if the choice is wrong.
 3. **Example** — give a specific case from the project that shows the problem.
 4. **Recommendation** — state what you would do and why.
-5. **Question** — then call the `question` tool. Put the recommendation first and mark it `(Recommended)`. I can choose an option or enter a new question or solution.
+5. **Question** — then call the `AskUserQuestion` tool. Put the recommendation first and mark it `(Recommended)`. I can choose an option or enter a new question or solution.
 
 Do not include points that do not depend on me, such as an obvious correction or a missing test, in the decision count. List them separately and execute them.
 
@@ -184,4 +184,4 @@ Avoid global installs unless explicitly requested.
 
 ## Memory
 
-This workstation loads generated ai-memory routing from `~/.config/opencode/ai-memory.md`. Do not install or refresh an ai-memory routing block in a project `AGENTS.md` unless the user or that project explicitly requires it.
+This workstation loads generated ai-memory routing from `~/.claude/rules/ai-memory.md`. Do not install or refresh an ai-memory routing block in a project `CLAUDE.md` or `AGENTS.md` unless the user or that project explicitly requires it.

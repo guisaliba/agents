@@ -1,6 +1,6 @@
 # provider<TAB>name<TAB>source<TAB>require_skill_file
 # upstream rows are installed individually by apply.sh into ~/.claude/skills.
-# Keep only skills the global AGENTS.md names (grill-me, grill-with-docs, /tdd)
+# Keep only skills the global CLAUDE.md names (grill-me, grill-with-docs, /tdd)
 # and their companion. pstack ships its own skills through the plugin.
 upstream	grill-me	mattpocock/skills@productivity/grill-me	no
 upstream	grill-with-docs	mattpocock/skills@engineering/grill-with-docs	no

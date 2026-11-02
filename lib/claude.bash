@@ -38,9 +38,7 @@ configure_claude_main_profile() {
   local rule
 
   log "Installing the global instructions and pstack rules for Claude Code"
-  # AGENTS.md is copied unchanged. claude/rules/harness-map.md maps its
-  # OpenCode tool names to the Claude Code equivalents.
-  install_managed_file "$REPO_DIR/AGENTS.md" "$CLAUDE_HOME/CLAUDE.md" "Claude Code global instructions"
+  install_managed_file "$REPO_DIR/CLAUDE.md" "$CLAUDE_HOME/CLAUDE.md" "Claude Code global instructions"
   for rule in "${CLAUDE_MANAGED_RULES[@]}"; do
     install_managed_file "$REPO_DIR/claude/rules/$rule" "$CLAUDE_RULES_DIR/$rule" "Claude Code rule $rule"
   done

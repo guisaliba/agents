@@ -69,15 +69,15 @@ The full validation checklist and daily usage are in
 | ai-memory service | [ai-memory/README.md](ai-memory/README.md) |
 | Bash entry point | [shell/README.md](shell/README.md) |
 | Shared helpers | [lib/README.md](lib/README.md) |
-| Global agent policy | [AGENTS.md](AGENTS.md) |
+| Global agent policy | [CLAUDE.md](CLAUDE.md) |
 
 ## What apply.sh changes
 
 | Path | Owner | Content |
 | --- | --- | --- |
 | `~/.local/bin/claude` | Claude Code installer | Native Claude Code. |
-| `~/.claude/CLAUDE.md` | apply.sh | Unchanged copy of `AGENTS.md`, plus the `@RTK.md` import that RTK adds. |
-| `~/.claude/rules/{harness-map,pstack-models,pstack-go}.md` | apply.sh | Managed copies of `claude/rules/`. |
+| `~/.claude/CLAUDE.md` | apply.sh | Copy of the repository `CLAUDE.md`, plus the `@RTK.md` import that RTK adds. |
+| `~/.claude/rules/{pstack-models,pstack-go}.md` | apply.sh | Managed copies of `claude/rules/`. |
 | `~/.claude/rules/ai-memory.md` | ai-memory | Generated routing instructions. |
 | `~/.claude/settings.json` | shared | apply.sh sets `model` and adds `go-worker` allow rules; ai-memory and RTK add hooks; the plugin manager adds `enabledPlugins`. |
 | `~/.claude/skills/` | skills CLI, ai-memory | `grill-me`, `grill-with-docs`, `grilling`, `tdd`, and five ai-memory skills. |

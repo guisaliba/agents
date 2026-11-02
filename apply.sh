@@ -5,7 +5,7 @@ set -Eeuo pipefail
 #
 # Deterministic Claude Code + pstack setup script.
 # Installs Claude Code, the pstack plugin, the OpenCode Go worker profile used
-# by pstack go/ roles, RTK, ai-memory, and the skills named by AGENTS.md.
+# by pstack go/ roles, RTK, ai-memory, and the skills named by CLAUDE.md.
 # Re-running converges the same state.
 #
 # Usage:
@@ -29,7 +29,7 @@ CLAUDE_MIN_VERSION="${CLAUDE_MIN_VERSION:-2.1.259}"
 CLAUDE_HOME="$HOME/.claude"
 CLAUDE_RULES_DIR="$CLAUDE_HOME/rules"
 CLAUDE_MAIN_MODEL="opus"
-CLAUDE_MANAGED_RULES=(harness-map.md pstack-models.md pstack-go.md)
+CLAUDE_MANAGED_RULES=(pstack-models.md pstack-go.md)
 CLAUDE_GO_HOME="${CLAUDE_GO_CONFIG_DIR:-$HOME/.claude-go}"
 GO_ANTHROPIC_BASE_URL="https://opencode.ai/inference/go/anthropic"
 GO_BACKGROUND_MODEL="deepseek-v4.1-flash"

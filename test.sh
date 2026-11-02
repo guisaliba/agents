@@ -267,9 +267,9 @@ apply_fixtures() {
   }
 
   expect "offline apply functions succeed" run_offline_apply
-  expect "CLAUDE.md is an unchanged copy of AGENTS.md" cmp -s "$REPO_DIR/AGENTS.md" "$home/.claude/CLAUDE.md"
+  expect "~/.claude/CLAUDE.md is a copy of the repository CLAUDE.md" cmp -s "$REPO_DIR/CLAUDE.md" "$home/.claude/CLAUDE.md"
   expect "managed rules are installed" bash -c \
-    'for r in harness-map.md pstack-models.md pstack-go.md; do cmp -s "$0/claude/rules/$r" "$1/.claude/rules/$r" || exit 1; done' \
+    'for r in pstack-models.md pstack-go.md; do cmp -s "$0/claude/rules/$r" "$1/.claude/rules/$r" || exit 1; done' \
     "$REPO_DIR" "$home"
   expect "main settings select Opus and allow go-worker runs" python3 -B -c '
 import json, sys
@@ -334,10 +334,10 @@ machine_checks() {
 
   expect "claude is installed" bash -c 'type -P claude >/dev/null'
   expect "pstack plugin is installed" bash -c 'claude plugin list 2>/dev/null | grep -q "pstack@cursor-plugins"'
-  expect "~/.claude/CLAUDE.md starts with AGENTS.md" bash -c \
-    'head -c "$(wc -c <"$0")" "$1" | cmp -s - "$0"' "$REPO_DIR/AGENTS.md" "$home/.claude/CLAUDE.md"
+  expect "~/.claude/CLAUDE.md starts with the repository CLAUDE.md" bash -c \
+    'head -c "$(wc -c <"$0")" "$1" | cmp -s - "$0"' "$REPO_DIR/CLAUDE.md" "$home/.claude/CLAUDE.md"
   expect "managed rules are current" bash -c \
-    'for r in harness-map.md pstack-models.md pstack-go.md; do cmp -s "$0/claude/rules/$r" "$1/.claude/rules/$r" || exit 1; done' \
+    'for r in pstack-models.md pstack-go.md; do cmp -s "$0/claude/rules/$r" "$1/.claude/rules/$r" || exit 1; done' \
     "$REPO_DIR" "$home"
   expect "ai-memory routing rule exists" test -s "$home/.claude/rules/ai-memory.md"
   expect "ai-memory hooks are in the main profile" file_contains "$home/.claude/settings.json" 'ai-memory'
