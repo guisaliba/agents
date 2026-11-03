@@ -220,6 +220,13 @@ assert m["succeeded"] and m["model_id"] == "kimi-k3.1-pro" and m["family"] == "k
 assert m["usage"]["output_tokens"] == 40 and m["mode"] == "write"' "$work/report.md.meta.json"
   expect "ledger records the run" file_contains "$home/.local/state/claude-worker/runs.tsv" $'worker/kimi-k3.1\tkimi-k3.1-pro\twrite\tyes'
 
+  status=0
+  run_worker run --model worker/kimi-k3.1 --dir "$work" --brief <(printf 'Piped fixture task.\n') --report "$work/piped.md" >/dev/null 2>&1 || status=$?
+  expect "a piped brief reaches the worker" bash -c '[[ "$0" == 0 ]] && grep -qF "Piped fixture task." "$1"' "$status" "$logs/stdin"
+  status=0
+  run_worker run --model worker/kimi-k3.1 --dir "$work" --brief <(printf '  \n') --report "$work/empty.md" >/dev/null 2>&1 || status=$?
+  expect "an empty piped brief exits 2" test "$status" -eq 2
+
   run_worker run --model deepseek-v4.1-flash --dir "$work" --brief "$work/brief.md" --report "$work/judge.md" --readonly >/dev/null 2>&1 || true
   expect "readonly run uses dontAsk with read-only tools" bash -c \
     'grep -qx dontAsk "$0" && grep -q "^Read,Glob,Grep" "$0" && ! grep -qx acceptEdits "$0"' "$logs/argv"
