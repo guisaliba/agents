@@ -32,6 +32,8 @@ expect() {
 }
 file_contains() { grep -qF -- "$2" "$1"; }
 file_lacks() { ! grep -qF -- "$2" "$1"; }
+# The installed instructions file is the source plus the RTK import line.
+equals_source_with_rtk_import() { cmp -s <(cat "$1"; printf '\n@RTK.md\n') "$2"; }
 
 FIXTURE_ROOT="$(mktemp -d)"
 trap 'rm -rf -- "$FIXTURE_ROOT"' EXIT
@@ -55,8 +57,10 @@ static_checks() {
   expect "provider.env defines every worker provider setting" bash -c \
     'for k in WORKER_PROVIDER WORKER_ANTHROPIC_BASE_URL WORKER_MODELS_URL WORKER_BACKGROUND_MODEL WORKER_SMOKE_ALIAS WORKER_API_KEY_ENV_FILE WORKER_API_KEY_VARIABLE; do python3 -B "$0" env-value "$1" "$k" >/dev/null || exit 1; done' \
     "$HELPER" "$REPO_DIR/claude/worker/provider.env"
-  expect "the managed CLAUDE.md files end with the RTK import" bash -c \
-    'for f in "$0/CLAUDE.md" "$0/claude/worker/CLAUDE.md"; do [[ "$(tail -n 1 "$f")" == "@RTK.md" ]] || exit 1; done' "$REPO_DIR"
+  expect "the instruction sources do not import RTK.md (apply.sh adds the import to the installed copy)" bash -c \
+    '! grep -qx "@RTK.md" "$0/CLAUDE.md" "$0/claude/worker/contract.md"' "$REPO_DIR"
+  expect "no CLAUDE.md exists below the repository root (Claude Code loads nested CLAUDE.md files)" bash -c \
+    '[[ -z "$(cd "$0" && git ls-files -- "*/CLAUDE.md")" ]]' "$REPO_DIR"
   expect "apply.sh requires Claude Code 2.1.287, the first release with the you-should-know mod" \
     grep -qx 'CLAUDE_MIN_VERSION="${CLAUDE_MIN_VERSION:-2.1.287}"' "$REPO_DIR/apply.sh"
   expect "the smoke alias exists in the roster" bash -c \
@@ -104,7 +108,7 @@ PY
   expect "no retired OpenCode payload remains" bash -c \
     '! test -e "$0/opencode" -o -e "$0/plugins" -o -e "$0/mcps" -o -e "$0/shell/opencode.bash" -o -e "$0/skills.tsv" -o -e "$0/AGENTS.md"' "$REPO_DIR"
   expect "no provider-specific names outside the provider files" bash -c \
-    '! grep -rIn -E "go-worker|go-key|claude-go|(^|[^a-z-])go/[a-z]" "$0/apply.sh" "$0/lib" "$0/bin" "$0/shell" "$0/claude/rules" "$0/claude/worker/CLAUDE.md"' "$REPO_DIR"
+    '! grep -rIn -E "go-worker|go-key|claude-go|(^|[^a-z-])go/[a-z]" "$0/apply.sh" "$0/lib" "$0/bin" "$0/shell" "$0/claude/rules" "$0/claude/worker/contract.md"' "$REPO_DIR"
 }
 
 # --- Helper fixtures -------------------------------------------------------
@@ -289,7 +293,7 @@ apply_fixtures() {
   expect "offline apply functions succeed" run_offline_apply
   expect "a differing managed file is backed up before it is replaced" bash -c \
     'set -- "$0"/.claude/CLAUDE.md.bak-*; [[ $# -eq 1 && -f "$1" ]] && grep -qx "# my own instructions" "$1"' "$home"
-  expect "~/.claude/CLAUDE.md is a copy of the repository CLAUDE.md" cmp -s "$REPO_DIR/CLAUDE.md" "$home/.claude/CLAUDE.md"
+  expect "~/.claude/CLAUDE.md is the repository CLAUDE.md plus the RTK import" equals_source_with_rtk_import "$REPO_DIR/CLAUDE.md" "$home/.claude/CLAUDE.md"
   expect "managed rules are installed" bash -c \
     'for r in pstack-models.md pstack-workers.md; do cmp -s "$0/claude/rules/$r" "$1/.claude/rules/$r" || exit 1; done' \
     "$REPO_DIR" "$home"
@@ -310,7 +314,7 @@ d = json.load(open(sys.argv[1]))
 assert d["enabledPlugins"]["cc-plugin-you-should-know@builtin"] is True' "$home/.claude/settings.json"
   expect "worker settings do not enable the you-should-know mod" file_lacks "$home/.claude-worker/settings.json" 'you-should-know'
   expect "main settings carry no worker provider routing" file_lacks "$home/.claude/settings.json" 'ANTHROPIC_BASE_URL'
-  expect "worker CLAUDE.md is installed" cmp -s "$REPO_DIR/claude/worker/CLAUDE.md" "$home/.claude-worker/CLAUDE.md"
+  expect "~/.claude-worker/CLAUDE.md is the worker contract plus the RTK import" equals_source_with_rtk_import "$REPO_DIR/claude/worker/contract.md" "$home/.claude-worker/CLAUDE.md"
   expect "claude-worker and claude-worker-key are linked into ~/.local/bin" bash -c \
     '[[ "$(readlink "$0/claude-worker")" == "$1/claude-worker" && "$(readlink "$0/claude-worker-key")" == "$1/claude-worker-key" ]]' \
     "$home/.local/bin" "$REPO_DIR/bin"
@@ -505,8 +509,8 @@ machine_checks() {
 import json, sys
 assert json.load(open(sys.argv[1]))["enabledPlugins"]["cc-plugin-you-should-know@builtin"] is True' "$home/.claude/settings.json"
   expect "pstack plugin is installed" bash -c 'claude plugin list 2>/dev/null | grep -q "pstack@cursor-plugins"'
-  expect "~/.claude/CLAUDE.md equals the repository CLAUDE.md" cmp -s "$REPO_DIR/CLAUDE.md" "$home/.claude/CLAUDE.md"
-  expect "~/.claude-worker/CLAUDE.md equals the worker contract" cmp -s "$REPO_DIR/claude/worker/CLAUDE.md" "$home/.claude-worker/CLAUDE.md"
+  expect "~/.claude/CLAUDE.md is the repository CLAUDE.md plus the RTK import" equals_source_with_rtk_import "$REPO_DIR/CLAUDE.md" "$home/.claude/CLAUDE.md"
+  expect "~/.claude-worker/CLAUDE.md is the worker contract plus the RTK import" equals_source_with_rtk_import "$REPO_DIR/claude/worker/contract.md" "$home/.claude-worker/CLAUDE.md"
   expect "managed rules are current" bash -c \
     'for r in pstack-models.md pstack-workers.md; do cmp -s "$0/claude/rules/$r" "$1/.claude/rules/$r" || exit 1; done' \
     "$REPO_DIR" "$home"

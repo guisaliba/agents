@@ -98,12 +98,12 @@ The full validation checklist and daily usage are in
 | Path | Owner | Content |
 | --- | --- | --- |
 | `~/.local/bin/claude` | Claude Code installer | Native Claude Code. |
-| `~/.claude/CLAUDE.md` | apply.sh | Copy of the repository `CLAUDE.md`, which ends with the `@RTK.md` import that RTK expects. |
+| `~/.claude/CLAUDE.md` | apply.sh | The repository `CLAUDE.md` plus a last `@RTK.md` line. The source has no import, because Claude Code resolves `@RTK.md` relative to the file and the repository has no `RTK.md`. |
 | `~/.claude/rules/{pstack-models,pstack-workers}.md` | apply.sh | Managed copies of `claude/rules/`. |
 | `~/.claude/rules/ai-memory.md` | ai-memory | Generated routing instructions. |
 | `~/.claude/settings.json` | shared | apply.sh sets `model`, adds `claude-worker` allow rules, and enables the built-in `cc-plugin-you-should-know@builtin` mod; ai-memory and RTK add hooks; the plugin manager adds the pstack entry to `enabledPlugins`. |
 | `~/.claude/skills/` | ai-memory | Five ai-memory skills. |
-| `~/.claude-worker/` | apply.sh | Worker profile: `CLAUDE.md`, `settings.json` (provider base URL, `apiKeyHelper`), RTK hook. |
+| `~/.claude-worker/` | apply.sh | Worker profile: `CLAUDE.md` (from `claude/worker/contract.md`, plus the `@RTK.md` line), `settings.json` (provider base URL, `apiKeyHelper`), RTK hook. |
 | `~/.local/bin/claude-worker`, `~/.local/bin/claude-worker-key` | apply.sh | Symlinks to `bin/`. |
 | `~/.bash_aliases`, `~/.bash_profile` | apply.sh | Marked blocks only. The retired OpenCode block is removed. |
 

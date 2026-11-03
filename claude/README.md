@@ -11,8 +11,10 @@
     line is the one pstack parses.
   - `pstack-workers.md` tells the coordinator how to run a `worker/<alias>`
     role through `claude-worker`.
-- `worker/CLAUDE.md` is the contract for every worker
-  (`~/.claude-worker/CLAUDE.md`).
+- `worker/contract.md` is the contract for every worker
+  (installed as `~/.claude-worker/CLAUDE.md`). Its name is not `CLAUDE.md`,
+  because Claude Code loads a nested `CLAUDE.md` when it reads files in
+  that directory.
 - `worker/provider.env` holds every provider-specific setting.
 - `worker/models.tsv` is the roster: alias, provider model id, model family,
   and the monthly allowance in USD.

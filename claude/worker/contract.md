@@ -30,5 +30,3 @@ Use this structure:
 5. **Open points**: assumptions and anything you could not finish.
 
 Use ASD-STE100 Simplified Technical English.
-
-@RTK.md

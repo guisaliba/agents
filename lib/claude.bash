@@ -40,11 +40,30 @@ install_managed_file() {
   chmod 644 "$target"
 }
 
+# RTK expects its import on the last line of the user instructions file.
+# The sources do not carry the import: Claude Code would resolve @RTK.md
+# relative to the source file, in the repository, where no RTK.md exists.
+# apply.sh writes the import into the installed copy, so rtk init finds it
+# and does not append a second one, and the next apply sees no change.
+install_instructions_file() {
+  local source="$1" target="$2" label="$3" generated status=0
+
+  [[ -f "$source" ]] || die "Missing managed source for $label: $source"
+  if grep -qx '@RTK.md' "$source"; then
+    die "The $label source must not import RTK.md; apply.sh adds the import: $source"
+  fi
+  generated="$(mktemp)"
+  { cat "$source"; printf '\n@RTK.md\n'; } >"$generated"
+  install_managed_file "$generated" "$target" "$label" || status=$?
+  rm -f -- "$generated"
+  return "$status"
+}
+
 configure_claude_main_profile() {
   local rule
 
   log "Installing the global instructions and pstack rules for Claude Code"
-  install_managed_file "$REPO_DIR/CLAUDE.md" "$CLAUDE_HOME/CLAUDE.md" "Claude Code global instructions"
+  install_instructions_file "$REPO_DIR/CLAUDE.md" "$CLAUDE_HOME/CLAUDE.md" "Claude Code global instructions"
   for rule in "${CLAUDE_MANAGED_RULES[@]}"; do
     install_managed_file "$REPO_DIR/claude/rules/$rule" "$CLAUDE_RULES_DIR/$rule" "Claude Code rule $rule"
   done
@@ -117,7 +136,7 @@ configure_worker_profile() {
   log "Configuring the pstack worker profile in $CLAUDE_WORKER_HOME ($(worker_provider_setting WORKER_PROVIDER))"
   mkdir -p "$CLAUDE_WORKER_HOME"
   chmod 700 "$CLAUDE_WORKER_HOME"
-  install_managed_file "$REPO_DIR/claude/worker/CLAUDE.md" "$CLAUDE_WORKER_HOME/CLAUDE.md" "worker instructions"
+  install_instructions_file "$REPO_DIR/claude/worker/contract.md" "$CLAUDE_WORKER_HOME/CLAUDE.md" "worker instructions"
   python3 "$AGENT_STACK_HELPER" merge-json \
     "$CLAUDE_WORKER_HOME/settings.json" \
     "$(worker_settings_patch)" \
