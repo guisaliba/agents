@@ -50,11 +50,13 @@ configure_claude_main_profile() {
   done
 
   # Opus is the main model. The allow rules let the coordinator start
-  # worker seats without one permission prompt per seat.
-  log "Selecting Opus as the main Claude Code model and allowing claude-worker"
+  # worker seats without one permission prompt per seat. The built-in
+  # you-should-know mod is off by default; it needs a direct claude.ai login,
+  # so it is enabled in the main profile only.
+  log "Selecting Opus as the main Claude Code model, allowing claude-worker, and enabling you-should-know"
   python3 "$AGENT_STACK_HELPER" merge-json \
     "$CLAUDE_HOME/settings.json" \
-    "{\"model\": \"$CLAUDE_MAIN_MODEL\", \"permissions\": {\"allow\": [\"Bash(claude-worker run *)\", \"Bash(claude-worker usage)\", \"Bash(claude-worker models)\"]}}" \
+    "{\"model\": \"$CLAUDE_MAIN_MODEL\", \"permissions\": {\"allow\": [\"Bash(claude-worker run *)\", \"Bash(claude-worker usage)\", \"Bash(claude-worker models)\"]}, \"enabledPlugins\": {\"$CLAUDE_YOU_SHOULD_KNOW_PLUGIN\": true}}" \
     "Claude Code user settings" || die "Could not update $CLAUDE_HOME/settings.json"
 }
 

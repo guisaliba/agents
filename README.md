@@ -101,7 +101,7 @@ The full validation checklist and daily usage are in
 | `~/.claude/CLAUDE.md` | apply.sh | Copy of the repository `CLAUDE.md`, which ends with the `@RTK.md` import that RTK expects. |
 | `~/.claude/rules/{pstack-models,pstack-workers}.md` | apply.sh | Managed copies of `claude/rules/`. |
 | `~/.claude/rules/ai-memory.md` | ai-memory | Generated routing instructions. |
-| `~/.claude/settings.json` | shared | apply.sh sets `model` and adds `claude-worker` allow rules; ai-memory and RTK add hooks; the plugin manager adds `enabledPlugins`. |
+| `~/.claude/settings.json` | shared | apply.sh sets `model`, adds `claude-worker` allow rules, and enables the built-in `cc-plugin-you-should-know@builtin` mod; ai-memory and RTK add hooks; the plugin manager adds the pstack entry to `enabledPlugins`. |
 | `~/.claude/skills/` | ai-memory | Five ai-memory skills. |
 | `~/.claude-worker/` | apply.sh | Worker profile: `CLAUDE.md`, `settings.json` (provider base URL, `apiKeyHelper`), RTK hook. |
 | `~/.local/bin/claude-worker`, `~/.local/bin/claude-worker-key` | apply.sh | Symlinks to `bin/`. |

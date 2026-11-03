@@ -302,6 +302,11 @@ assert d["apiKeyHelper"] == sys.argv[2]
 assert d["env"]["ANTHROPIC_BASE_URL"] == "https://opencode.ai/inference/go/anthropic"
 assert d["env"]["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "deepseek-v4.1-flash"
 assert d["env"]["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"] == "1"' "$home/.claude-worker/settings.json" "$REPO_DIR/bin/claude-worker-key"
+  expect "main settings enable the built-in you-should-know mod" python3 -B -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d["enabledPlugins"]["cc-plugin-you-should-know@builtin"] is True' "$home/.claude/settings.json"
+  expect "worker settings do not enable the you-should-know mod" file_lacks "$home/.claude-worker/settings.json" 'you-should-know'
   expect "main settings carry no worker provider routing" file_lacks "$home/.claude/settings.json" 'ANTHROPIC_BASE_URL'
   expect "worker CLAUDE.md is installed" cmp -s "$REPO_DIR/claude/worker/CLAUDE.md" "$home/.claude-worker/CLAUDE.md"
   expect "claude-worker and claude-worker-key are linked into ~/.local/bin" bash -c \
@@ -404,6 +409,9 @@ machine_checks() {
   PATH="$home/.local/bin:$PATH"
 
   expect "claude is installed" bash -c 'type -P claude >/dev/null'
+  expect "the you-should-know mod is enabled in the main profile" python3 -B -c '
+import json, sys
+assert json.load(open(sys.argv[1]))["enabledPlugins"]["cc-plugin-you-should-know@builtin"] is True' "$home/.claude/settings.json"
   expect "pstack plugin is installed" bash -c 'claude plugin list 2>/dev/null | grep -q "pstack@cursor-plugins"'
   expect "~/.claude/CLAUDE.md equals the repository CLAUDE.md" cmp -s "$REPO_DIR/CLAUDE.md" "$home/.claude/CLAUDE.md"
   expect "~/.claude-worker/CLAUDE.md equals the worker contract" cmp -s "$REPO_DIR/claude/worker/CLAUDE.md" "$home/.claude-worker/CLAUDE.md"

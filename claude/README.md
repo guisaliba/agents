@@ -125,3 +125,7 @@ this branch to `main`.
 10. **Pro quota.** Watch the Claude Pro usage meter on panel-heavy days. If it
     runs out first, move `judgment and prose` or `hardest tasks` to a
     `worker/` model.
+    The built-in you-should-know mod also uses Pro usage: each check is a
+    background request to the session model. Disable it in `/plugin` for one
+    session, or remove it from `configure_claude_main_profile` to stop it on
+    every host.

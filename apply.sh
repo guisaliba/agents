@@ -27,6 +27,8 @@ CLAUDE_MIN_VERSION="${CLAUDE_MIN_VERSION:-2.1.259}"
 CLAUDE_HOME="$HOME/.claude"
 CLAUDE_RULES_DIR="$CLAUDE_HOME/rules"
 CLAUDE_MAIN_MODEL="opus"
+# Built-in Claude Code mod: https://code.claude.com/docs/en/interactive-mode#you-should-know-suggestions
+CLAUDE_YOU_SHOULD_KNOW_PLUGIN="cc-plugin-you-should-know@builtin"
 CLAUDE_MANAGED_RULES=(pstack-models.md pstack-workers.md)
 CLAUDE_WORKER_HOME="${CLAUDE_WORKER_CONFIG_DIR:-$HOME/.claude-worker}"
 WORKER_PROVIDER_FILE="$REPO_DIR/claude/worker/provider.env"
