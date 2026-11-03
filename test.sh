@@ -422,6 +422,75 @@ wrapper_fixtures() {
     '[[ ! -e "$1" && "$(tr "\n" "|" <"$0")" == "run|claude|-p|plugin list|" ]]' "$dir/log" "$dir/native"
 }
 
+# --- RTK install fixtures ----------------------------------------------------
+
+# A fake rtk that passes the rewrite compatibility check and reports a version.
+make_fake_rtk() {
+  local path="$1" version="$2"
+  {
+    printf '%s\n' '#!/usr/bin/env bash' "version='$version'"
+    cat <<'FAKE'
+case "${1:-}" in
+  --version) printf 'rtk %s\n' "$version" ;;
+  rewrite) printf 'rtk %s\n' "$2" ;;
+  gain) : ;;
+esac
+FAKE
+  } >"$path"
+  chmod +x "$path"
+}
+
+rtk_fixtures() {
+  printf '\n== RTK install fixtures\n'
+  local dir="$FIXTURE_ROOT/rtk"
+  mkdir -p "$dir/bin" "$dir/home/.local/bin"
+  # The fake curl prints an installer script; sh runs it, and it installs an
+  # rtk that reports the version the installer was asked for.
+  cat >"$dir/bin/curl" <<FAKE
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >>"$dir/curl.log"
+cat <<'SCRIPT'
+version="\${RTK_VERSION#v}"
+printf '%s\n' '#!/usr/bin/env bash' "version='\$version'" \
+  'case "\${1:-}" in --version) printf "rtk %s\n" "\$version" ;; rewrite) printf "rtk %s\n" "\$2" ;; esac' \
+  >"\$HOME/.local/bin/rtk"
+chmod +x "\$HOME/.local/bin/rtk"
+SCRIPT
+FAKE
+  chmod +x "$dir/bin/curl"
+
+  run_install_rtk() {
+    env -i HOME="$dir/home" PATH="$dir/home/.local/bin:$dir/bin:/usr/bin:/bin" bash -c '
+      set -Eeuo pipefail
+      source "$0/apply.sh"
+      install_rtk
+      rtk --version
+    ' "$REPO_DIR" 2>&1
+  }
+
+  local pinned output
+  pinned="$(sed -n 's/^RTK_VERSION="\${RTK_VERSION:-v\(.*\)}"$/\1/p' "$REPO_DIR/apply.sh")"
+
+  make_fake_rtk "$dir/home/.local/bin/rtk" 0.48.0
+  : >"$dir/curl.log"
+  output="$(run_install_rtk)" || true
+  expect "an older compatible RTK is upgraded to the pinned release" bash -c \
+    '[[ "$(tail -n 1 <<<"$0")" == "rtk $1" ]] && grep -q "rtk-ai/rtk/v$1/install.sh" "$2"' \
+    "$output" "$pinned" "$dir/curl.log"
+
+  make_fake_rtk "$dir/home/.local/bin/rtk" "$pinned"
+  : >"$dir/curl.log"
+  output="$(run_install_rtk)" || true
+  expect "a current compatible RTK is kept without a download" bash -c \
+    '[[ "$(tail -n 1 <<<"$0")" == "rtk $1" && ! -s "$2" ]]' "$output" "$pinned" "$dir/curl.log"
+
+  make_fake_rtk "$dir/home/.local/bin/rtk" 9.9.9
+  : >"$dir/curl.log"
+  output="$(run_install_rtk)" || true
+  expect "a newer compatible RTK is kept, never downgraded" bash -c \
+    '[[ "$(tail -n 1 <<<"$0")" == "rtk 9.9.9" && ! -s "$1" ]]' "$output" "$dir/curl.log"
+}
+
 # --- Machine checks ---------------------------------------------------------
 
 machine_checks() {
@@ -446,6 +515,8 @@ assert json.load(open(sys.argv[1]))["enabledPlugins"]["cc-plugin-you-should-know
   expect "ai-memory hooks stay out of the worker profile" file_lacks "$home/.claude-worker/settings.json" 'ai-memory'
   expect "RTK did not set a proxy base URL in the main profile" file_lacks "$home/.claude/settings.json" 'ANTHROPIC_BASE_URL'
   expect "claude-worker is on PATH" bash -c 'command -v claude-worker >/dev/null'
+  expect "RTK is the pinned release or newer" bash -c \
+    'source "$0/lib/common.bash"; (require_minimum_version rtk "$(sed -n "s/^RTK_VERSION=\"\${RTK_VERSION:-v\(.*\)}\"$/\1/p" "$0/apply.sh")") >/dev/null 2>&1' "$REPO_DIR"
   expect "ai-memory is the pinned release or newer" bash -c \
     'source "$0/lib/common.bash"; (require_minimum_version ai-memory "$(sed -n "s/^AI_MEMORY_MIN_VERSION=\"\${AI_MEMORY_MIN_VERSION:-\(.*\)}\"$/\1/p" "$0/apply.sh")") >/dev/null 2>&1' "$REPO_DIR"
   expect "ai-memory service answers" bash -c 'ai-memory status --json >/dev/null 2>&1'
@@ -463,6 +534,7 @@ worker_fixtures
 apply_fixtures
 ai_memory_env_fixtures
 wrapper_fixtures
+rtk_fixtures
 if [[ "$repo_only" == false ]]; then
   machine_checks
 fi

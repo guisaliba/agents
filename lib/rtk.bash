@@ -65,12 +65,16 @@ install_rtk() {
   RTK_CLI_INSTALLED_BY_APPLY=false
 
   if have rtk; then
-    if rtk_cli_is_compatible; then
-      version_output="$(rtk --version 2>/dev/null)"
-      log "Keeping compatible RTK CLI: $version_output"
-    else
+    if ! rtk_cli_is_compatible; then
       log "Installed RTK CLI does not pass the rewrite compatibility check"
       install_required=true
+    elif ! rtk_cli_meets_install_version; then
+      version_output="$(rtk --version 2>/dev/null)"
+      log "Installed RTK CLI ($version_output) is older than the pinned release $RTK_VERSION"
+      install_required=true
+    else
+      version_output="$(rtk --version 2>/dev/null)"
+      log "Keeping RTK CLI $version_output (pinned release $RTK_VERSION or newer)"
     fi
   else
     install_required=true
@@ -86,7 +90,7 @@ install_rtk() {
     have rtk || die "RTK install did not put rtk on PATH"
     rtk_cli_is_compatible || die "Installed RTK CLI failed its rewrite compatibility check"
     rtk_cli_meets_install_version || \
-      die "Installed RTK CLI is older than the pinned stable release $RTK_VERSION"
+      die "rtk on PATH ($(type -P rtk)) is still older than the pinned stable release $RTK_VERSION. Remove or upgrade that copy (for example a package-manager install), then rerun apply."
     RTK_CLI_INSTALLED_BY_APPLY=true
   fi
 
