@@ -2,7 +2,7 @@
 # lib/claude.bash
 #
 # Claude Code installation, the main (Claude Pro) profile, the pstack plugin,
-# the OpenCode Go worker profile, and the Bash entry points.
+# the pstack worker profile, and the Bash entry points.
 # Sourced by apply.sh. Do not execute directly.
 
 install_claude_code() {
@@ -44,11 +44,11 @@ configure_claude_main_profile() {
   done
 
   # Opus is the main model. The allow rules let the coordinator start
-  # OpenCode Go worker seats without one permission prompt per seat.
-  log "Selecting Opus as the main Claude Code model and allowing go-worker"
+  # worker seats without one permission prompt per seat.
+  log "Selecting Opus as the main Claude Code model and allowing claude-worker"
   python3 "$AGENT_STACK_HELPER" merge-json \
     "$CLAUDE_HOME/settings.json" \
-    "{\"model\": \"$CLAUDE_MAIN_MODEL\", \"permissions\": {\"allow\": [\"Bash(go-worker run *)\", \"Bash(go-worker usage)\", \"Bash(go-worker models)\"]}}" \
+    "{\"model\": \"$CLAUDE_MAIN_MODEL\", \"permissions\": {\"allow\": [\"Bash(claude-worker run *)\", \"Bash(claude-worker usage)\", \"Bash(claude-worker models)\"]}}" \
     "Claude Code user settings" || die "Could not update $CLAUDE_HOME/settings.json"
 }
 
@@ -71,8 +71,18 @@ install_pstack_plugin() {
   fi
 }
 
-go_worker_settings_patch() {
-  python3 - "$REPO_DIR/bin/go-key" "$GO_ANTHROPIC_BASE_URL" "$GO_BACKGROUND_MODEL" <<'PY'
+worker_provider_setting() {
+  local value
+  value="$(python3 "$AGENT_STACK_HELPER" env-value "$WORKER_PROVIDER_FILE" "$1")" || \
+    die "$1 is missing in $WORKER_PROVIDER_FILE"
+  printf '%s\n' "$value"
+}
+
+worker_settings_patch() {
+  python3 - \
+    "$REPO_DIR/bin/claude-worker-key" \
+    "$(worker_provider_setting WORKER_ANTHROPIC_BASE_URL)" \
+    "$(worker_provider_setting WORKER_BACKGROUND_MODEL)" <<'PY'
 import json
 import sys
 
@@ -83,7 +93,7 @@ print(json.dumps({
         "ANTHROPIC_BASE_URL": base_url,
         # Session titles and other background tasks use the haiku slot.
         "ANTHROPIC_DEFAULT_HAIKU_MODEL": background_model,
-        # OpenCode Go forwards to non-Anthropic models that reject
+        # A gateway that forwards to non-Anthropic models rejects
         # pre-release Anthropic request fields.
         "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
@@ -92,27 +102,30 @@ print(json.dumps({
 PY
 }
 
-configure_go_worker_profile() {
-  local link="$HOME/.local/bin/go-worker"
+configure_worker_profile() {
+  local link
+  local -a commands=(claude-worker claude-worker-key)
 
-  log "Configuring the OpenCode Go worker profile in $CLAUDE_GO_HOME"
-  mkdir -p "$CLAUDE_GO_HOME"
-  chmod 700 "$CLAUDE_GO_HOME"
-  install_managed_file "$REPO_DIR/claude/worker/CLAUDE.md" "$CLAUDE_GO_HOME/CLAUDE.md" "worker instructions"
+  log "Configuring the pstack worker profile in $CLAUDE_WORKER_HOME ($(worker_provider_setting WORKER_PROVIDER))"
+  mkdir -p "$CLAUDE_WORKER_HOME"
+  chmod 700 "$CLAUDE_WORKER_HOME"
+  install_managed_file "$REPO_DIR/claude/worker/CLAUDE.md" "$CLAUDE_WORKER_HOME/CLAUDE.md" "worker instructions"
   python3 "$AGENT_STACK_HELPER" merge-json \
-    "$CLAUDE_GO_HOME/settings.json" \
-    "$(go_worker_settings_patch)" \
-    "worker settings" || die "Could not update $CLAUDE_GO_HOME/settings.json"
+    "$CLAUDE_WORKER_HOME/settings.json" \
+    "$(worker_settings_patch)" \
+    "worker settings" || die "Could not update $CLAUDE_WORKER_HOME/settings.json"
 
-  log "Linking go-worker into ~/.local/bin"
-  mkdir -p "$(dirname "$link")"
-  if [[ -e "$link" && ! -L "$link" ]]; then
-    die "Refusing to replace a file that is not a symlink: $link"
-  fi
-  ln -sfn "$REPO_DIR/bin/go-worker" "$link"
+  log "Linking claude-worker and claude-worker-key into ~/.local/bin"
+  mkdir -p "$HOME/.local/bin"
+  for link in "${commands[@]}"; do
+    if [[ -e "$HOME/.local/bin/$link" && ! -L "$HOME/.local/bin/$link" ]]; then
+      die "Refusing to replace a file that is not a symlink: $HOME/.local/bin/$link"
+    fi
+    ln -sfn "$REPO_DIR/bin/$link" "$HOME/.local/bin/$link"
+  done
 
-  if ! "$REPO_DIR/bin/go-key" >/dev/null 2>&1; then
-    log "OpenCode Go key not found. Add OPENCODE_API_KEY to $AI_MEMORY_ENV_FILE before you use go/ roles."
+  if ! "$REPO_DIR/bin/claude-worker-key" >/dev/null 2>&1; then
+    log "Worker provider API key not found. Run claude-worker-key for the reason before you use worker/ roles."
   fi
 }
 

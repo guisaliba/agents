@@ -21,7 +21,7 @@ source ~/.bash_aliases
 | `claude <flags>` | Passes the flags to Claude Code, for example `claude --continue`. |
 | `claude-raw ...` | Runs native Claude Code for diagnostics and recovery. |
 
-The functions are not exported. ai-memory and `go-worker` therefore start the
+The functions are not exported. ai-memory and `claude-worker` therefore start the
 native `claude` executable, never this wrapper.
 
 `claude` refuses `--dangerously-skip-permissions` and

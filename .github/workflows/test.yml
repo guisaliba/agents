@@ -9,5 +9,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: bash -n apply.sh test.sh lib/*.bash bin/go-worker bin/go-key shell/claude.bash
+      - run: bash -n apply.sh test.sh lib/*.bash bin/claude-worker bin/claude-worker-key shell/claude.bash
       - run: ./test.sh --repo-only

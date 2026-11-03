@@ -74,9 +74,9 @@ user service.
 The ai-memory binary owns the generated Claude Code hooks in
 `~/.claude/settings.json`, the MCP registration in `~/.claude.json`, the routing
 instructions in `~/.claude/rules/ai-memory.md`, and five ai-memory skills in
-`~/.claude/skills/`. Do not edit generated files by hand. The OpenCode Go worker
-profile (`~/.claude-go`) never receives these hooks, so worker runs do not write
-into the coordinator's workstream.
+`~/.claude/skills/`. Do not edit generated files by hand. The pstack worker
+profile (`~/.claude-worker`) never receives these hooks, so worker runs do not
+write into the coordinator's workstream.
 
 `DOTFILES_AI_MEMORY_LLM_PROFILE` is the single profile for a local service. It
 sets that service's LLM provider and model. Set it on each host that runs a
@@ -88,7 +88,8 @@ The default profile is `opencode-go-deepseek-v4.1-flash`, which uses
 `opencode-go-muse-spark-1.3-contributor`, which uses
 `opencode-go/muse-spark-1.3-contributor`. Both profiles stay in zero-LLM mode
 until `OPENCODE_API_KEY` is present in the environment file. The same key also
-feeds the pstack OpenCode Go workers through `bin/go-key`.
+feeds the pstack workers through `bin/claude-worker-key` while
+`claude/worker/provider.env` names OpenCode Go as the worker provider.
 
 Set `DOTFILES_AI_MEMORY_LLM_PROFILE` in `~/.config/ai-memory/env` to select
 a profile. Apply preserves an explicit valid selection; remove the assignment

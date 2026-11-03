@@ -1,33 +1,36 @@
 #!/usr/bin/env bash
-# go-worker
+# claude-worker
 #
-# Run one pstack worker seat as a headless Claude Code process on OpenCode Go.
+# Run one pstack worker seat as a headless Claude Code process on the worker
+# model provider (claude/worker/provider.env).
 #
 # The coordinator session runs Opus on the Claude Pro plan. Claude Code
-# subagents can only use that plan, so a pstack role whose value is go/<alias>
-# runs here instead: `claude -p` with CLAUDE_CONFIG_DIR set to the separate
-# worker profile (~/.claude-go). That profile reaches OpenCode Go through its
-# settings.json (ANTHROPIC_BASE_URL plus the go-key apiKeyHelper), so the worker
-# never reads or uses the Pro login.
+# subagents can only use that plan, so a pstack role whose value is
+# worker/<alias> runs here instead: `claude -p` with CLAUDE_CONFIG_DIR set to
+# the separate worker profile (~/.claude-worker). That profile reaches the
+# provider through its settings.json (ANTHROPIC_BASE_URL plus the
+# claude-worker-key apiKeyHelper), so the worker never reads or uses the Pro login.
 #
 # Usage:
-#   go-worker run --model go/<alias> --dir <path> --brief <file> --report <file>
-#                 [--readonly] [--max-turns N] [--timeout SECONDS]
-#   go-worker models
-#   go-worker doctor [--live]
-#   go-worker usage
+#   claude-worker run --model worker/<alias> --dir <path> --brief <file> --report <file>
+#                     [--readonly] [--max-turns N] [--timeout SECONDS]
+#   claude-worker models
+#   claude-worker doctor [--live]
+#   claude-worker usage
 #
 # Exit status: 0 success, 1 worker run failed, 2 usage error,
-#              3 worker profile or OpenCode Go key not configured.
+#              3 worker profile or provider API key not configured.
 set -Eeuo pipefail
 
 script_path="$(readlink -f -- "${BASH_SOURCE[0]}" 2>/dev/null || python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "${BASH_SOURCE[0]}")"
 REPO_DIR="$(cd -- "$(dirname -- "$script_path")/.." && pwd)"
-ROSTER="${GO_WORKER_ROSTER:-$REPO_DIR/claude/go-models.tsv}"
-GO_CONFIG_DIR="${CLAUDE_GO_CONFIG_DIR:-$HOME/.claude-go}"
-STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/go-worker"
+HELPER="$REPO_DIR/lib/agent_stack.py"
+ROSTER="${CLAUDE_WORKER_ROSTER:-$REPO_DIR/claude/worker/models.tsv}"
+PROVIDER_FILE="${CLAUDE_WORKER_PROVIDER_FILE:-$REPO_DIR/claude/worker/provider.env}"
+WORKER_CONFIG_DIR="${CLAUDE_WORKER_CONFIG_DIR:-$HOME/.claude-worker}"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/claude-worker"
 LEDGER="$STATE_DIR/runs.tsv"
-GO_MODELS_URL="${GO_WORKER_MODELS_URL:-https://opencode.ai/inference/go/v1/models}"
+KEY_HELPER="$REPO_DIR/bin/claude-worker-key"
 CLAUDE_MIN_VERSION="2.1.259"
 DEFAULT_MAX_TURNS=80
 DEFAULT_TIMEOUT=3600
@@ -36,23 +39,27 @@ WRITE_TOOLS="Read,Edit,Write,Glob,Grep,Bash"
 DISALLOWED_TOOLS="Agent,WebSearch"
 
 usage() {
-  sed -n '13,21p' "$script_path" | sed 's/^# \{0,1\}//' >&2
+  sed -n '14,22p' "$script_path" | sed 's/^# \{0,1\}//' >&2
 }
 
 fail_usage() {
-  printf 'go-worker: %s\n' "$*" >&2
+  printf 'claude-worker: %s\n' "$*" >&2
   usage
   exit 2
 }
 
 fail_config() {
-  printf 'go-worker: %s\n' "$*" >&2
+  printf 'claude-worker: %s\n' "$*" >&2
   exit 3
 }
 
+provider_setting() {
+  python3 "$HELPER" env-value "$PROVIDER_FILE" "$1" 2>/dev/null
+}
+
 claude_binary() {
-  if [[ -n "${GO_WORKER_CLAUDE_BIN:-}" ]]; then
-    printf '%s\n' "$GO_WORKER_CLAUDE_BIN"
+  if [[ -n "${CLAUDE_WORKER_CLAUDE_BIN:-}" ]]; then
+    printf '%s\n' "$CLAUDE_WORKER_CLAUDE_BIN"
     return 0
   fi
   # type -P ignores shell functions, so the interactive `claude` wrapper (which
@@ -60,9 +67,9 @@ claude_binary() {
   type -P claude || return 1
 }
 
-# Print "<model_id>\t<family>" for an alias, with or without the go/ prefix.
+# Print "<model_id>\t<family>" for an alias, with or without the worker/ prefix.
 resolve_alias() {
-  local requested="${1#go/}"
+  local requested="${1#worker/}"
   python3 - "$ROSTER" "$requested" <<'PY'
 import sys
 from pathlib import Path
@@ -83,7 +90,7 @@ PY
 }
 
 require_profile() {
-  local settings="$GO_CONFIG_DIR/settings.json"
+  local settings="$WORKER_CONFIG_DIR/settings.json"
   [[ -f "$settings" ]] || \
     fail_config "worker profile is missing: $settings. Run apply.sh from guisaliba/agents."
   python3 - "$settings" <<'PY' || fail_config "worker profile $settings has no apiKeyHelper or ANTHROPIC_BASE_URL. Run apply.sh from guisaliba/agents."
@@ -98,8 +105,8 @@ PY
 }
 
 require_key() {
-  "$REPO_DIR/bin/go-key" >/dev/null 2>&1 || \
-    fail_config "the OpenCode Go key is not available. Add OPENCODE_API_KEY to ~/.config/ai-memory/env."
+  "$KEY_HELPER" >/dev/null 2>&1 || \
+    fail_config "the worker provider API key is not available. Run claude-worker-key to see why."
 }
 
 # The worker gets a small, explicit environment. This keeps the coordinator's
@@ -115,7 +122,7 @@ worker_environment() {
       WORKER_ENV+=("$name=${!name}")
     fi
   done
-  WORKER_ENV+=("CLAUDE_CONFIG_DIR=$GO_CONFIG_DIR")
+  WORKER_ENV+=("CLAUDE_CONFIG_DIR=$WORKER_CONFIG_DIR")
 }
 
 command_run() {
@@ -144,7 +151,7 @@ command_run() {
 
   local resolved model_id family
   resolved="$(resolve_alias "$alias")" || \
-    fail_usage "unknown OpenCode Go alias: $alias. Run: go-worker models"
+    fail_usage "unknown worker alias: $alias. Run: claude-worker models"
   IFS=$'\t' read -r model_id family <<<"$resolved"
 
   require_profile
@@ -254,8 +261,9 @@ PY
 }
 
 command_models() {
-  printf 'ALIAS\tGO_MODEL_ID\tFAMILY\tGO_MONTHLY_ALLOWANCE_USD\n'
-  grep -v '^#' "$ROSTER" | grep -v '^[[:space:]]*$' | sed 's/^/go\//'
+  printf 'provider: %s\n' "$(provider_setting WORKER_PROVIDER || printf unknown)"
+  printf 'ALIAS\tMODEL_ID\tFAMILY\tMONTHLY_ALLOWANCE_USD\n'
+  grep -v '^#' "$ROSTER" | grep -v '^[[:space:]]*$' | sed 's/^/worker\//'
 }
 
 command_doctor() {
@@ -280,16 +288,16 @@ raise SystemExit(0 if found and tuple(map(int, found.groups())) >= need else 1)
 PY
   fi
 
-  DOCTOR_LABEL="worker profile $GO_CONFIG_DIR/settings.json"
+  DOCTOR_LABEL="worker profile $WORKER_CONFIG_DIR/settings.json"
   check bash -c '"$0" __profile' "$script_path"
-  DOCTOR_LABEL="OpenCode Go key available through go-key (value not shown)"
-  check "$REPO_DIR/bin/go-key" >/dev/null 2>&1
+  DOCTOR_LABEL="provider API key available through claude-worker-key (value not shown)"
+  check "$KEY_HELPER" >/dev/null 2>&1
 
-  DOCTOR_LABEL="every roster model id is in the OpenCode Go model list"
+  DOCTOR_LABEL="every roster model id is in the provider model list"
   check models_in_live_list
 
   if [[ "$live" == true ]]; then
-    DOCTOR_LABEL="one live worker run on go/deepseek-v4.1-flash"
+    DOCTOR_LABEL="one live worker run on worker/$(provider_setting WORKER_SMOKE_ALIAS || printf unset)"
     check live_smoke_run
   fi
 
@@ -301,11 +309,12 @@ PY
 }
 
 models_in_live_list() {
-  local key listing
-  key="$("$REPO_DIR/bin/go-key" 2>/dev/null)" || return 1
+  local key listing models_url
+  models_url="$(provider_setting WORKER_MODELS_URL)" || return 1
+  key="$("$KEY_HELPER" 2>/dev/null)" || return 1
   # The key goes to curl on standard input, so it never appears in argv.
   listing="$(printf 'header = "Authorization: Bearer %s"\n' "$key" | \
-    curl --fail --silent --show-error --max-time 30 --config - "$GO_MODELS_URL")" || return 1
+    curl --fail --silent --show-error --max-time 30 --config - "$models_url")" || return 1
   unset key
   python3 - "$ROSTER" "$listing" <<'PY'
 import json
@@ -329,10 +338,11 @@ PY
 }
 
 live_smoke_run() {
-  local work
+  local work smoke_alias
+  smoke_alias="$(provider_setting WORKER_SMOKE_ALIAS)" || return 1
   work="$(mktemp -d)" || return 1
   printf '%s\n' 'Reply with the single word READY and nothing else.' >"$work/brief.md"
-  if "$script_path" run --model go/deepseek-v4.1-flash --dir "$work" \
+  if "$script_path" run --model "worker/$smoke_alias" --dir "$work" \
     --brief "$work/brief.md" --report "$work/report.md" --readonly --max-turns 2 --timeout 180 \
     && grep -q 'READY' "$work/report.md"; then
     rm -rf "$work"

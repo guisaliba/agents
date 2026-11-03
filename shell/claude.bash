@@ -1,6 +1,6 @@
 # >>> guisaliba/agents Claude Code ai-memory wrapper >>>
 # Keep these functions local to the interactive Bash process. They are not
-# exported, so ai-memory and go-worker resolve the native claude executable
+# exported, so ai-memory and claude-worker resolve the native claude executable
 # without recursing into this wrapper.
 unalias claude claude-raw 2>/dev/null || true
 unset -f claude claude-raw 2>/dev/null || true

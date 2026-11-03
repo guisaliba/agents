@@ -2,7 +2,8 @@
 
 Claude Code agent stack with the [pstack](https://github.com/cursor/plugins/tree/main/pstack)
 workflow. Opus on the Claude Pro plan is the main session. pstack roles that
-name `go/<alias>` run on OpenCode Go models as separate worker processes.
+name `worker/<alias>` run on models from a second provider as separate worker
+processes. The current worker provider is OpenCode Go.
 
 The dotfiles installer clones this repository into
 `~/.local/share/dotfiles/agents`. This repository owns the agent setup; it does
@@ -24,53 +25,69 @@ without routing the Pro login through a third-party tool:
 ```text
  You ──▶ claude (Opus, Claude Pro login, ~/.claude)
            │  pstack plugin: /pstack:poteto-mode, arena, interrogate, ...
-           │  ~/.claude/rules/pstack-models.md   role ──▶ model
-           │  ~/.claude/rules/pstack-go.md       go/<alias> ──▶ go-worker
+           │  ~/.claude/rules/pstack-models.md    role ──▶ model
+           │  ~/.claude/rules/pstack-workers.md   worker/<alias> ──▶ claude-worker
            │
            ├── Agent tool ──▶ Claude subagents (opus/sonnet/haiku, Pro plan)
            │
-           └── Bash, in background ──▶ go-worker run --model go/kimi-k3.1 ...
+           └── Bash, in background ──▶ claude-worker run --model worker/kimi-k3.1 ...
                                          │
                                          ▼
-                        claude -p   CLAUDE_CONFIG_DIR=~/.claude-go
-                        ANTHROPIC_BASE_URL = OpenCode Go
-                        apiKeyHelper = bin/go-key (OPENCODE_API_KEY)
+                        claude -p   CLAUDE_CONFIG_DIR=~/.claude-worker
+                        ANTHROPIC_BASE_URL = provider (claude/worker/provider.env)
+                        apiKeyHelper = claude-worker-key
                         own Git worktree, report.md back to Opus
 ```
 
 A **coordinator** is the main session that runs the pstack playbook. A
 **worker** is one headless `claude -p` process that does one seat of a panel
-and returns a report file.
+and returns a report file. A **worker provider** is the Anthropic-compatible
+model gateway that workers call.
+
+## Change the worker provider
+
+Two files hold everything provider-specific:
+
+- `claude/worker/provider.env`: base URL, model list URL, background model,
+  smoke-test alias, and the file and variable that hold the API key.
+- `claude/worker/models.tsv`: the roster of aliases, provider model ids, model
+  families, and allowances.
+
+Edit both, update the `worker/<alias>` values in
+`claude/rules/pstack-models.md` when aliases change, then run `./apply.sh` and
+`claude-worker doctor`.
 
 ## Quick Start
 
-Prerequisites: Bash, curl, Git, and Python 3.11+. Linux also needs a
-systemd user manager; Arch systems need `yay` when `ai-memory` is absent. macOS
-needs Homebrew.
+Prerequisites: Bash, curl, Git, and Python 3.11+. Linux also needs a systemd
+user manager; Arch systems need `yay` when `ai-memory` is absent. macOS needs
+Homebrew.
 
 ```sh
 ./apply.sh
 source ~/.bash_aliases
 claude            # once: log in with the Claude Pro plan, then /exit
 ./test.sh
-go-worker doctor --live
+claude-worker doctor --live
 ```
 
-Put the OpenCode Go key in `~/.config/ai-memory/env` as `OPENCODE_API_KEY=...`
-before you use `go/` roles. ai-memory uses the same key for its LLM jobs.
+For the OpenCode Go provider, put the key in `~/.config/ai-memory/env` as
+`OPENCODE_API_KEY=...` before you use `worker/` roles. ai-memory uses the same
+key for its LLM jobs.
 
 The full validation checklist and daily usage are in
 [`claude/README.md`](claude/README.md).
 
 ## Components
 
-| Component | Documentation |
-| --- | --- |
-| Claude Code, pstack, OpenCode Go workers | [claude/README.md](claude/README.md) |
-| ai-memory service | [ai-memory/README.md](ai-memory/README.md) |
-| Bash entry point | [shell/README.md](shell/README.md) |
-| Shared helpers | [lib/README.md](lib/README.md) |
-| Global agent policy | [CLAUDE.md](CLAUDE.md) |
+| Component | Version | Documentation |
+| --- | --- | --- |
+| Claude Code, pstack, workers | Claude Code 2.1.259 or newer; pstack from the `cursor-plugins` marketplace | [claude/README.md](claude/README.md) |
+| ai-memory service | 3.3.1 | [ai-memory/README.md](ai-memory/README.md) |
+| RTK | v1.1.0 | `lib/rtk.bash` |
+| Bash entry point | | [shell/README.md](shell/README.md) |
+| Shared helpers | | [lib/README.md](lib/README.md) |
+| Global agent policy | | [CLAUDE.md](CLAUDE.md) |
 
 ## What apply.sh changes
 
@@ -78,17 +95,18 @@ The full validation checklist and daily usage are in
 | --- | --- | --- |
 | `~/.local/bin/claude` | Claude Code installer | Native Claude Code. |
 | `~/.claude/CLAUDE.md` | apply.sh | Copy of the repository `CLAUDE.md`, plus the `@RTK.md` import that RTK adds. |
-| `~/.claude/rules/{pstack-models,pstack-go}.md` | apply.sh | Managed copies of `claude/rules/`. |
+| `~/.claude/rules/{pstack-models,pstack-workers}.md` | apply.sh | Managed copies of `claude/rules/`. |
 | `~/.claude/rules/ai-memory.md` | ai-memory | Generated routing instructions. |
-| `~/.claude/settings.json` | shared | apply.sh sets `model` and adds `go-worker` allow rules; ai-memory and RTK add hooks; the plugin manager adds `enabledPlugins`. |
+| `~/.claude/settings.json` | shared | apply.sh sets `model` and adds `claude-worker` allow rules; ai-memory and RTK add hooks; the plugin manager adds `enabledPlugins`. |
 | `~/.claude/skills/` | ai-memory | Five ai-memory skills. |
-| `~/.claude-go/` | apply.sh | Worker profile: `CLAUDE.md`, `settings.json` (OpenCode Go base URL, `apiKeyHelper`), RTK hook. |
-| `~/.local/bin/go-worker` | apply.sh | Symlink to `bin/go-worker`. |
+| `~/.claude-worker/` | apply.sh | Worker profile: `CLAUDE.md`, `settings.json` (provider base URL, `apiKeyHelper`), RTK hook. |
+| `~/.local/bin/claude-worker`, `~/.local/bin/claude-worker-key` | apply.sh | Symlinks to `bin/`. |
 | `~/.bash_aliases`, `~/.bash_profile` | apply.sh | Marked blocks only. The retired OpenCode block is removed. |
 
 apply.sh does not delete the old OpenCode installation (`~/.opencode`,
-`~/.config/opencode`, the OpenCode server service). Remove those by hand when
-you no longer need them.
+`~/.config/opencode`, the OpenCode server service), the old shared skills in
+`~/.agents/skills`, or an old `~/.claude-go` profile from an earlier build of
+this branch. Remove those by hand when you no longer need them.
 
 `./test.sh --repo-only` runs the deterministic fixtures with a temporary HOME
 and fake executables. It never changes the workstation and never uses the

@@ -1,45 +1,62 @@
-# Claude Code, pstack, and OpenCode Go workers
+# Claude Code, pstack, and workers
 
 ## Context
 
 - `rules/` holds the two rule files that apply.sh copies to
   `~/.claude/rules/`. Claude Code loads every file in that directory into each
-  session.
+  main session.
   - `pstack-models.md` is the pstack role table. pstack reads it in place of the
-    `/pstack:setup-pstack` output.
-  - `pstack-go.md` tells the coordinator how to run a `go/<alias>` role through
-    `go-worker`.
-- `worker/CLAUDE.md` is the contract for every worker (`~/.claude-go/CLAUDE.md`).
-- `go-models.tsv` is the roster: alias, OpenCode Go model id, model family, and
-  the Go monthly allowance in USD.
+    `/pstack:setup-pstack` output. Its `#` lines are comments in the format that
+    the pstack Claude Code adapter specifies for this file, and the `# budget`
+    line is the one pstack parses.
+  - `pstack-workers.md` tells the coordinator how to run a `worker/<alias>`
+    role through `claude-worker`.
+- `worker/CLAUDE.md` is the contract for every worker
+  (`~/.claude-worker/CLAUDE.md`).
+- `worker/provider.env` holds every provider-specific setting.
+- `worker/models.tsv` is the roster: alias, provider model id, model family,
+  and the monthly allowance in USD.
 
 Do not run `/pstack:setup-pstack`. It accepts only Claude models that it can
-detect, so it would drop every `go/` entry. Edit `rules/pstack-models.md` in this
-repository and run `./apply.sh` again.
+detect, so it would drop every `worker/` entry. Edit `rules/pstack-models.md` in
+this repository and run `./apply.sh` again.
+
+## Which instructions load where
+
+| Session | User-level instructions | Rules | Project `CLAUDE.md` |
+| --- | --- | --- | --- |
+| Main (`claude`) | `~/.claude/CLAUDE.md` (the repository `CLAUDE.md`) | `~/.claude/rules/*.md` | Loaded |
+| Worker (`claude-worker`) | `~/.claude-worker/CLAUDE.md` (the worker contract) | none | Loaded from the worker's checkout |
+
+A worker does not load `~/.claude/CLAUDE.md`, because `CLAUDE_CONFIG_DIR` moves
+its user-level directory to `~/.claude-worker`. The worker contract repeats the
+rules a worker needs: the language rule, the evidence rule, and the report
+format.
 
 ## Role table
 
 | Role | Model | Plan |
 | --- | --- | --- |
 | Main session, judgment, prose, hardest tasks | Opus | Claude Pro |
-| Feature, refactoring, bug fix | `go/kimi-k2.7-code` | OpenCode Go |
-| Perf issue | `go/glm-5.3` | OpenCode Go |
-| Hillclimb, `how` explorer, `why` investigators, swarm workers | `go/deepseek-v4.1-flash` | OpenCode Go |
-| Arena and architect runners | Opus (`inherit-parent`), `go/kimi-k3.1`, `go/glm-5.3` | both |
-| Arena cross-judge | `go/kimi-k3.1`, `go/glm-5.3` | OpenCode Go |
-| Interrogate reviewers | `go/kimi-k3.1`, `go/glm-5.3`, `go/gpt-6-luna`, `go/deepseek-v4.1-flash` | OpenCode Go |
+| Feature, refactoring, bug fix | `worker/kimi-k2.7-code` | worker provider |
+| Perf issue | `worker/glm-5.3` | worker provider |
+| Hillclimb, `how` explorer, `why` investigators, swarm workers | `worker/deepseek-v4.1-flash` | worker provider |
+| Arena and architect runners | Opus (`inherit-parent`), `worker/kimi-k3.1`, `worker/glm-5.3` | both |
+| Arena cross-judge | `worker/kimi-k3.1`, `worker/glm-5.3` | worker provider |
+| Interrogate reviewers | `worker/kimi-k3.1`, `worker/glm-5.3`, `worker/gpt-6-luna`, `worker/deepseek-v4.1-flash` | worker provider |
 
-The bulk work goes to the large Go allowances (DeepSeek V4.1 Flash $100,
-Kimi K2.7 Code $60). The frontier Go models (Kimi K3.1, GLM-5.3, GPT 6 Luna,
-$15 each on Go) only take panel seats.
+With OpenCode Go, the bulk work goes to the large allowances (DeepSeek V4.1
+Flash $100, Kimi K2.7 Code $60). The frontier models (Kimi K3.1, GLM-5.3, GPT 6
+Luna, $15 each on Go) only take panel seats.
 
-## go-worker
+## claude-worker
 
 ```text
-go-worker run --model go/<alias> --dir <path> --brief <file> --report <file> [--readonly]
-go-worker models          # roster
-go-worker doctor [--live] # profile, key, live model ids, optional one live run
-go-worker usage           # tokens per model from the local ledger
+claude-worker run --model worker/<alias> --dir <path> --brief <file> --report <file> [--readonly]
+claude-worker models          # provider and roster
+claude-worker doctor [--live] # profile, key, live model ids, optional one live run
+claude-worker usage           # tokens per model from the local ledger
+claude-worker-key             # the apiKeyHelper; prints the key, or why it is missing
 ```
 
 - A write seat runs with `--permission-mode acceptEdits` and the tools
@@ -51,7 +68,7 @@ go-worker usage           # tokens per model from the local ledger
   `CLAUDECODE` and `ANTHROPIC_*` variables do not reach it.
 - Outputs per seat: `report.md`, `report.md.meta.json`, `report.md.raw.json`,
   `report.md.stderr.log`. The ledger is
-  `~/.local/state/go-worker/runs.tsv`.
+  `~/.local/state/claude-worker/runs.tsv`.
 
 ## Daily use
 
@@ -71,37 +88,33 @@ this branch to `main`.
 
 1. **Pro login, Opus main.** Run `claude`, then `/status`. Expected: a claude.ai
    login, model `opus`, no `Anthropic base URL` line.
-2. **Worker profile and key.** Run `go-worker doctor`. Expected: every check
-   `ok`. The roster model ids are a **hypothesis** derived from the OpenCode Go
-   documentation; a failed id check prints the live ids, so correct
-   `go-models.tsv` from that output.
-3. **A non-Claude model inside Claude Code.** Run `go-worker doctor --live`.
-   Expected: the DeepSeek worker replies `READY`. Then give one real write seat:
-   `go-worker run --model go/kimi-k2.7-code --dir <scratch-worktree> ...` with a
-   small edit task. Expected: the edit exists and the report lists it.
+2. **Worker profile and key.** Run `claude-worker doctor`. Expected: every
+   check `ok`. The roster model ids are a **hypothesis** derived from the
+   OpenCode Go documentation; a failed id check prints the live ids, so correct
+   `worker/models.tsv` from that output.
+3. **A non-Claude model inside Claude Code.** Run `claude-worker doctor --live`.
+   Expected: the smoke worker replies `READY`. Then give one real write seat:
+   `claude-worker run --model worker/kimi-k2.7-code --dir <scratch-worktree> ...`
+   with a small edit task. Expected: the edit exists and the report lists it.
 4. **Routing by instruction.** In a scratch repository, run
    `/pstack:arena add a --json flag to <a small script>. 3 candidates.`
-   Expected: Opus starts `go-worker` background commands for the `go/` seats,
-   briefs appear under `.git/go-worker/`, and `go-worker usage` shows new runs.
-   Failure mode: Opus spawns Claude subagents for those seats instead.
+   Expected: Opus starts `claude-worker` background commands for the `worker/`
+   seats, briefs appear under `.git/claude-worker/`, and `claude-worker usage`
+   shows new runs. Failure mode: Opus spawns Claude subagents for those seats
+   instead.
 5. **Cross-family judge.** In the same arena run, expected: the judge runs as a
-   `go/` worker (`--readonly`), not skipped.
+   `worker/` seat (`--readonly`), not skipped.
 6. **Interrogate.** Run `/pstack:interrogate` on that branch. Expected: verified
    findings with commands, from more than one model family.
 7. **ai-memory.** Start `claude` in a repository, work for a few turns, quit,
-   and start again. Expected: a handoff appears. `~/.claude-go/settings.json`
-   has no ai-memory hooks.
+   and start again. Expected: a handoff appears.
+   `~/.claude-worker/settings.json` has no ai-memory hooks.
 8. **RTK.** In both profiles, a `git status` tool call is rewritten to
-   `rtk git status` (see `rtk gain`).
-9. **Capacity.** After one week of normal use, compare `go-worker usage` with
-   the OpenCode Go console. Decide Go or Go Plus from the 5-hour and weekly
-   limits of the frontier models.
+   `rtk git status` (see `rtk gain`). Neither `settings.json` has an RTK proxy
+   `ANTHROPIC_BASE_URL`.
+9. **Capacity.** After one week of normal use, compare `claude-worker usage`
+   with the provider console. For OpenCode Go, decide Go or Go Plus from the
+   5-hour and weekly limits of the frontier models.
 10. **Pro quota.** Watch the Claude Pro usage meter on panel-heavy days. If it
-    runs out first, move `judgment and prose` or `hardest tasks` to a `go/` model.
-
-## Known open decision
-
-`CLAUDE.md` says: ask three motivation questions before a plan.
-`/pstack:poteto-mode` says: restate the goal and proceed without waiting. Both
-load into the same session. This setup does not resolve the conflict. Decide
-which rule wins when you refine `CLAUDE.md`.
+    runs out first, move `judgment and prose` or `hardest tasks` to a
+    `worker/` model.

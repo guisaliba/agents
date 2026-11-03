@@ -96,7 +96,7 @@ install_rtk() {
 
 # Install the RTK PreToolUse hook into one Claude Code configuration directory.
 # RTK resolves the directory from CLAUDE_CONFIG_DIR, so the same function wires
-# the main profile and the OpenCode Go worker profile. Default mode also writes
+# the main profile and the pstack worker profile. Default mode also writes
 # RTK.md and adds an @RTK.md import to that directory's CLAUDE.md, so call this
 # after apply.sh writes the managed CLAUDE.md.
 wire_rtk_to_claude_code() {

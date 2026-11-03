@@ -990,8 +990,8 @@ PY
 }
 
 
-# Wire ai-memory into the main Claude Code profile only. The OpenCode Go worker
-# profile ($CLAUDE_GO_CONFIG_DIR) never receives these hooks, so worker runs do
+# Wire ai-memory into the main Claude Code profile only. The pstack worker
+# profile ($CLAUDE_WORKER_HOME) never receives these hooks, so worker runs do
 # not write observations into the coordinator's workstream.
 wire_ai_memory_to_claude_code() {
   local auth_token_arguments=() auth_token=""

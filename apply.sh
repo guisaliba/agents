@@ -4,8 +4,8 @@ set -Eeuo pipefail
 # apply.sh
 #
 # Deterministic Claude Code + pstack setup script.
-# Installs Claude Code, the pstack plugin, the OpenCode Go worker profile used
-# by pstack go/ roles, RTK, and ai-memory.
+# Installs Claude Code, the pstack plugin, the worker profile used by pstack
+# worker/ roles, RTK, and ai-memory.
 # Re-running converges the same state.
 #
 # Usage:
@@ -22,15 +22,14 @@ AGENT_STACK_HELPER="$REPO_DIR/lib/agent_stack.py"
 unset CLAUDE_CONFIG_DIR
 
 CLAUDE_INSTALL_URL="https://claude.ai/install.sh"
-# --permission-prompts (used by go-worker) requires 2.1.259.
+# --permission-prompts (used by claude-worker) requires 2.1.259.
 CLAUDE_MIN_VERSION="${CLAUDE_MIN_VERSION:-2.1.259}"
 CLAUDE_HOME="$HOME/.claude"
 CLAUDE_RULES_DIR="$CLAUDE_HOME/rules"
 CLAUDE_MAIN_MODEL="opus"
-CLAUDE_MANAGED_RULES=(pstack-models.md pstack-go.md)
-CLAUDE_GO_HOME="${CLAUDE_GO_CONFIG_DIR:-$HOME/.claude-go}"
-GO_ANTHROPIC_BASE_URL="https://opencode.ai/inference/go/anthropic"
-GO_BACKGROUND_MODEL="deepseek-v4.1-flash"
+CLAUDE_MANAGED_RULES=(pstack-models.md pstack-workers.md)
+CLAUDE_WORKER_HOME="${CLAUDE_WORKER_CONFIG_DIR:-$HOME/.claude-worker}"
+WORKER_PROVIDER_FILE="$REPO_DIR/claude/worker/provider.env"
 PSTACK_MARKETPLACE_SOURCE="cursor/plugins"
 PSTACK_MARKETPLACE_NAME="cursor-plugins"
 PSTACK_PLUGIN="pstack@cursor-plugins"
@@ -94,13 +93,13 @@ main() {
   wire_rtk_to_claude_code "$CLAUDE_HOME"
   install_pstack_plugin
 
-  configure_go_worker_profile
-  wire_rtk_to_claude_code "$CLAUDE_GO_HOME"
+  configure_worker_profile
+  wire_rtk_to_claude_code "$CLAUDE_WORKER_HOME"
 
   merge_claude_shell_block
   configure_bash_login_env
 
-  log "Setup complete. Open a new Bash shell, run claude once to log in with the Claude Pro plan, then run ./test.sh and go-worker doctor."
+  log "Setup complete. Open a new Bash shell, run claude once to log in with the Claude Pro plan, then run ./test.sh and claude-worker doctor."
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

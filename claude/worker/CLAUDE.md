@@ -1,6 +1,6 @@
-# OpenCode Go worker
+# pstack worker
 
-You are a worker process. A coordinator session started you with `go-worker`
+You are a worker process. A coordinator session started you with `claude-worker`
 and gave you one brief on standard input. The coordinator cannot answer
 questions while you run, and it reads only your final message.
 

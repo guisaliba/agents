@@ -41,19 +41,25 @@ trap 'rm -rf -- "$FIXTURE_ROOT"' EXIT
 static_checks() {
   printf '\n== Static checks\n'
   expect "Bash syntax" bash -n "$REPO_DIR/apply.sh" "$REPO_DIR/test.sh" \
-    "$REPO_DIR"/lib/*.bash "$REPO_DIR/bin/go-worker" "$REPO_DIR/bin/go-key" \
+    "$REPO_DIR"/lib/*.bash "$REPO_DIR/bin/claude-worker" "$REPO_DIR/bin/claude-worker-key" \
     "$REPO_DIR/shell/claude.bash"
   expect "Python helper compiles" python3 -B -m py_compile "$HELPER"
   if command -v shellcheck >/dev/null 2>&1; then
     expect "shellcheck on new entry points" shellcheck -x -S warning \
-      "$REPO_DIR/bin/go-worker" "$REPO_DIR/bin/go-key" "$REPO_DIR/lib/claude.bash" \
+      "$REPO_DIR/bin/claude-worker" "$REPO_DIR/bin/claude-worker-key" "$REPO_DIR/lib/claude.bash" \
       "$REPO_DIR/shell/claude.bash"
   else
     printf 'skip  shellcheck not installed\n'
   fi
-  expect "go-worker and go-key are executable" test -x "$REPO_DIR/bin/go-worker" -a -x "$REPO_DIR/bin/go-key"
+  expect "claude-worker and claude-worker-key are executable" test -x "$REPO_DIR/bin/claude-worker" -a -x "$REPO_DIR/bin/claude-worker-key"
+  expect "provider.env defines every worker provider setting" bash -c \
+    'for k in WORKER_PROVIDER WORKER_ANTHROPIC_BASE_URL WORKER_MODELS_URL WORKER_BACKGROUND_MODEL WORKER_SMOKE_ALIAS WORKER_API_KEY_ENV_FILE WORKER_API_KEY_VARIABLE; do python3 -B "$0" env-value "$1" "$k" >/dev/null || exit 1; done' \
+    "$HELPER" "$REPO_DIR/claude/worker/provider.env"
+  expect "the smoke alias exists in the roster" bash -c \
+    'grep -q "^$(python3 -B "$0" env-value "$1" WORKER_SMOKE_ALIAS)	" "$2"' \
+    "$HELPER" "$REPO_DIR/claude/worker/provider.env" "$REPO_DIR/claude/worker/models.tsv"
 
-  expect "roster rows have four fields and unique aliases" python3 -B - "$REPO_DIR/claude/go-models.tsv" <<'PY'
+  expect "roster rows have four fields and unique aliases" python3 -B - "$REPO_DIR/claude/worker/models.tsv" <<'PY'
 import sys
 seen = set()
 for line in open(sys.argv[1], encoding="utf-8"):
@@ -67,13 +73,13 @@ for line in open(sys.argv[1], encoding="utf-8"):
 raise SystemExit(0 if seen else 1)
 PY
 
-  expect "every go/ role in pstack-models.md exists in the roster" python3 -B - \
-    "$REPO_DIR/claude/rules/pstack-models.md" "$REPO_DIR/claude/go-models.tsv" <<'PY'
+  expect "every worker/ role in pstack-models.md exists in the roster" python3 -B - \
+    "$REPO_DIR/claude/rules/pstack-models.md" "$REPO_DIR/claude/worker/models.tsv" <<'PY'
 import re
 import sys
 roster = {l.split("\t")[0] for l in open(sys.argv[2], encoding="utf-8")
           if l.strip() and not l.startswith("#")}
-used = set(re.findall(r"go/([A-Za-z0-9.\-]+)", open(sys.argv[1], encoding="utf-8").read()))
+used = set(re.findall(r"worker/([A-Za-z0-9.\-]+)", open(sys.argv[1], encoding="utf-8").read()))
 missing = used - roster
 if missing:
     print("missing:", sorted(missing))
@@ -92,7 +98,9 @@ raise SystemExit(0 if roles <= found else 1)
 PY
 
   expect "no retired OpenCode payload remains" bash -c \
-    '! test -e "$0/opencode" -o -e "$0/plugins" -o -e "$0/mcps" -o -e "$0/shell/opencode.bash" -o -e "$0/skills.tsv"' "$REPO_DIR"
+    '! test -e "$0/opencode" -o -e "$0/plugins" -o -e "$0/mcps" -o -e "$0/shell/opencode.bash" -o -e "$0/skills.tsv" -o -e "$0/AGENTS.md"' "$REPO_DIR"
+  expect "no provider-specific names outside the provider files" bash -c \
+    '! grep -rIn -E "go-worker|go-key|claude-go|(^|[^a-z-])go/[a-z]" "$0/apply.sh" "$0/lib" "$0/bin" "$0/shell" "$0/claude/rules" "$0/claude/worker/CLAUDE.md"' "$REPO_DIR"
 }
 
 # --- Helper fixtures -------------------------------------------------------
@@ -125,14 +133,14 @@ helper_fixtures() {
     "$HELPER" "$REPO_DIR/shell/claude.bash" "$dir/unbalanced" "$start" "$end"
 
   printf '%s\n' '{"hooks": {"PreToolUse": [{"matcher": "Bash"}]}, "env": {"KEEP": "1"}, "permissions": {"allow": ["Bash(npm test)"]}}' >"$dir/settings.json"
-  local patch='{"model": "opus", "env": {"NEW": "2"}, "permissions": {"allow": ["Bash(go-worker run *)"]}}'
+  local patch='{"model": "opus", "env": {"NEW": "2"}, "permissions": {"allow": ["Bash(claude-worker run *)"]}}'
   python3 -B "$HELPER" merge-json "$dir/settings.json" "$patch" settings
   expect "merge-json keeps foreign hooks, env keys, and allow rules" python3 -B -c '
 import json, sys
 d = json.load(open(sys.argv[1]))
 assert d["hooks"]["PreToolUse"][0]["matcher"] == "Bash"
 assert d["env"] == {"KEEP": "1", "NEW": "2"} and d["model"] == "opus"
-assert d["permissions"]["allow"] == ["Bash(npm test)", "Bash(go-worker run *)"]' "$dir/settings.json"
+assert d["permissions"]["allow"] == ["Bash(npm test)", "Bash(claude-worker run *)"]' "$dir/settings.json"
   before="$(sha256sum "$dir/settings.json")"
   python3 -B "$HELPER" merge-json "$dir/settings.json" "$patch" settings
   after="$(sha256sum "$dir/settings.json")"
@@ -142,13 +150,13 @@ assert d["permissions"]["allow"] == ["Bash(npm test)", "Bash(go-worker run *)"]'
     '! python3 -B "$0" merge-json "$1" "{}" settings 2>/dev/null' "$HELPER" "$dir/bad.json"
 }
 
-# --- go-key and go-worker fixtures ----------------------------------------
+# --- claude-worker-key and claude-worker fixtures ---------------------------
 
 make_fake_claude() {
   local path="$1" log_dir="$2" mode_file="$3"
   {
     printf '%s\n' '#!/usr/bin/env bash' \
-      '# Fake claude for go-worker fixtures. Records argv, environment, and stdin.' \
+      '# Fake claude for claude-worker fixtures. Records argv, environment, and stdin.' \
       "log_dir='$log_dir'" "mode_file='$mode_file'"
     cat <<'FAKE'
 printf '%s\n' "$@" >"$log_dir/argv"
@@ -166,30 +174,30 @@ FAKE
 }
 
 worker_fixtures() {
-  printf '\n== go-key and go-worker fixtures\n'
+  printf '\n== claude-worker-key and claude-worker fixtures\n'
   local dir="$FIXTURE_ROOT/worker"
-  local home="$dir/home" profile="$dir/home/.claude-go" logs="$dir/logs" work="$dir/work"
+  local home="$dir/home" profile="$dir/home/.claude-worker" logs="$dir/logs" work="$dir/work"
   local secret="sk-fixture-$$-do-not-leak"
   mkdir -p "$home/.config/ai-memory" "$profile" "$logs" "$work"
   printf 'OTHER=1\nOPENCODE_API_KEY=%s\n' "$secret" >"$home/.config/ai-memory/env"
-  printf '%s\n' "{\"apiKeyHelper\": \"$REPO_DIR/bin/go-key\", \"env\": {\"ANTHROPIC_BASE_URL\": \"https://opencode.ai/inference/go/anthropic\"}}" >"$profile/settings.json"
+  printf '%s\n' "{\"apiKeyHelper\": \"$REPO_DIR/bin/claude-worker-key\", \"env\": {\"ANTHROPIC_BASE_URL\": \"https://opencode.ai/inference/go/anthropic\"}}" >"$profile/settings.json"
   make_fake_claude "$dir/claude" "$logs" "$dir/mode"
   printf 'Do the fixture task.\n' >"$work/brief.md"
 
   run_worker() {
-    env HOME="$home" CLAUDE_GO_CONFIG_DIR="${PROFILE_OVERRIDE:-$profile}" XDG_STATE_HOME="$home/.local/state" \
-      GO_WORKER_CLAUDE_BIN="$dir/claude" \
+    env HOME="$home" CLAUDE_WORKER_CONFIG_DIR="${PROFILE_OVERRIDE:-$profile}" XDG_STATE_HOME="$home/.local/state" \
+      CLAUDE_WORKER_CLAUDE_BIN="$dir/claude" ${KEY_FILE_OVERRIDE:+CLAUDE_WORKER_KEY_ENV_FILE="$KEY_FILE_OVERRIDE"} \
       CLAUDECODE=1 ANTHROPIC_API_KEY=sk-coordinator ANTHROPIC_MODEL=opus \
-      "$REPO_DIR/bin/go-worker" "$@"
+      "$REPO_DIR/bin/claude-worker" "$@"
   }
 
-  expect "go-key prints the configured key" bash -c \
-    '[[ "$(HOME="$0" "$1/bin/go-key")" == "$2" ]]' "$home" "$REPO_DIR" "$secret"
-  expect "go-key fails without a key" bash -c \
-    '! HOME="$0" AGENTS_GO_KEY_ENV_FILE=/nonexistent "$1/bin/go-key" 2>/dev/null' "$home" "$REPO_DIR"
+  expect "claude-worker-key prints the key that provider.env names" bash -c \
+    '[[ "$(HOME="$0" "$1/bin/claude-worker-key")" == "$2" ]]' "$home" "$REPO_DIR" "$secret"
+  expect "claude-worker-key fails without a key file" bash -c \
+    '! HOME="$0" CLAUDE_WORKER_KEY_ENV_FILE=/nonexistent "$1/bin/claude-worker-key" 2>/dev/null' "$home" "$REPO_DIR"
 
   local status=0
-  run_worker run --model go/kimi-k3.1 --dir "$work" --brief "$work/brief.md" --report "$work/report.md" >/dev/null 2>&1 || status=$?
+  run_worker run --model worker/kimi-k3.1 --dir "$work" --brief "$work/brief.md" --report "$work/report.md" >/dev/null 2>&1 || status=$?
   expect "write run exits 0" test "$status" -eq 0
   expect "write run resolves the alias to the Go model id" file_contains "$logs/argv" 'kimi-k3.1-pro'
   expect "write run uses acceptEdits" file_contains "$logs/argv" 'acceptEdits'
@@ -197,7 +205,7 @@ worker_fixtures() {
     'grep -qx none "$0" && grep -qx "Agent,WebSearch" "$0"' "$logs/argv"
   expect "worker receives the brief on stdin" file_contains "$logs/stdin" 'Do the fixture task.'
   expect "worker runs in --dir" bash -c '[[ "$(cat "$0")" == "$1" ]]' "$logs/cwd" "$work"
-  expect "worker gets CLAUDE_CONFIG_DIR of the Go profile" file_contains "$logs/env" "CLAUDE_CONFIG_DIR=$profile"
+  expect "worker gets CLAUDE_CONFIG_DIR of the worker profile" file_contains "$logs/env" "CLAUDE_CONFIG_DIR=$profile"
   expect "worker environment drops coordinator variables" bash -c \
     '! grep -qE "^(CLAUDECODE|ANTHROPIC_API_KEY|ANTHROPIC_MODEL)=" "$0"' "$logs/env"
   expect "the key never reaches argv or the worker environment" bash -c \
@@ -208,37 +216,37 @@ import json, sys
 m = json.load(open(sys.argv[1]))
 assert m["succeeded"] and m["model_id"] == "kimi-k3.1-pro" and m["family"] == "kimi"
 assert m["usage"]["output_tokens"] == 40 and m["mode"] == "write"' "$work/report.md.meta.json"
-  expect "ledger records the run" file_contains "$home/.local/state/go-worker/runs.tsv" $'go/kimi-k3.1\tkimi-k3.1-pro\twrite\tyes'
+  expect "ledger records the run" file_contains "$home/.local/state/claude-worker/runs.tsv" $'worker/kimi-k3.1\tkimi-k3.1-pro\twrite\tyes'
 
   run_worker run --model deepseek-v4.1-flash --dir "$work" --brief "$work/brief.md" --report "$work/judge.md" --readonly >/dev/null 2>&1 || true
   expect "readonly run uses dontAsk with read-only tools" bash -c \
     'grep -qx dontAsk "$0" && grep -q "^Read,Glob,Grep" "$0" && ! grep -qx acceptEdits "$0"' "$logs/argv"
 
   status=0
-  echo error >"$dir/mode"; run_worker run --model go/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/err.md" >/dev/null 2>&1 || status=$?
+  echo error >"$dir/mode"; run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/err.md" >/dev/null 2>&1 || status=$?
   expect "an is_error result exits 1" test "$status" -eq 1
   status=0
-  echo crash >"$dir/mode"; run_worker run --model go/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/crash.md" >/dev/null 2>&1 || status=$?
+  echo crash >"$dir/mode"; run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/crash.md" >/dev/null 2>&1 || status=$?
   expect "a crashed worker exits 1 and writes a placeholder report" bash -c \
     '[[ "$0" == 1 ]] && grep -q "worker produced no report" "$1"' "$status" "$work/crash.md"
   status=0
-  run_worker run --model go/nope --dir "$work" --brief "$work/brief.md" --report "$work/x.md" >/dev/null 2>&1 || status=$?
+  run_worker run --model worker/nope --dir "$work" --brief "$work/brief.md" --report "$work/x.md" >/dev/null 2>&1 || status=$?
   expect "an unknown alias exits 2" test "$status" -eq 2
   status=0
-  run_worker run --model go/glm-5.3 --dir "$work" --brief "$work/missing.md" --report "$work/x.md" >/dev/null 2>&1 || status=$?
+  run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/missing.md" --report "$work/x.md" >/dev/null 2>&1 || status=$?
   expect "a missing brief exits 2" test "$status" -eq 2
   status=0
   echo ok >"$dir/mode"
-  PROFILE_OVERRIDE="$dir/absent" run_worker run --model go/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/x.md" >/dev/null 2>&1 || status=$?
+  PROFILE_OVERRIDE="$dir/absent" run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/x.md" >/dev/null 2>&1 || status=$?
   expect "a missing worker profile exits 3" test "$status" -eq 3
   status=0
-  AGENTS_GO_KEY_ENV_FILE=/nonexistent run_worker run --model go/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/x.md" >/dev/null 2>&1 || status=$?
-  expect "a missing OpenCode Go key exits 3" test "$status" -eq 3
+  KEY_FILE_OVERRIDE=/nonexistent run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/x.md" >/dev/null 2>&1 || status=$?
+  expect "a missing provider key exits 3" test "$status" -eq 3
 
   expect "usage aggregates the ledger" bash -c \
-    'env HOME="$0" XDG_STATE_HOME="$0/.local/state" "$1/bin/go-worker" usage | grep -q "^go/glm-5.3"' "$home" "$REPO_DIR"
-  expect "models lists the roster with the go/ prefix" bash -c \
-    '"$0/bin/go-worker" models | grep -q "^go/kimi-k3.1	kimi-k3.1-pro	kimi"' "$REPO_DIR"
+    'env HOME="$0" XDG_STATE_HOME="$0/.local/state" "$1/bin/claude-worker" usage | grep -q "^worker/glm-5.3"' "$home" "$REPO_DIR"
+  expect "models names the provider and lists the roster with the worker/ prefix" bash -c \
+    'out="$("$0/bin/claude-worker" models)"; grep -q "^provider: opencode-go" <<<"$out" && grep -q "^worker/kimi-k3.1	kimi-k3.1-pro	kimi" <<<"$out"' "$REPO_DIR"
 }
 
 # --- apply.sh fixtures (offline functions only) ---------------------------
@@ -254,7 +262,7 @@ apply_fixtures() {
       set -Eeuo pipefail
       source "$0/apply.sh"
       configure_claude_main_profile
-      configure_go_worker_profile
+      configure_worker_profile
       merge_claude_shell_block
       configure_bash_login_env
     ' "$REPO_DIR" >/dev/null
@@ -268,22 +276,24 @@ apply_fixtures() {
   expect "offline apply functions succeed" run_offline_apply
   expect "~/.claude/CLAUDE.md is a copy of the repository CLAUDE.md" cmp -s "$REPO_DIR/CLAUDE.md" "$home/.claude/CLAUDE.md"
   expect "managed rules are installed" bash -c \
-    'for r in pstack-models.md pstack-go.md; do cmp -s "$0/claude/rules/$r" "$1/.claude/rules/$r" || exit 1; done' \
+    'for r in pstack-models.md pstack-workers.md; do cmp -s "$0/claude/rules/$r" "$1/.claude/rules/$r" || exit 1; done' \
     "$REPO_DIR" "$home"
-  expect "main settings select Opus and allow go-worker runs" python3 -B -c '
+  expect "main settings select Opus and allow claude-worker runs" python3 -B -c '
 import json, sys
 d = json.load(open(sys.argv[1]))
-assert d["model"] == "opus" and "Bash(go-worker run *)" in d["permissions"]["allow"]' "$home/.claude/settings.json"
-  expect "worker settings point at OpenCode Go through go-key" python3 -B -c '
+assert d["model"] == "opus" and "Bash(claude-worker run *)" in d["permissions"]["allow"]' "$home/.claude/settings.json"
+  expect "worker settings use provider.env and claude-worker-key" python3 -B -c '
 import json, sys
 d = json.load(open(sys.argv[1]))
 assert d["apiKeyHelper"] == sys.argv[2]
 assert d["env"]["ANTHROPIC_BASE_URL"] == "https://opencode.ai/inference/go/anthropic"
-assert d["env"]["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"] == "1"' "$home/.claude-go/settings.json" "$REPO_DIR/bin/go-key"
-  expect "main settings carry no OpenCode Go routing" file_lacks "$home/.claude/settings.json" 'opencode.ai'
-  expect "worker CLAUDE.md is installed" cmp -s "$REPO_DIR/claude/worker/CLAUDE.md" "$home/.claude-go/CLAUDE.md"
-  expect "go-worker is linked into ~/.local/bin" bash -c '[[ "$(readlink "$0")" == "$1" ]]' \
-    "$home/.local/bin/go-worker" "$REPO_DIR/bin/go-worker"
+assert d["env"]["ANTHROPIC_DEFAULT_HAIKU_MODEL"] == "deepseek-v4.1-flash"
+assert d["env"]["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"] == "1"' "$home/.claude-worker/settings.json" "$REPO_DIR/bin/claude-worker-key"
+  expect "main settings carry no worker provider routing" file_lacks "$home/.claude/settings.json" 'ANTHROPIC_BASE_URL'
+  expect "worker CLAUDE.md is installed" cmp -s "$REPO_DIR/claude/worker/CLAUDE.md" "$home/.claude-worker/CLAUDE.md"
+  expect "claude-worker and claude-worker-key are linked into ~/.local/bin" bash -c \
+    '[[ "$(readlink "$0/claude-worker")" == "$1/claude-worker" && "$(readlink "$0/claude-worker-key")" == "$1/claude-worker-key" ]]' \
+    "$home/.local/bin" "$REPO_DIR/bin"
   expect "bash aliases gain the Claude block and lose the OpenCode block" bash -c \
     'grep -qF "Claude Code ai-memory wrapper >>>" "$0" && ! grep -qF "opencode() { :; }" "$0"' "$home/.bash_aliases"
   expect "login profile loads aliases and the ai-memory environment" bash -c \
@@ -336,17 +346,20 @@ machine_checks() {
   expect "~/.claude/CLAUDE.md starts with the repository CLAUDE.md" bash -c \
     'head -c "$(wc -c <"$0")" "$1" | cmp -s - "$0"' "$REPO_DIR/CLAUDE.md" "$home/.claude/CLAUDE.md"
   expect "managed rules are current" bash -c \
-    'for r in pstack-models.md pstack-go.md; do cmp -s "$0/claude/rules/$r" "$1/.claude/rules/$r" || exit 1; done' \
+    'for r in pstack-models.md pstack-workers.md; do cmp -s "$0/claude/rules/$r" "$1/.claude/rules/$r" || exit 1; done' \
     "$REPO_DIR" "$home"
   expect "ai-memory routing rule exists" test -s "$home/.claude/rules/ai-memory.md"
   expect "ai-memory hooks are in the main profile" file_contains "$home/.claude/settings.json" 'ai-memory'
   expect "RTK hook is in the main profile" file_contains "$home/.claude/settings.json" 'rtk'
-  expect "RTK hook is in the worker profile" file_contains "$home/.claude-go/settings.json" 'rtk'
-  expect "ai-memory hooks stay out of the worker profile" file_lacks "$home/.claude-go/settings.json" 'ai-memory'
-  expect "go-worker is on PATH" bash -c 'command -v go-worker >/dev/null'
+  expect "RTK hook is in the worker profile" file_contains "$home/.claude-worker/settings.json" 'rtk'
+  expect "ai-memory hooks stay out of the worker profile" file_lacks "$home/.claude-worker/settings.json" 'ai-memory'
+  expect "RTK did not set a proxy base URL in the main profile" file_lacks "$home/.claude/settings.json" 'ANTHROPIC_BASE_URL'
+  expect "claude-worker is on PATH" bash -c 'command -v claude-worker >/dev/null'
+  expect "ai-memory is the pinned release or newer" bash -c \
+    'source "$0/lib/common.bash"; (require_minimum_version ai-memory "$(sed -n "s/^AI_MEMORY_MIN_VERSION=\"\${AI_MEMORY_MIN_VERSION:-\(.*\)}\"$/\1/p" "$0/apply.sh")") >/dev/null 2>&1' "$REPO_DIR"
   expect "ai-memory service answers" bash -c 'ai-memory status --json >/dev/null 2>&1'
   expect "bash aliases carry the Claude block" file_contains "$home/.bash_aliases" 'Claude Code ai-memory wrapper >>>'
-  printf '\nRun `go-worker doctor` (and `go-worker doctor --live`) to check the OpenCode Go side.\n'
+  printf '\nRun `claude-worker doctor` (and `claude-worker doctor --live`) to check the worker provider.\n'
 }
 
 static_checks

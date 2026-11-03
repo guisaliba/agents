@@ -7,11 +7,11 @@
 | `common.bash` | Logging, platform prerequisites, version checks, AUR install. |
 | `ai-memory.bash` | Native ai-memory install, per-host service, environment policy, and the Claude Code wiring. |
 | `rtk.bash` | RTK CLI install and the RTK hook for one Claude Code configuration directory. |
-| `claude.bash` | Claude Code install, the main profile, the pstack plugin, the OpenCode Go worker profile, and the Bash entry points. |
+| `claude.bash` | Claude Code install, the main profile, the pstack plugin, the worker profile, and the Bash entry points. |
 
 `agent_stack.py` is the standard-library-only helper used by `apply.sh`,
-`test.sh`, and `bin/go-key`. It centralizes safe file writes, environment
-assignment handling, marked-block merges
+`test.sh`, `bin/claude-worker`, and `bin/claude-worker-key`. It centralizes safe
+file writes, environment assignment handling, marked-block merges
 (`merge-block`, `remove-block`), and JSON settings merges (`merge-json`) that
 keep keys other installers own.
 
