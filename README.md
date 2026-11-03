@@ -86,7 +86,7 @@ The full validation checklist and daily usage are in
 
 | Component | Version | Documentation |
 | --- | --- | --- |
-| Claude Code, pstack, workers | Claude Code 2.1.259 or newer; pstack from the `cursor-plugins` marketplace | [claude/README.md](claude/README.md) |
+| Claude Code, pstack, workers | Claude Code 2.1.287 or newer; pstack from the `cursor-plugins` marketplace | [claude/README.md](claude/README.md) |
 | ai-memory service | 3.3.1 | [ai-memory/README.md](ai-memory/README.md) |
 | RTK | v1.1.0 | `lib/rtk.bash` |
 | Bash entry point | | [shell/README.md](shell/README.md) |

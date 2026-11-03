@@ -57,6 +57,8 @@ static_checks() {
     "$HELPER" "$REPO_DIR/claude/worker/provider.env"
   expect "the managed CLAUDE.md files end with the RTK import" bash -c \
     'for f in "$0/CLAUDE.md" "$0/claude/worker/CLAUDE.md"; do [[ "$(tail -n 1 "$f")" == "@RTK.md" ]] || exit 1; done' "$REPO_DIR"
+  expect "apply.sh requires Claude Code 2.1.287, the first release with the you-should-know mod" \
+    grep -qx 'CLAUDE_MIN_VERSION="${CLAUDE_MIN_VERSION:-2.1.287}"' "$REPO_DIR/apply.sh"
   expect "the smoke alias exists in the roster" bash -c \
     'grep -q "^$(python3 -B "$0" env-value "$1" WORKER_SMOKE_ALIAS)	" "$2"' \
     "$HELPER" "$REPO_DIR/claude/worker/provider.env" "$REPO_DIR/claude/worker/models.tsv"

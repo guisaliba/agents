@@ -22,8 +22,9 @@ AGENT_STACK_HELPER="$REPO_DIR/lib/agent_stack.py"
 unset CLAUDE_CONFIG_DIR
 
 CLAUDE_INSTALL_URL="https://claude.ai/install.sh"
-# --permission-prompts (used by claude-worker) requires 2.1.259.
-CLAUDE_MIN_VERSION="${CLAUDE_MIN_VERSION:-2.1.259}"
+# The built-in you-should-know mod requires 2.1.287. claude-worker needs only
+# 2.1.259 (--permission-prompts), so the mod sets the floor.
+CLAUDE_MIN_VERSION="${CLAUDE_MIN_VERSION:-2.1.287}"
 CLAUDE_HOME="$HOME/.claude"
 CLAUDE_RULES_DIR="$CLAUDE_HOME/rules"
 CLAUDE_MAIN_MODEL="opus"
