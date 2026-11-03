@@ -58,11 +58,17 @@ Do this in place of one Agent tool call.
    ```
 
    Add `--readonly` for a read-only seat. Its brief says "do not edit files".
+   `claude-worker` enforces it: the seat has no edit tools, no hooks, and no
+   MCP servers, and its Bash runs in the Claude Code sandbox with the checkout
+   and its Git directory write-denied. Bash can write scratch files only to
+   `$TMPDIR` and has no network, so a command that writes into the tree (a
+   build, a test run with in-tree output) fails there. Give such a command to
+   a write seat instead.
 4. **Collect.** Wait for every background command to finish. `claude-worker`
    exits 0 on success, 1 when the worker run failed, 2 on a usage error, and 3
-   when the worker profile or the provider API key is not configured. Read `report.md` and
-   `report.md.meta.json` for each seat. A read-only seat keeps Bash, so run
-   `git status --short` in its checkout and confirm that it changed nothing.
+   when the worker profile, the provider API key, or the sandbox commands
+   (`bwrap` and `socat` on Linux) are missing. Read `report.md` and
+   `report.md.meta.json` for each seat.
 5. **Own the result.** Treat each report like a subagent result. Review the
    worktree diff yourself and write your own summary. Do not pass a report
    through.

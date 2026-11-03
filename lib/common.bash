@@ -67,7 +67,8 @@ check_prerequisites() {
   local commands=(bash curl git python3)
   platform="$(agent_stack_platform)"
   case "$platform" in
-    Linux) commands+=(systemctl) ;;
+    # bwrap and socat: the Claude Code sandbox for read-only worker seats.
+    Linux) commands+=(systemctl bwrap socat) ;;
     Darwin) commands+=(brew launchctl) ;;
     *) die "Unsupported operating system: $platform" ;;
   esac

@@ -62,8 +62,9 @@ Edit both, update the `worker/<alias>` values in
 ## Quick Start
 
 Prerequisites: Bash, curl, Git, and Python 3.11+. Linux also needs a systemd
-user manager; Arch systems need `yay` when `ai-memory` is absent. macOS needs
-Homebrew.
+user manager and `bwrap` and `socat` (the Claude Code sandbox for read-only
+worker seats; Arch: `sudo pacman -S bubblewrap socat`); Arch systems need
+`yay` when `ai-memory` is absent. macOS needs Homebrew.
 
 ```sh
 ./apply.sh

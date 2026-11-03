@@ -213,6 +213,7 @@ worker_fixtures() {
   local status=0
   run_worker run --model worker/kimi-k3.1 --dir "$work" --brief "$work/brief.md" --report "$work/report.md" >/dev/null 2>&1 || status=$?
   expect "write run exits 0" test "$status" -eq 0
+  cp "$logs/argv" "$logs/argv.write"
   expect "write run resolves the alias to the Go model id" file_contains "$logs/argv" 'kimi-k3.1-pro'
   expect "write run uses acceptEdits" file_contains "$logs/argv" 'acceptEdits'
   expect "write run disables prompts and the Agent tool" bash -c \
@@ -258,9 +259,43 @@ assert m["usage"]["output_tokens"] == 40 and m["mode"] == "write"' "$work/report
   run_worker run --model worker/kimi-k3.1 --dir "$work" --brief <(printf '  \n') --report "$work/empty.md" >/dev/null 2>&1 || status=$?
   expect "an empty piped brief exits 2" test "$status" -eq 2
 
-  run_worker run --model deepseek-v4.1-flash --dir "$work" --brief "$work/brief.md" --report "$work/judge.md" --readonly >/dev/null 2>&1 || true
+  status=0
+  mkdir -p "$repo/sub"
+  CLAUDE_WORKER_SANDBOX_COMMANDS="bash" run_worker run --model deepseek-v4.1-flash --dir "$repo/sub" --brief "$work/brief.md" --report "$work/judge.md" --readonly >/dev/null 2>&1 || status=$?
+  expect "readonly run exits 0 when the sandbox commands exist" test "$status" -eq 0
   expect "readonly run uses dontAsk and keeps Bash without edit tools" bash -c \
     'grep -qx dontAsk "$0" && grep -qx "Read,Glob,Grep,Bash" "$0" && ! grep -qx acceptEdits "$0" && ! grep -qE "(^|,)(Edit|Write)(,|$)" "$0"' "$logs/argv"
+  expect "readonly run turns on a fail-closed sandbox that denies writes to the checkout and its Git dir" python3 -B -c '
+import json, os, sys
+argv = open(sys.argv[1]).read().splitlines()
+settings = json.loads(argv[argv.index("--settings") + 1])["sandbox"]
+assert settings["enabled"] is True and settings["failIfUnavailable"] is True
+assert settings["allowUnsandboxedCommands"] is False
+deny = settings["filesystem"]["denyWrite"]
+real = os.path.realpath
+assert real(sys.argv[2]) in map(real, deny), deny
+assert real(sys.argv[2] + "/.git") in map(real, deny), deny' "$logs/argv" "$repo"
+  expect "readonly run turns off hooks, which run outside the sandbox" python3 -B -c '
+import json, sys
+argv = open(sys.argv[1]).read().splitlines()
+assert json.loads(argv[argv.index("--settings") + 1])["disableAllHooks"] is True' "$logs/argv"
+  expect "readonly run offers only the read tools and Bash, and no MCP server" bash -c \
+    'grep -A1 -x -- --tools "$0" | grep -qx "Read,Glob,Grep,Bash" && grep -qx -- --strict-mcp-config "$0"' "$logs/argv"
+  expect "readonly meta records the sandbox" python3 -B -c '
+import json, sys
+m = json.load(open(sys.argv[1]))
+assert m["mode"] == "readonly" and m["sandbox"] is True' "$work/judge.md.meta.json"
+  status=0
+  CLAUDE_WORKER_SANDBOX_COMMANDS="bash" run_worker run --model deepseek-v4.1-flash --dir "$work" --brief "$work/brief.md" --report "$work/judge-linked.md" --readonly >/dev/null 2>&1 || status=$?
+  expect "a readonly seat in a linked worktree denies writes to the shared Git dir" python3 -B -c '
+import json, os, sys
+argv = open(sys.argv[1]).read().splitlines()
+deny = list(map(os.path.realpath, json.loads(argv[argv.index("--settings") + 1])["sandbox"]["filesystem"]["denyWrite"]))
+assert os.path.realpath(sys.argv[2]) in deny and os.path.realpath(sys.argv[3] + "/.git") in deny, deny' "$logs/argv" "$work" "$repo"
+  status=0
+  CLAUDE_WORKER_SANDBOX_COMMANDS="claude-worker-fixture-missing-command" run_worker run --model deepseek-v4.1-flash --dir "$repo" --brief "$work/brief.md" --report "$work/nosandbox.md" --readonly >/dev/null 2>&1 || status=$?
+  expect "a readonly run without the sandbox commands exits 3" test "$status" -eq 3
+  expect "a write run gets no sandbox settings" bash -c '! grep -qx -- --settings "$0"' "$logs/argv.write"
 
   status=0
   echo error >"$dir/mode"; run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/err.md" >/dev/null 2>&1 || status=$?

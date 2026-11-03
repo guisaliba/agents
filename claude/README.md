@@ -66,9 +66,14 @@ claude-worker-key             # the apiKeyHelper; prints the key, or why it is m
   coordinator creates that worktree first. `--dir` must be in a linked
   worktree (not the main working tree), and one write seat at a time holds a
   worktree: the lock is `<worktree git dir>/claude-worker.lock`. A `--readonly` seat runs with
-  `dontAsk` and `Read,Glob,Grep,Bash`: no edit tools, but Bash, so it can run
-  tests. This matches the pstack Claude Code adapter, which maps `readonly` to
-  the `Explore` subagent. The coordinator checks `git status` after the seat.
+  `dontAsk` and only the tools `Read,Glob,Grep,Bash`, as the pstack Claude
+  Code adapter maps `readonly` to the `Explore` subagent, which keeps Bash.
+  Its Bash runs in the Claude Code
+  [sandbox](https://code.claude.com/docs/en/sandboxing) (fail-closed,
+  `denyWrite` on the worktree and the shared Git directory), and the seat has
+  no hooks and no MCP servers, because those run outside the sandbox. Bash can
+  write only to `$TMPDIR` and has no network. On Linux the sandbox needs
+  `bwrap` and `socat`; without them a read-only run exits 3.
 - Every seat runs with `--permission-prompts none` and without the `Agent` and
   `WebSearch` tools, so a worker cannot fan out further.
 - The worker gets an explicit, small environment. The coordinator's

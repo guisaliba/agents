@@ -35,8 +35,8 @@ CLAUDE_MIN_VERSION="2.1.259"
 DEFAULT_MAX_TURNS=80
 DEFAULT_TIMEOUT=3600
 # A read-only seat keeps Bash, as the pstack Claude Code adapter maps
-# readonly to the Explore subagent. It has no edit tools; the coordinator
-# checks git status after the run.
+# readonly to the Explore subagent. It has no edit tools, and its Bash runs
+# in the Claude Code sandbox (see readonly_sandbox_settings).
 READONLY_TOOLS="Read,Glob,Grep,Bash"
 WRITE_TOOLS="Read,Edit,Write,Glob,Grep,Bash"
 DISALLOWED_TOOLS="Agent,WebSearch"
@@ -144,6 +144,69 @@ acquire_write_lock() {
   trap 'rm -rf -- "$WRITE_LOCK"' EXIT
 }
 
+# A read-only seat keeps Bash, so the Claude Code sandbox (bubblewrap on
+# Linux, Seatbelt on macOS) is what keeps it read-only: every Bash command
+# runs with the checkout and its Git directory write-denied. The sandbox
+# fails closed: claude refuses to start when it cannot build one. Its Linux
+# dependencies are checked here first, so a missing package is a
+# configuration error (exit 3), not a seat dropout (exit 1).
+sandbox_commands() {
+  if [[ -n "${CLAUDE_WORKER_SANDBOX_COMMANDS+set}" ]]; then
+    printf '%s\n' "$CLAUDE_WORKER_SANDBOX_COMMANDS"
+    return 0
+  fi
+  case "$(uname -s)" in
+    Linux) printf 'bwrap socat\n' ;;
+    *) printf '\n' ;;
+  esac
+}
+
+missing_sandbox_commands() {
+  local command_name
+  local -a missing=()
+  for command_name in $(sandbox_commands); do
+    type -P "$command_name" >/dev/null 2>&1 || missing+=("$command_name")
+  done
+  printf '%s' "${missing[*]}"
+}
+
+require_sandbox() {
+  local missing
+  missing="$(missing_sandbox_commands)"
+  [[ -z "$missing" ]] || \
+    fail_config "a read-only seat needs the Claude Code sandbox, which needs: $missing. Install bubblewrap and socat (Arch: sudo pacman -S bubblewrap socat)."
+}
+
+# Print the --settings JSON for a read-only seat. The deny list holds the
+# worktree top level and the shared Git directory, so neither the files nor
+# the refs, index, or stash change, also from a linked worktree. Bash in the
+# seat can write only to $TMPDIR and has no network.
+readonly_sandbox_settings() {
+  local dir="$1" top="" common=""
+  if top="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)"; then
+    common="$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir)"
+  else
+    top="$(cd -- "$dir" && pwd -P)"
+  fi
+  python3 - "$top" "$common" <<'PY'
+import json
+import sys
+
+import os
+
+deny = [os.path.realpath(path) for path in sys.argv[1:] if path]
+# Hooks and MCP servers run outside the sandbox, so a read-only seat has
+# neither: disableAllHooks here, --strict-mcp-config on the command line.
+print(json.dumps({"disableAllHooks": True, "sandbox": {
+    "enabled": True,
+    "failIfUnavailable": True,
+    "allowUnsandboxedCommands": False,
+    "autoAllowBashIfSandboxed": True,
+    "filesystem": {"denyWrite": deny},
+}}))
+PY
+}
+
 # The worker gets a small, explicit environment. This keeps the coordinator's
 # session variables (CLAUDECODE, ANTHROPIC_*, the Pro OAuth state) out of the
 # worker, so the worker cannot fall back to the Pro plan or detect nesting.
@@ -203,10 +266,14 @@ command_run() {
   local -a arguments=(-p --model "$model_id" --output-format json
     --max-turns "$max_turns" --permission-prompts none
     --disallowedTools "$DISALLOWED_TOOLS")
-  local mode
+  local mode sandbox=false
   if [[ "$readonly" == true ]]; then
     mode="readonly"
-    arguments+=(--permission-mode dontAsk --allowedTools "$READONLY_TOOLS")
+    require_sandbox
+    sandbox=true
+    arguments+=(--permission-mode dontAsk --tools "$READONLY_TOOLS"
+      --allowedTools "$READONLY_TOOLS" --strict-mcp-config
+      --settings "$(readonly_sandbox_settings "$dir")")
   else
     mode="write"
     arguments+=(--permission-mode acceptEdits --allowedTools "$WRITE_TOOLS")
@@ -229,14 +296,14 @@ command_run() {
   ended="$(date +%s)"
 
   mkdir -p "$STATE_DIR"
-  python3 - "$raw" "$report" "$alias" "$model_id" "$family" "$mode" "$status" \
+  python3 - "$raw" "$report" "$alias" "$model_id" "$family" "$mode" "$sandbox" "$status" \
     "$started" "$ended" "$dir" "$LEDGER" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-(raw, report, alias, model_id, family, mode, status,
+(raw, report, alias, model_id, family, mode, sandbox, status,
  started, ended, directory, ledger) = sys.argv[1:]
 status = int(status)
 payload = {}
@@ -269,6 +336,7 @@ meta = {
     "model_id": model_id,
     "family": family,
     "mode": mode,
+    "sandbox": sandbox == "true",
     "exit_status": status,
     "succeeded": succeeded,
     "is_error": is_error,
@@ -328,6 +396,9 @@ need = tuple(map(int, sys.argv[2].split(".")))
 raise SystemExit(0 if found and tuple(map(int, found.groups())) >= need else 1)
 PY
   fi
+
+  DOCTOR_LABEL="Claude Code sandbox commands for read-only seats ($(sandbox_commands | tr -s ' \n' ' ' | sed 's/ *$//;s/^$/built in/'))"
+  check test -z "$(missing_sandbox_commands)"
 
   DOCTOR_LABEL="worker profile $WORKER_CONFIG_DIR/settings.json"
   check bash -c '"$0" __profile' "$script_path"
