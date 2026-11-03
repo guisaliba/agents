@@ -58,8 +58,8 @@ PY
   if [[ -d "$AI_MEMORY_INSTALL_ROOT" ]]; then
     [[ -x "$AI_MEMORY_INSTALL_ROOT/ai-memory" ]] || \
       die "Existing ai-memory release bundle is incomplete: $AI_MEMORY_INSTALL_ROOT"
-    [[ -d "$AI_MEMORY_INSTALL_ROOT/hooks/opencode" ]] || \
-      die "Existing ai-memory release bundle has no OpenCode hooks: $AI_MEMORY_INSTALL_ROOT"
+    [[ -d "$AI_MEMORY_INSTALL_ROOT/hooks/claude-code" ]] || \
+      die "Existing ai-memory release bundle has no Claude Code hooks: $AI_MEMORY_INSTALL_ROOT"
     installed_version="$("$AI_MEMORY_INSTALL_ROOT/ai-memory" --version 2>/dev/null || true)"
     [[ "$installed_version" == *"$AI_MEMORY_RELEASE_VERSION"* ]] || \
       die "Existing ai-memory release bundle does not report version $AI_MEMORY_RELEASE_VERSION"
@@ -77,7 +77,7 @@ PY
       [[ "$actual_sha" == "$expected_sha" ]] || die "ai-memory archive digest did not match $asset"
       tar -xzf "$archive" -C "$temporary_dir" || die "Could not extract the ai-memory release archive"
       [[ -x "$temporary_dir/ai-memory" ]] || die "ai-memory release archive has no executable"
-      [[ -d "$temporary_dir/hooks/opencode" ]] || die "ai-memory release archive has no OpenCode hooks"
+      [[ -d "$temporary_dir/hooks/claude-code" ]] || die "ai-memory release archive has no Claude Code hooks"
       installed_version="$("$temporary_dir/ai-memory" --version 2>/dev/null || true)"
       [[ "$installed_version" == *"$AI_MEMORY_RELEASE_VERSION"* ]] || \
         die "Downloaded ai-memory does not report version $AI_MEMORY_RELEASE_VERSION"
@@ -91,8 +91,8 @@ PY
 
   [[ -x "$AI_MEMORY_INSTALL_ROOT/ai-memory" ]] || \
     die "Installed ai-memory release bundle is incomplete: $AI_MEMORY_INSTALL_ROOT"
-  [[ -d "$AI_MEMORY_INSTALL_ROOT/hooks/opencode" ]] || \
-    die "Installed ai-memory release bundle has no OpenCode hooks: $AI_MEMORY_INSTALL_ROOT"
+  [[ -d "$AI_MEMORY_INSTALL_ROOT/hooks/claude-code" ]] || \
+    die "Installed ai-memory release bundle has no Claude Code hooks: $AI_MEMORY_INSTALL_ROOT"
   mkdir -p "$(dirname "$AI_MEMORY_BINARY")"
   if [[ -L "$AI_MEMORY_BINARY" ]]; then
     if [[ "$(readlink "$AI_MEMORY_BINARY")" != "$AI_MEMORY_INSTALL_ROOT/ai-memory" ]]; then

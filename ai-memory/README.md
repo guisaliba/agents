@@ -16,6 +16,21 @@ For a remote service, use its base URL; the MCP endpoint is that URL plus
 `/mcp`. `apply.sh` starts the local service for loopback URLs and leaves the
 local service stopped for a non-loopback URL.
 
+## Version
+
+`apply.sh` pins ai-memory 3.3.1. Linux installs it from the AUR package
+`ai-memory-bin`; macOS installs the checksum-verified release archive.
+
+ai-memory 3.0 changed one default. `ai-memory init` on a **new** data
+directory creates a root bearer token at `<data_dir>/auth-tokens/default` and
+turns authentication on. The hooks and the MCP registration read that token
+file, so no token goes into a harness configuration or the environment. An
+**existing** 2.x data directory keeps its unauthenticated loopback service after
+the upgrade. See the upstream
+[3.0 upgrade notes](https://github.com/akitaonrails/ai-memory/blob/v3.3.1/docs/upgrading-to-3.0.md).
+Take `ai-memory backup --to ~/ai-memory-pre-3.0.tar.gz` before the first apply
+on a host that runs 2.x.
+
 ## Ownership
 
 The service uses:

@@ -104,6 +104,11 @@ wire_rtk_to_claude_code() {
 
   log "Installing the RTK Claude Code hook in $config_dir"
   mkdir -p "$config_dir"
-  CLAUDE_CONFIG_DIR="$config_dir" rtk init -g --auto-patch --no-trust-filters </dev/null || \
+  # --auto-patch never offers the RTK proxy or delegation on-ramps, and
+  # RTK_ONRAMP_DISABLED=1 states the same intent. Either on-ramp would set
+  # env.ANTHROPIC_BASE_URL in settings.json, which would reroute the Pro login
+  # or replace the worker provider base URL.
+  CLAUDE_CONFIG_DIR="$config_dir" RTK_ONRAMP_DISABLED=1 \
+    rtk init -g --auto-patch --no-trust-filters </dev/null || \
     die "RTK Claude Code hook installation failed for $config_dir"
 }
