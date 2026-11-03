@@ -19,6 +19,7 @@ source ~/.bash_aliases
 | --- | --- |
 | `claude` | Starts `ai-memory run claude` in the current directory. Always managed. |
 | `claude --new` | Creates a fresh worktree and starts the managed session in it. |
+| `claude <subcommand>` | `plugin`, `mcp`, `update`, `doctor`, `auth`, the background-session commands, and the other CLI subcommands run the native `claude`, with no managed workstream. So do `-h`, `--help`, `-v`, and `--version`. |
 | `claude <flags>` | Passes the flags to Claude Code, for example `claude --continue`. |
 | `claude-raw ...` | Runs native Claude Code for diagnostics and recovery. |
 

@@ -9,6 +9,17 @@ export PATH="$HOME/.local/bin:$PATH"
 # directory. `claude --new` first creates a fresh Git worktree, so two sessions
 # in one repository never share a working tree.
 claude() {
+  # A CLI subcommand or a version/help request is not a session, so it runs the
+  # native claude without a managed workstream. test.sh checks this list
+  # against `claude --help`.
+  case "${1:-}" in
+    # native subcommands: agents attach auth auto-mode doctor gateway import install kill logs mcp plugin plugins purge respawn rm setup-token stop ultrareview update upgrade
+    agents|attach|auth|auto-mode|doctor|gateway|import|install|kill|logs|mcp|plugin|plugins|purge|respawn|rm|setup-token|stop|ultrareview|update|upgrade|-h|--help|-v|--version)
+      command claude "$@"
+      return
+      ;;
+  esac
+
   local argument new_worktree=false previous=""
   local forwarded=()
   for argument in "$@"; do

@@ -399,6 +399,27 @@ wrapper_fixtures() {
     'source "$0"; claude --permission-mode bypassPermissions' "$REPO_DIR/shell/claude.bash"
   expect "the wrapper functions are not exported to child processes" bash -c \
     'source "$0"; ! bash -c "declare -F claude >/dev/null 2>&1"' "$REPO_DIR/shell/claude.bash"
+
+  printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\n" "$@" >"$NATIVE_LOG"' >"$dir/bin/claude"
+  chmod +x "$dir/bin/claude"
+  native_case() {
+    rm -f "$dir/log" "$dir/native"
+    env -i HOME="$dir" PATH="$dir/bin:/usr/bin:/bin" WRAPPER_LOG="$dir/log" NATIVE_LOG="$dir/native" bash -c \
+      'source "$0"; claude "$@"' "$REPO_DIR/shell/claude.bash" "$@" >/dev/null 2>&1
+  }
+  expect "the bypass comment and the case pattern name the same subcommands" bash -c '
+    comment="$(sed -n "s/^ *# native subcommands: //p" "$0" | tr " " "\n" | sort)"
+    pattern="$(sed -n "/# native subcommands:/{n;p}" "$0" | sed "s/).*//; s/^ *//" | tr "|" "\n" | grep -v "^-" | sort)"
+    [[ -n "$comment" && "$comment" == "$pattern" ]]' "$REPO_DIR/shell/claude.bash"
+  native_case plugin list
+  expect "a CLI subcommand runs native claude, not a managed session" bash -c \
+    '[[ ! -e "$0" && "$(tr "\n" " " <"$1")" == "plugin list " ]]' "$dir/log" "$dir/native"
+  native_case --version
+  expect "claude --version runs native claude" bash -c \
+    '[[ ! -e "$0" && "$(cat "$1")" == "--version" ]]' "$dir/log" "$dir/native"
+  native_case -p "plugin list"
+  expect "a print-mode prompt stays a managed session" bash -c \
+    '[[ ! -e "$1" && "$(tr "\n" "|" <"$0")" == "run|claude|-p|plugin list|" ]]' "$dir/log" "$dir/native"
 }
 
 # --- Machine checks ---------------------------------------------------------
@@ -428,6 +449,10 @@ assert json.load(open(sys.argv[1]))["enabledPlugins"]["cc-plugin-you-should-know
   expect "ai-memory is the pinned release or newer" bash -c \
     'source "$0/lib/common.bash"; (require_minimum_version ai-memory "$(sed -n "s/^AI_MEMORY_MIN_VERSION=\"\${AI_MEMORY_MIN_VERSION:-\(.*\)}\"$/\1/p" "$0/apply.sh")") >/dev/null 2>&1' "$REPO_DIR"
   expect "ai-memory service answers" bash -c 'ai-memory status --json >/dev/null 2>&1'
+  expect "the wrapper bypass list matches the installed claude subcommands" bash -c '
+    want="$("$(type -P claude)" --help 2>/dev/null | sed -n "/^Commands:/,\$p" | grep -E "^  [a-z]" | awk "{print \$1}" | tr "|" "\n" | sort -u)"
+    have="$(sed -n "s/^ *# native subcommands: //p" "$0" | tr " " "\n" | sort -u)"
+    [[ -n "$want" && "$want" == "$have" ]]' "$REPO_DIR/shell/claude.bash"
   expect "bash aliases carry the Claude block" file_contains "$home/.bash_aliases" 'Claude Code ai-memory wrapper >>>'
   printf '\nRun `claude-worker doctor` (and `claude-worker doctor --live`) to check the worker provider.\n'
 }
