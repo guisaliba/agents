@@ -112,6 +112,38 @@ require_key() {
     fail_config "the worker provider API key is not available. Run claude-worker-key to see why."
 }
 
+# A writing seat owns one linked Git worktree (the pstack
+# separate-before-serializing-shared-state principle). The worktree name is
+# free; the isolation is what counts. Refuse the main working tree, a
+# directory outside Git, and a worktree where another write seat runs.
+require_write_worktree() {
+  local dir="$1" git_dir common_dir
+  git_dir="$(git -C "$dir" rev-parse --path-format=absolute --git-dir 2>/dev/null)" || \
+    fail_usage "a write seat needs --dir inside a linked Git worktree; $dir is not in a Git worktree"
+  common_dir="$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir)"
+  [[ "$git_dir" != "$common_dir" ]] || \
+    fail_usage "a write seat needs its own linked worktree, not the main working tree ($dir). Create one: git worktree add <repository>-worktrees/<role>-<n> <base-ref>"
+  WRITE_LOCK="$git_dir/claude-worker.lock"
+}
+
+# mkdir is atomic, so one seat wins the lock. A lock whose pid file names a
+# process that no longer runs is stale (a killed run) and is replaced. An
+# empty pid file counts as busy: its owner is between mkdir and the write.
+acquire_write_lock() {
+  local owner
+  if ! mkdir -- "$WRITE_LOCK" 2>/dev/null; then
+    owner="$(cat -- "$WRITE_LOCK/pid" 2>/dev/null || true)"
+    if [[ ! "$owner" =~ ^[0-9]+$ ]] || kill -0 "$owner" 2>/dev/null; then
+      fail_usage "another write seat (pid ${owner:-unknown}) runs in this worktree ($WRITE_LOCK)"
+    fi
+    rm -rf -- "$WRITE_LOCK"
+    mkdir -- "$WRITE_LOCK" 2>/dev/null || \
+      fail_usage "another write seat took the lock first ($WRITE_LOCK)"
+  fi
+  printf '%s\n' "$$" >"$WRITE_LOCK/pid"
+  trap 'rm -rf -- "$WRITE_LOCK"' EXIT
+}
+
 # The worker gets a small, explicit environment. This keeps the coordinator's
 # session variables (CLAUDECODE, ANTHROPIC_*, the Pro OAuth state) out of the
 # worker, so the worker cannot fall back to the Pro plan or detect nesting.
@@ -155,6 +187,8 @@ command_run() {
   [[ -n "${brief_text//[[:space:]]/}" ]] || fail_usage "--brief is missing or empty: $brief"
   [[ -d "$(dirname -- "$report")" ]] || fail_usage "--report directory does not exist: $(dirname -- "$report")"
 
+  [[ "$readonly" == true ]] || require_write_worktree "$dir"
+
   local resolved model_id family
   resolved="$(resolve_alias "$alias")" || \
     fail_usage "unknown worker alias: $alias. Run: claude-worker models"
@@ -183,6 +217,7 @@ command_run() {
     timeout_prefix=(timeout --kill-after=30 "$timeout_seconds")
   fi
 
+  [[ "$readonly" == true ]] || acquire_write_lock
   worker_environment
   local raw="$report.raw.json" errors="$report.stderr.log" started ended status=0
   started="$(date +%s)"

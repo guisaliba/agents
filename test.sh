@@ -186,7 +186,13 @@ worker_fixtures() {
   local dir="$FIXTURE_ROOT/worker"
   local home="$dir/home" profile="$dir/home/.claude-worker" logs="$dir/logs" work="$dir/work"
   local secret="sk-fixture-$$-do-not-leak"
-  mkdir -p "$home/.config/ai-memory" "$profile" "$logs" "$work"
+  local repo="$dir/repo"
+  mkdir -p "$home/.config/ai-memory" "$profile" "$logs" "$repo"
+  # A write seat must run in its own linked worktree, so the fixture work
+  # directory is one. The main working tree is the read-only checkout.
+  git -C "$repo" init -q
+  git -C "$repo" -c user.email=fixture@example.com -c user.name=fixture commit -q --allow-empty -m init
+  git -C "$repo" worktree add -q --detach "$work"
   printf 'OTHER=1\nOPENCODE_API_KEY=%s\n' "$secret" >"$home/.config/ai-memory/env"
   printf '%s\n' "{\"apiKeyHelper\": \"$REPO_DIR/bin/claude-worker-key\", \"env\": {\"ANTHROPIC_BASE_URL\": \"https://opencode.ai/inference/go/anthropic\"}}" >"$profile/settings.json"
   make_fake_claude "$dir/claude" "$logs" "$dir/mode"
@@ -225,6 +231,25 @@ m = json.load(open(sys.argv[1]))
 assert m["succeeded"] and m["model_id"] == "kimi-k3.1-pro" and m["family"] == "kimi"
 assert m["usage"]["output_tokens"] == 40 and m["mode"] == "write"' "$work/report.md.meta.json"
   expect "ledger records the run" file_contains "$home/.local/state/claude-worker/runs.tsv" $'worker/kimi-k3.1\tkimi-k3.1-pro\twrite\tyes'
+
+  local lock
+  lock="$(git -C "$work" rev-parse --absolute-git-dir)/claude-worker.lock"
+  status=0
+  run_worker run --model worker/kimi-k3.1 --dir "$repo" --brief "$work/brief.md" --report "$work/main.md" >/dev/null 2>&1 || status=$?
+  expect "a write run in the main working tree exits 2" test "$status" -eq 2
+  status=0
+  mkdir -p "$dir/plain"
+  run_worker run --model worker/kimi-k3.1 --dir "$dir/plain" --brief "$work/brief.md" --report "$work/plain.md" >/dev/null 2>&1 || status=$?
+  expect "a write run outside a Git worktree exits 2" test "$status" -eq 2
+  status=0
+  mkdir "$lock" && printf '%s\n' "$$" >"$lock/pid"
+  run_worker run --model worker/kimi-k3.1 --dir "$work" --brief "$work/brief.md" --report "$work/busy.md" >/dev/null 2>&1 || status=$?
+  expect "a second write seat in a busy worktree exits 2" test "$status" -eq 2
+  status=0
+  printf '%s\n' 999999999 >"$lock/pid"
+  run_worker run --model worker/kimi-k3.1 --dir "$work" --brief "$work/brief.md" --report "$work/stale.md" >/dev/null 2>&1 || status=$?
+  expect "a stale write lock from a dead process is replaced" test "$status" -eq 0
+  expect "the write lock is released after the run" test ! -e "$lock"
 
   status=0
   run_worker run --model worker/kimi-k3.1 --dir "$work" --brief <(printf 'Piped fixture task.\n') --report "$work/piped.md" >/dev/null 2>&1 || status=$?

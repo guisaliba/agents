@@ -63,7 +63,9 @@ claude-worker-key             # the apiKeyHelper; prints the key, or why it is m
 
 - A write seat runs with `--permission-mode acceptEdits` and the tools
   `Read,Edit,Write,Glob,Grep,Bash` in the directory that `--dir` names; the
-  coordinator creates that worktree first. A `--readonly` seat runs with
+  coordinator creates that worktree first. `--dir` must be in a linked
+  worktree (not the main working tree), and one write seat at a time holds a
+  worktree: the lock is `<worktree git dir>/claude-worker.lock`. A `--readonly` seat runs with
   `dontAsk` and `Read,Glob,Grep,Bash`: no edit tools, but Bash, so it can run
   tests. This matches the pstack Claude Code adapter, which maps `readonly` to
   the `Explore` subagent. The coordinator checks `git status` after the seat.

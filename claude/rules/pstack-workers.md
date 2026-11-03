@@ -31,9 +31,13 @@ directory (`~/.claude-worker`). The worker never touches the Pro login.
 Do this in place of one Agent tool call.
 
 1. **Location.** A writing seat (implementation, arena runner, architect runner,
-   interrogate adversary, swarm worker that edits) gets its own Git worktree:
-   `git worktree add <repository>-worktrees/worker-<role>-<n> <base-ref>`. Copy
-   uncommitted changes into it when the skill says so. A read-only seat (arena
+   interrogate adversary, swarm worker that edits) gets its own linked Git
+   worktree, for example
+   `git worktree add <repository>-worktrees/<role>-<n> <base-ref>`. Copy
+   uncommitted changes into it when the skill says so. The name is free.
+   `claude-worker run` enforces the isolation: without `--readonly` it exits 2
+   when `--dir` is the main working tree, is outside Git, or is a worktree in
+   which another write seat runs. A read-only seat (arena
    cross-judge, how explorer, why investigator) runs in the checkout it reads.
 2. **Brief.** Write the brief to a file under
    `$(git rev-parse --path-format=absolute --git-common-dir)/claude-worker/<utc-timestamp>-<role>-<n>/brief.md`.
