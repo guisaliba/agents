@@ -62,7 +62,6 @@ PY
 
 install_rtk() {
   local install_required=false version_output
-  RTK_CLI_INSTALLED_BY_APPLY=false
 
   if have rtk; then
     if ! rtk_cli_is_compatible; then
@@ -91,7 +90,6 @@ install_rtk() {
     rtk_cli_is_compatible || die "Installed RTK CLI failed its rewrite compatibility check"
     rtk_cli_meets_install_version || \
       die "rtk on PATH ($(type -P rtk)) is still older than the pinned stable release $RTK_VERSION. Remove or upgrade that copy (for example a package-manager install), then rerun apply."
-    RTK_CLI_INSTALLED_BY_APPLY=true
   fi
 
   rtk gain || true
