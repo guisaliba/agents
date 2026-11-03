@@ -307,6 +307,54 @@ assert d["env"]["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"] == "1"' "$home/.claude
   [[ "$first" == "$second" ]] || diff <(printf "%s\n" "$first") <(printf "%s\n" "$second") || true
 }
 
+# --- ai-memory environment file fixtures ----------------------------------
+
+ai_memory_env_fixtures() {
+  printf '\n== ai-memory environment file fixtures\n'
+  local home="$FIXTURE_ROOT/ai-memory-env-home" env_file output before
+  local secret="sk-fixture-secret-0123456789"
+  env_file="$home/.config/ai-memory/env"
+
+  check_env() {
+    env -i HOME="$home" PATH="$PATH" bash -c '
+      set -Eeuo pipefail
+      source "$0/apply.sh"
+      check_ai_memory_env_file
+    ' "$REPO_DIR" 2>&1
+  }
+
+  mkdir -p "$home"
+  check_env_quiet() { check_env >/dev/null; }
+  expect "a missing environment file is created" check_env_quiet
+  expect "the created environment file is empty and private" bash -c \
+    '[[ -f "$0" && ! -s "$0" && "$(stat -c %a "$0" 2>/dev/null || stat -f %Lp "$0")" == 600 ]]' "$env_file"
+
+  mkdir -p "$(dirname "$env_file")"
+  printf 'AI_MEMORY_LLM_PROVIDER=opencode\nAI_MEMORY_LLM_MODEL=deepseek-v4.1-flash\nOPENCODE_API_KEY=%s\n' "$secret" >"$env_file"
+  chmod 600 "$env_file"
+  before="$(sha256sum "$env_file")"
+  output="$(check_env || printf "check_ai_memory_env_file failed\n")"
+  expect "a configured LLM is reported as enabled" grep -qF 'ai-memory LLM enabled: provider opencode, model deepseek-v4.1-flash' <<<"$output"
+  expect "apply never rewrites the operator environment file" test "$before" == "$(sha256sum "$env_file")"
+  expect "the API key never reaches apply output" bash -c '! grep -qF "$0" <<<"$1"' "$secret" "$output"
+
+  printf 'AI_MEMORY_LLM_PROVIDER=opencode\nAI_MEMORY_LLM_MODEL=deepseek-v4.1-flash\n' >"$env_file"
+  output="$(check_env || printf "check_ai_memory_env_file failed\n")"
+  expect "a missing provider key is reported by name" grep -qF 'ai-memory LLM disabled: OPENCODE_API_KEY is not set' <<<"$output"
+
+  : >"$env_file"
+  output="$(check_env || printf "check_ai_memory_env_file failed\n")"
+  expect "an empty file reports both unset names" grep -qF 'ai-memory LLM disabled: AI_MEMORY_LLM_PROVIDER, AI_MEMORY_LLM_MODEL are not set' <<<"$output"
+
+  printf '%s\n' 'AGENTS_AI_MEMORY_LLM_ENABLED=false' 'DOTFILES_AI_MEMORY_LLM_PROFILE=x' \
+    'AGENTS_AI_MEMORY_REMOTE_MODE=false' 'AI_MEMORY_SERVER_URL=http://127.0.0.1:49374' >"$env_file"
+  before="$(sha256sum "$env_file")"
+  output="$(check_env || printf "check_ai_memory_env_file failed\n")"
+  expect "retired names are reported" bash -c \
+    'for n in AGENTS_AI_MEMORY_LLM_ENABLED DOTFILES_AI_MEMORY_LLM_PROFILE AGENTS_AI_MEMORY_REMOTE_MODE AI_MEMORY_SERVER_URL; do grep -qF "$n" <<<"$0" || exit 1; done' "$output"
+  expect "retired names are reported, not removed" test "$before" == "$(sha256sum "$env_file")"
+}
+
 # --- Bash wrapper fixtures -------------------------------------------------
 
 wrapper_fixtures() {
@@ -366,6 +414,7 @@ static_checks
 helper_fixtures
 worker_fixtures
 apply_fixtures
+ai_memory_env_fixtures
 wrapper_fixtures
 if [[ "$repo_only" == false ]]; then
   machine_checks

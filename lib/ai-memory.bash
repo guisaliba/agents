@@ -225,18 +225,6 @@ PY
 verify_ai_memory_unauthenticated_loopback() {
   local auth_variable
 
-  # A host pointed at a remote ai-memory server uses remote-client policy. The
-  # ai-memory CLI reads its bearer from the environment, so it must be allowed.
-  if agent_stack_uses_remote_ai_memory; then
-    log "Verifying the authenticated ai-memory client policy for $AI_MEMORY_SERVER_URL"
-    if [[ -z "${AI_MEMORY_AUTH_TOKEN:-}" ]] && \
-      ! ai_memory_env_has_nonempty_value AI_MEMORY_AUTH_TOKEN && \
-      [[ ! -s "$AI_MEMORY_AUTH_TOKEN_FILE" ]]; then
-      die "Remote ai-memory mode requires a bearer token for $AI_MEMORY_SERVER_URL. Put one in $AI_MEMORY_AUTH_TOKEN_FILE, or export AI_MEMORY_AUTH_TOKEN, then re-run apply."
-    fi
-    return 0
-  fi
-
   log "Verifying the unauthenticated ai-memory loopback policy"
 
   for auth_variable in \
@@ -282,368 +270,67 @@ ensure_ai_memory_env_file() {
     "ai-memory environment path"
 }
 
-ai_memory_env_value() {
-  local name="$1"
-
-  python3 "$AGENT_STACK_HELPER" env-value "$AI_MEMORY_ENV_FILE" "$name"
-}
-
-ai_memory_env_has_nonempty_value() {
-  local name="$1"
-  local value
-
-  value="$(ai_memory_env_value "$name" 2>/dev/null)" || return 1
-  [[ -n "$value" ]]
-}
-
-# Pause-flag ownership: agents owns AGENTS_AI_MEMORY_LLM_ENABLED. The
-# DOTFILES_ name is retired; read it as fallback for one release so existing
-# checkouts migrate without losing an explicit false.
-ai_memory_llm_enabled() {
-  local value
-  value="$(ai_memory_env_value AGENTS_AI_MEMORY_LLM_ENABLED 2>/dev/null || true)"
-  if [[ -z "$value" ]]; then
-    value="$(ai_memory_env_value DOTFILES_AI_MEMORY_LLM_ENABLED 2>/dev/null || true)"
-  fi
-  [[ "$value" != "false" ]]
-}
-
-ai_memory_profile_list() {
-  printf '%s\n' \
-    opencode-go-deepseek-v4.1-flash \
-    opencode-go-muse-spark-1.3-contributor
-}
-
-ai_memory_profile_spec() {
-  case "$1" in
-    opencode-go-muse-spark-1.3-contributor)
-      printf '%s\n' 'opencode|muse-spark-1.3-contributor|opencode-api-key|opencode-go/muse-spark-1.3-contributor'
-      ;;
-    opencode-go-deepseek-v4.1-flash)
-      printf '%s\n' 'opencode|deepseek-v4.1-flash|opencode-api-key|opencode-go/deepseek-v4.1-flash'
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-}
-
-
-ai_memory_server_url_is_loopback() {
-  python3 - "$AI_MEMORY_SERVER_URL" <<'PY'
-import ipaddress
-import sys
-from urllib.parse import urlsplit
-
-try:
-    url = urlsplit(sys.argv[1])
-    host = url.hostname
-    url.port  # Validate the optional port instead of accepting malformed URLs.
-except ValueError:
-    raise SystemExit(2)
-
-if url.scheme not in {"http", "https"} or not host or url.username or url.password:
-    raise SystemExit(2)
-
-host = host.rstrip(".").lower()
-if host == "localhost" or host.endswith(".localhost"):
-    raise SystemExit(0)
-
-try:
-    address = ipaddress.ip_address(host)
-except ValueError:
-    raise SystemExit(1)
-
-if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
-    address = address.ipv4_mapped
-raise SystemExit(0 if address.is_loopback else 1)
-PY
-}
-
-agent_stack_uses_remote_ai_memory() {
-  local loopback_status=0
-  ai_memory_server_url_is_loopback || loopback_status=$?
-  case "$loopback_status" in
-    0) return 1 ;;
-    1) return 0 ;;
-    *) die "AI_MEMORY_SERVER_URL must be a valid HTTP(S) URL without user information" ;;
-  esac
-}
-
-# A host that uses a remote ai-memory service has no local store, so the remote
-# server owns its profile. Do not carry a stale local copy that looks authoritative.
-agent_stack_profile_owner_note() {
-  log "Profile selection is owned by the remote ai-memory server. This host carries no profile."
-  log "  The remote server's ai-memory environment decides the model."
-}
-
-
-ai_memory_selected_profile() {
-  local profile supported
-
-  profile="$(ai_memory_env_value DOTFILES_AI_MEMORY_LLM_PROFILE 2>/dev/null || true)"
-  profile="${profile:-$AI_MEMORY_DEFAULT_LLM_PROFILE}"
-  if ! ai_memory_profile_spec "$profile" >/dev/null; then
-    supported="$(ai_memory_profile_list | paste -sd, - | sed 's/,/, /g')"
-    die "Unsupported DOTFILES_AI_MEMORY_LLM_PROFILE '$profile'. Supported profiles: $supported. Remove the assignment to use the default."
-  fi
-  printf '%s\n' "$profile"
-}
-
-ai_memory_profile_credential_ready() {
-  case "$1" in
-    opencode-api-key)
-      ai_memory_env_has_nonempty_value OPENCODE_API_KEY
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-}
-
-configure_ai_memory_env_file() {
-  local profile profile_spec provider model credential subagent_model provider_state
+check_ai_memory_env_file() {
   ensure_ai_memory_env_file
-  log "Converging the ai-memory provider and paid-job policy"
+  log "Checking the ai-memory LLM settings"
 
-  # A host using a remote ai-memory service does not own its profile or provider
-  # choice. Strip those values rather than leave inert settings that look live.
-  if agent_stack_uses_remote_ai_memory; then
-    provider_state="$(python3 - \
-      "$AI_MEMORY_ENV_FILE" \
-      "$AGENT_STACK_HELPER" \
-      "$AI_MEMORY_SERVER_URL" <<'PY'
-import shlex
+  # The operator owns every line of the environment file. apply.sh reads it
+  # and reports; it never rewrites it.
+  python3 - "$AI_MEMORY_ENV_FILE" "$AGENT_STACK_HELPER" <<'PY'
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
 helper_path = Path(sys.argv[2])
-server_url = sys.argv[3]
 sys.path.insert(0, str(helper_path.parent))
 sys.dont_write_bytecode = True
 
-from agent_stack import atomic_write_text, parse_env_assignment
+from agent_stack import parse_env_assignment
 
-# Owned by the server host. Never written on a client.
-server_owned = {
-    "DOTFILES_AI_MEMORY_LLM_PROFILE",
-    "AI_MEMORY_LLM_PROVIDER",
-    "AI_MEMORY_LLM_MODEL",
-}
-# Retired selectors, removed on every host so no dead variable lingers.
-retired = {"DOTFILES_OPENCODE_SUBAGENT_PROFILE"}
-# Retired pause flag: migrate its value once to the agents-owned name.
-retired_pause_old = "DOTFILES_AI_MEMORY_LLM_ENABLED"
-retired_pause_new = "AGENTS_AI_MEMORY_LLM_ENABLED"
-# Stale marker from the dotfiles-era installer; current apply.sh never wrote
-# it, so drop it wherever it still heads a block.
-stale_comments = {"# Managed by dotfiles/agents/apply.sh."}
-# Managed here as well, so every copy is stripped before one is appended.
-client_managed = {
-    "AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL",
-    "AI_MEMORY_SERVER_URL",
+# Names that earlier versions of apply.sh wrote. Nothing reads them now.
+retired = {
+    "AGENTS_AI_MEMORY_LLM_ENABLED",
     "AGENTS_AI_MEMORY_REMOTE_MODE",
+    "AI_MEMORY_SERVER_URL",
+    "DOTFILES_AI_MEMORY_LLM_ENABLED",
+    "DOTFILES_AI_MEMORY_LLM_PROFILE",
+    "DOTFILES_OPENCODE_SUBAGENT_PROFILE",
 }
-managed_comment = "# Managed by guisaliba/agents apply.sh."
+# ai-memory reads the key of each provider from its own variable.
+provider_keys = {"opencode": "OPENCODE_API_KEY"}
 
 try:
-    original_lines = path.read_text(encoding="utf-8").splitlines()
+    lines = path.read_text(encoding="utf-8").splitlines()
 except OSError as exc:
     raise SystemExit(f"ERROR: Cannot read ai-memory environment file at {path}: {exc}")
 
-pause_value = None
-pause_new_present = False
-for line in original_lines:
+values = {}
+for line in lines:
     parsed = parse_env_assignment(line)
-    if parsed is None:
-        continue
-    if parsed[0] == retired_pause_new:
-        pause_new_present = True
-    if parsed[0] == retired_pause_old:
-        pause_value = parsed[1]
+    if parsed is not None:
+        values[parsed[0]] = parsed[1].strip()
 
-kept_lines = []
-for line in original_lines:
-    if line == managed_comment:
-        continue
-    if line in stale_comments:
-        continue
-    parsed = parse_env_assignment(line)
-    if parsed is not None and parsed[0] in server_owned:
-        continue
-    if parsed is not None and parsed[0] in retired:
-        continue
-    if parsed is not None and parsed[0] == retired_pause_old:
-        continue
-    # Strip names this branch owns too, so a copy written by an earlier run or
-    # left above the marker cannot survive alongside the one appended below.
-    if parsed is not None and parsed[0] in client_managed:
-        continue
-    kept_lines.append(line)
+stale = sorted(name for name in retired if name in values)
+if stale:
+    print(f"WARNING: {path} sets retired names that nothing reads: {', '.join(stale)}. Remove them.")
 
-if pause_value is not None and not pause_new_present:
-    kept_lines.append(f"{retired_pause_new}={pause_value}")
+provider = values.get("AI_MEMORY_LLM_PROVIDER", "")
+model = values.get("AI_MEMORY_LLM_MODEL", "")
+missing = [
+    name
+    for name, value in (("AI_MEMORY_LLM_PROVIDER", provider), ("AI_MEMORY_LLM_MODEL", model))
+    if not value
+]
+key_name = provider_keys.get(provider)
+if key_name and not values.get(key_name):
+    missing.append(key_name)
 
-while kept_lines and not kept_lines[-1].strip():
-    kept_lines.pop()
-if kept_lines:
-    kept_lines.append("")
-
-kept_lines.extend(
-    [
-        managed_comment,
-        f"AI_MEMORY_SERVER_URL={shlex.quote(server_url)}",
-        "AGENTS_AI_MEMORY_REMOTE_MODE=true",
-        "AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL=true",
-    ]
-)
-
-content = "\n".join(kept_lines) + "\n"
-atomic_write_text(path, content, 0o600, ".env.")
-print("client")
+if missing:
+    verb = "is" if len(missing) == 1 else "are"
+    print(f"ai-memory LLM disabled: {', '.join(missing)} {verb} not set in {path}")
+else:
+    print(f"ai-memory LLM enabled: provider {provider}, model {model}")
 PY
-  )" || die "Could not clear the remote-service ai-memory policy for this host"
-    agent_stack_profile_owner_note
-    return 0
-  fi
-
-  profile="$(ai_memory_selected_profile)" || return 1
-  profile_spec="$(ai_memory_profile_spec "$profile")"
-  IFS='|' read -r provider model credential subagent_model <<<"$profile_spec"
-
-  provider_state="zero-llm"
-  if ai_memory_llm_enabled && ai_memory_profile_credential_ready "$credential"; then
-    provider_state="enabled"
-  else
-    provider=""
-  fi
-
-  provider_state="$(python3 - \
-    "$AI_MEMORY_ENV_FILE" \
-    "$profile" \
-    "$provider" \
-    "$model" \
-    "$provider_state" \
-    "$AI_MEMORY_SERVER_URL" \
-    "$AGENT_STACK_HELPER" <<'PY'
-import shlex
-import sys
-from pathlib import Path
-
-path = Path(sys.argv[1])
-profile = sys.argv[2]
-provider = sys.argv[3]
-model = sys.argv[4]
-provider_state = sys.argv[5]
-server_url = sys.argv[6]
-helper_path = Path(sys.argv[7])
-sys.path.insert(0, str(helper_path.parent))
-sys.dont_write_bytecode = True
-
-from agent_stack import atomic_write_text, parse_env_assignment
-
-managed_names = {
-    "DOTFILES_AI_MEMORY_LLM_PROFILE",
-    "AI_MEMORY_LLM_PROVIDER",
-    "AI_MEMORY_LLM_MODEL",
-    "AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL",
-    "AI_MEMORY_SERVER_URL",
-    "AGENTS_AI_MEMORY_REMOTE_MODE",
-}
-# The scheduler flag is the operator's, not the script's. It is written as a
-# literal "false" here today, which makes a value in the environment file look
-# editable while every apply.sh run silently reverts it. That is the same defect
-# class as the path translation and the client token: a setting that appears to
-# be configured but is actually owned elsewhere. Read it instead, so an explicit
-# operator value survives.
-operator_owned_names = {"AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED"}
-scheduler_default = "false"
-managed_comment = "# Managed by guisaliba/agents apply.sh."
-# Retired pause flag: migrate its value once to the agents-owned name.
-retired_pause_old = "DOTFILES_AI_MEMORY_LLM_ENABLED"
-retired_pause_new = "AGENTS_AI_MEMORY_LLM_ENABLED"
-# Stale marker from the dotfiles-era installer; current apply.sh never wrote
-# it, so drop it wherever it still heads a block.
-stale_comments = {"# Managed by dotfiles/agents/apply.sh."}
-
-
-try:
-    original_lines = path.read_text(encoding="utf-8").splitlines()
-except OSError as exc:
-    raise SystemExit(f"ERROR: Cannot read ai-memory environment file at {path}: {exc}")
-
-# Last assignment wins, matching the shared parser, so read the operator's value
-# before removing every copy of the name.
-scheduler_value = None
-pause_value = None
-pause_new_present = False
-for line in original_lines:
-    parsed = parse_env_assignment(line)
-    if parsed is None:
-        continue
-    name, value = parsed
-    if name in operator_owned_names:
-        scheduler_value = value
-    if name == retired_pause_new:
-        pause_new_present = True
-    if name == retired_pause_old:
-        pause_value = value
-if scheduler_value is None:
-    scheduler_value = scheduler_default
-
-kept_lines = []
-for line in original_lines:
-    if line == managed_comment:
-        continue
-    if line in stale_comments:
-        continue
-    parsed = parse_env_assignment(line)
-    if parsed is not None and parsed[0] in managed_names:
-        continue
-    if parsed is not None and parsed[0] in operator_owned_names:
-        continue
-    if parsed is not None and parsed[0] == retired_pause_old:
-        continue
-    kept_lines.append(line)
-
-while kept_lines and not kept_lines[-1].strip():
-    kept_lines.pop()
-if kept_lines:
-    kept_lines.append("")
-
-# The operator's own value goes above the managed block, so the ownership split
-# stays visible: everything above the marker is theirs, everything below is ours.
-kept_lines.append(f"AI_MEMORY_AUTO_IMPROVE__SCHEDULER__ENABLED={scheduler_value}")
-if pause_value is not None and not pause_new_present:
-    kept_lines.append(f"{retired_pause_new}={pause_value}")
-kept_lines.append("")
-kept_lines.extend(
-    [
-        managed_comment,
-        f"AI_MEMORY_SERVER_URL={shlex.quote(server_url)}",
-        "AGENTS_AI_MEMORY_REMOTE_MODE=false",
-        f"DOTFILES_AI_MEMORY_LLM_PROFILE={profile}",
-        "AI_MEMORY_AUTO_IMPROVE__REQUIRE_APPROVAL=true",
-        f"AI_MEMORY_LLM_PROVIDER={provider}",
-        f"AI_MEMORY_LLM_MODEL={model}",
-    ]
-)
-
-content = "\n".join(kept_lines) + "\n"
-atomic_write_text(path, content, 0o600, ".env.")
-
-print(provider_state)
-PY
-)" || die "Could not configure the ai-memory provider policy"
-
-  if [[ "$provider_state" == "enabled" ]]; then
-    log "ai-memory LLM enabled by $profile"
-  elif ! ai_memory_llm_enabled; then
-    log "ai-memory LLM paused by AGENTS_AI_MEMORY_LLM_ENABLED=false"
-  elif [[ "$credential" == "opencode-api-key" ]]; then
-    log "ai-memory remains in zero-LLM mode. Add OPENCODE_API_KEY to $AI_MEMORY_ENV_FILE, then rerun apply."
-  fi
 }
 
 initialize_ai_memory() {
@@ -663,7 +350,7 @@ initialize_ai_memory() {
   chmod 700 "$AI_MEMORY_DATA_DIR" "$(dirname "$AI_MEMORY_CONFIG_FILE")"
   chmod 600 "$AI_MEMORY_CONFIG_FILE"
 
-  configure_ai_memory_env_file
+  check_ai_memory_env_file
 }
 
 install_ai_memory_systemd_user_service() {
@@ -994,18 +681,6 @@ PY
 # profile ($CLAUDE_WORKER_HOME) never receives these hooks, so worker runs do
 # not write observations into the coordinator's workstream.
 wire_ai_memory_to_claude_code() {
-  local auth_token_arguments=() auth_token=""
-
-  if agent_stack_uses_remote_ai_memory; then
-    auth_token="${AI_MEMORY_AUTH_TOKEN:-}"
-    if [[ -z "$auth_token" && -s "$AI_MEMORY_AUTH_TOKEN_FILE" ]]; then
-      auth_token="$(<"$AI_MEMORY_AUTH_TOKEN_FILE")"
-    fi
-  fi
-  if [[ -n "$auth_token" ]]; then
-    auth_token_arguments=(--auth-token "$auth_token")
-  fi
-
   log "Installing the ai-memory Claude Code lifecycle hooks"
   env -u CLAUDE_CONFIG_DIR ai-memory \
     --data-dir "$AI_MEMORY_DATA_DIR" \
@@ -1014,7 +689,6 @@ wire_ai_memory_to_claude_code() {
     --agent claude-code \
     --server-url "$AI_MEMORY_SERVER_URL" \
     --project-strategy repo-root \
-    "${auth_token_arguments[@]}" \
     --apply || die "ai-memory Claude Code hook installation failed"
 
   log "Registering the ai-memory MCP server for Claude Code"
@@ -1024,7 +698,6 @@ wire_ai_memory_to_claude_code() {
     install-mcp \
     --client claude-code \
     --server-url "$AI_MEMORY_SERVER_URL" \
-    "${auth_token_arguments[@]}" \
     --apply || die "ai-memory Claude Code MCP registration failed"
 
   log "Generating current ai-memory routing instructions"
@@ -1040,18 +713,7 @@ wire_ai_memory_to_claude_code() {
 }
 
 setup_ai_memory() {
-  if ! agent_stack_uses_remote_ai_memory; then
-    initialize_ai_memory
-    start_ai_memory_service
-  else
-    log "Using remote ai-memory at $AI_MEMORY_SERVER_URL"
-    # A client still needs its environment file converged, because it carries
-    # the server URL and the scheduler flag. This also strips the policy the
-    # server owns, which would otherwise linger as a value that governs nothing.
-    configure_ai_memory_env_file
-    if [[ "$(agent_stack_platform)" == Linux ]]; then
-      systemctl --user disable --now ai-memory.service >/dev/null 2>&1 || true
-    fi
-  fi
+  initialize_ai_memory
+  start_ai_memory_service
   wire_ai_memory_to_claude_code
 }

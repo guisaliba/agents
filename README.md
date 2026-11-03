@@ -72,8 +72,10 @@ claude-worker doctor --live
 ```
 
 For the OpenCode Go provider, put the key in `~/.config/ai-memory/env` as
-`OPENCODE_API_KEY=...` before you use `worker/` roles. ai-memory uses the same
-key for its LLM jobs.
+`OPENCODE_API_KEY=...` before you use `worker/` roles. You own that file;
+`apply.sh` never rewrites it. ai-memory uses the same key for its LLM jobs when
+the file also sets `AI_MEMORY_LLM_PROVIDER=opencode` and `AI_MEMORY_LLM_MODEL`
+(see [ai-memory/README.md](ai-memory/README.md#llm)).
 
 The full validation checklist and daily usage are in
 [`claude/README.md`](claude/README.md).
