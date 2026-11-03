@@ -55,6 +55,8 @@ static_checks() {
   expect "provider.env defines every worker provider setting" bash -c \
     'for k in WORKER_PROVIDER WORKER_ANTHROPIC_BASE_URL WORKER_MODELS_URL WORKER_BACKGROUND_MODEL WORKER_SMOKE_ALIAS WORKER_API_KEY_ENV_FILE WORKER_API_KEY_VARIABLE; do python3 -B "$0" env-value "$1" "$k" >/dev/null || exit 1; done' \
     "$HELPER" "$REPO_DIR/claude/worker/provider.env"
+  expect "the managed CLAUDE.md files end with the RTK import" bash -c \
+    'for f in "$0/CLAUDE.md" "$0/claude/worker/CLAUDE.md"; do [[ "$(tail -n 1 "$f")" == "@RTK.md" ]] || exit 1; done' "$REPO_DIR"
   expect "the smoke alias exists in the roster" bash -c \
     'grep -q "^$(python3 -B "$0" env-value "$1" WORKER_SMOKE_ALIAS)	" "$2"' \
     "$HELPER" "$REPO_DIR/claude/worker/provider.env" "$REPO_DIR/claude/worker/models.tsv"
@@ -396,8 +398,8 @@ machine_checks() {
 
   expect "claude is installed" bash -c 'type -P claude >/dev/null'
   expect "pstack plugin is installed" bash -c 'claude plugin list 2>/dev/null | grep -q "pstack@cursor-plugins"'
-  expect "~/.claude/CLAUDE.md starts with the repository CLAUDE.md" bash -c \
-    'head -c "$(wc -c <"$0")" "$1" | cmp -s - "$0"' "$REPO_DIR/CLAUDE.md" "$home/.claude/CLAUDE.md"
+  expect "~/.claude/CLAUDE.md equals the repository CLAUDE.md" cmp -s "$REPO_DIR/CLAUDE.md" "$home/.claude/CLAUDE.md"
+  expect "~/.claude-worker/CLAUDE.md equals the worker contract" cmp -s "$REPO_DIR/claude/worker/CLAUDE.md" "$home/.claude-worker/CLAUDE.md"
   expect "managed rules are current" bash -c \
     'for r in pstack-models.md pstack-workers.md; do cmp -s "$0/claude/rules/$r" "$1/.claude/rules/$r" || exit 1; done' \
     "$REPO_DIR" "$home"

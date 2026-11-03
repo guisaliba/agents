@@ -51,3 +51,5 @@ Group changes into commits by similarity and relevance. For example, if class X 
 Do not mix unrelated edits in one commit.
 
 This workstation loads generated ai-memory routing from `~/.claude/rules/ai-memory.md`. Do not install or refresh an ai-memory routing block in a project `CLAUDE.md` or `AGENTS.md` unless the user or that project explicitly requires it.
+
+@RTK.md

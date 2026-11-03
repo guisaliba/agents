@@ -96,7 +96,7 @@ The full validation checklist and daily usage are in
 | Path | Owner | Content |
 | --- | --- | --- |
 | `~/.local/bin/claude` | Claude Code installer | Native Claude Code. |
-| `~/.claude/CLAUDE.md` | apply.sh | Copy of the repository `CLAUDE.md`, plus the `@RTK.md` import that RTK adds. |
+| `~/.claude/CLAUDE.md` | apply.sh | Copy of the repository `CLAUDE.md`, which ends with the `@RTK.md` import that RTK expects. |
 | `~/.claude/rules/{pstack-models,pstack-workers}.md` | apply.sh | Managed copies of `claude/rules/`. |
 | `~/.claude/rules/ai-memory.md` | ai-memory | Generated routing instructions. |
 | `~/.claude/settings.json` | shared | apply.sh sets `model` and adds `claude-worker` allow rules; ai-memory and RTK add hooks; the plugin manager adds `enabledPlugins`. |
