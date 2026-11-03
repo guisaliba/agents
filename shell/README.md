@@ -10,7 +10,8 @@ source ~/.bash_aliases
 ```
 
 `apply.sh` adds one managed block to `~/.bash_profile`. That block sources
-`~/.bash_aliases` and the ai-memory environment for login shells.
+`~/.bash_aliases` and `~/.profile` for login shells. It does not load
+`~/.config/ai-memory/env`, so no shell exports the provider API key.
 
 ## Commands
 

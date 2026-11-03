@@ -144,12 +144,12 @@ merge_claude_shell_block() {
     die "Could not merge the Claude Code wrapper block into $BASH_ALIASES_FILE"
 }
 
-# Every platform needs this block, not only macOS. The ai-memory CLI reads
-# AI_MEMORY_SERVER_URL and AI_MEMORY_AUTH_TOKEN from the environment, never from
-# the environment file, so every login shell must load its per-host ai-memory
-# settings.
+# Login Bash loads the interactive wrapper and the operator overrides. It does
+# not load ~/.config/ai-memory/env: the service reads that file through its
+# unit, and claude-worker-key reads the key from it, so no shell needs to
+# export the API key.
 configure_bash_login_env() {
-  log "Making login Bash load the managed shell and ai-memory environment"
+  log "Making login Bash load the managed shell"
   python3 - \
     "$BASH_PROFILE" \
     "$BASH_PROFILE_BLOCK_START" \
@@ -206,21 +206,6 @@ kept.extend(
         "fi",
         'if [[ -f "$HOME/.profile" ]]; then',
         '  source "$HOME/.profile"',
-        "fi",
-        'if [[ -f "$HOME/.config/ai-memory/env" ]]; then',
-        '  set -a',
-        '  source "$HOME/.config/ai-memory/env"',
-        '  set +a',
-        "fi",
-        '# A remote ai-memory service needs the client bearer. A local service',
-        '# does not.',
-        'if [[ "${AGENTS_AI_MEMORY_REMOTE_MODE:-false}" == "true" ]]; then',
-        '  if [[ -z "${AI_MEMORY_AUTH_TOKEN:-}" && -f "$HOME/.config/ai-memory/client-token" ]]; then',
-        '    AI_MEMORY_AUTH_TOKEN="$(tr -d \' \\r\\n\' < "$HOME/.config/ai-memory/client-token")"',
-        '    export AI_MEMORY_AUTH_TOKEN',
-        '  fi',
-        'else',
-        '  unset AI_MEMORY_AUTH_TOKEN',
         "fi",
         end_marker,
     ]

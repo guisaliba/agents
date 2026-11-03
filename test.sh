@@ -296,9 +296,10 @@ assert d["env"]["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"] == "1"' "$home/.claude
     "$home/.local/bin" "$REPO_DIR/bin"
   expect "bash aliases gain the Claude block and lose the OpenCode block" bash -c \
     'grep -qF "Claude Code ai-memory wrapper >>>" "$0" && ! grep -qF "opencode() { :; }" "$0"' "$home/.bash_aliases"
-  expect "login profile loads aliases and the ai-memory environment" bash -c \
-    'grep -qF "source \"\$HOME/.bash_aliases\"" "$0" && grep -qF ".config/ai-memory/env" "$0" && ! grep -q opencode "$0"' \
+  expect "login profile loads aliases and ~/.profile" bash -c \
+    'grep -qF "source \"\$HOME/.bash_aliases\"" "$0" && grep -qF "source \"\$HOME/.profile\"" "$0" && ! grep -q opencode "$0"' \
     "$home/.bash_profile"
+  expect "login profile does not export the ai-memory environment file" file_lacks "$home/.bash_profile" '.config/ai-memory'
 
   first="$(snapshot)"
   run_offline_apply
