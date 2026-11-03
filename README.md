@@ -105,6 +105,11 @@ The full validation checklist and daily usage are in
 | `~/.local/bin/claude-worker`, `~/.local/bin/claude-worker-key` | apply.sh | Symlinks to `bin/`. |
 | `~/.bash_aliases`, `~/.bash_profile` | apply.sh | Marked blocks only. The retired OpenCode block is removed. |
 
+When a managed copy (`CLAUDE.md`, a pstack rule, or the worker `CLAUDE.md`)
+differs from the repository file, apply.sh first copies it to
+`<file>.bak-<UTC timestamp>` next to it, then replaces it. A backup does not end in
+`.md`, so Claude Code does not load it as a rule.
+
 apply.sh does not delete the old OpenCode installation (`~/.opencode`,
 `~/.config/opencode`, the OpenCode server service), the old shared skills in
 `~/.agents/skills`, or an old `~/.claude-go` profile from an earlier build of

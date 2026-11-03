@@ -273,7 +273,11 @@ apply_fixtures() {
     done)
   }
 
+  mkdir -p "$home/.claude"
+  printf '%s\n' '# my own instructions' >"$home/.claude/CLAUDE.md"
   expect "offline apply functions succeed" run_offline_apply
+  expect "a differing managed file is backed up before it is replaced" bash -c \
+    'set -- "$0"/.claude/CLAUDE.md.bak-*; [[ $# -eq 1 && -f "$1" ]] && grep -qx "# my own instructions" "$1"' "$home"
   expect "~/.claude/CLAUDE.md is a copy of the repository CLAUDE.md" cmp -s "$REPO_DIR/CLAUDE.md" "$home/.claude/CLAUDE.md"
   expect "managed rules are installed" bash -c \
     'for r in pstack-models.md pstack-workers.md; do cmp -s "$0/claude/rules/$r" "$1/.claude/rules/$r" || exit 1; done' \

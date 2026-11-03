@@ -30,6 +30,12 @@ install_managed_file() {
   if [[ -f "$target" ]] && cmp -s "$source" "$target"; then
     return 0
   fi
+  if [[ -f "$target" ]]; then
+    local backup
+    backup="$target.bak-$(date -u +%Y%m%dT%H%M%SZ)"
+    cp -p "$target" "$backup" || die "Could not back up $target before replacing it"
+    log "Backed up the previous $label to $backup"
+  fi
   cp "$source" "$target"
   chmod 644 "$target"
 }
