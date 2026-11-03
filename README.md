@@ -12,7 +12,8 @@ not depend on the dotfiles checkout.
 
 The previous `main` installed an OpenCode V2 stack. This setup replaces it. It
 keeps two components from that stack, ai-memory and RTK, and drops the rest
-(OpenCode, Plannotator, Learn, the MCP servers, and most skills).
+(OpenCode, Plannotator, Learn, the MCP servers, and the skill catalog). pstack
+supplies the workflow skills.
 
 Claude Code subagents can only run Claude models on the plan of the main
 session. pstack gets its counter-arguments from model diversity (rival designs
@@ -43,7 +44,7 @@ and returns a report file.
 
 ## Quick Start
 
-Prerequisites: Bash, curl, Git, npm, npx, and Python 3.11+. Linux also needs a
+Prerequisites: Bash, curl, Git, and Python 3.11+. Linux also needs a
 systemd user manager; Arch systems need `yay` when `ai-memory` is absent. macOS
 needs Homebrew.
 
@@ -80,7 +81,7 @@ The full validation checklist and daily usage are in
 | `~/.claude/rules/{pstack-models,pstack-go}.md` | apply.sh | Managed copies of `claude/rules/`. |
 | `~/.claude/rules/ai-memory.md` | ai-memory | Generated routing instructions. |
 | `~/.claude/settings.json` | shared | apply.sh sets `model` and adds `go-worker` allow rules; ai-memory and RTK add hooks; the plugin manager adds `enabledPlugins`. |
-| `~/.claude/skills/` | skills CLI, ai-memory | `grill-me`, `grill-with-docs`, `grilling`, `tdd`, and five ai-memory skills. |
+| `~/.claude/skills/` | ai-memory | Five ai-memory skills. |
 | `~/.claude-go/` | apply.sh | Worker profile: `CLAUDE.md`, `settings.json` (OpenCode Go base URL, `apiKeyHelper`), RTK hook. |
 | `~/.local/bin/go-worker` | apply.sh | Symlink to `bin/go-worker`. |
 | `~/.bash_aliases`, `~/.bash_profile` | apply.sh | Marked blocks only. The retired OpenCode block is removed. |

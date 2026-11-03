@@ -51,7 +51,6 @@ static_checks() {
   else
     printf 'skip  shellcheck not installed\n'
   fi
-  expect "skill manifest parses" python3 -B "$HELPER" manifest "$REPO_DIR/skills.tsv" >/dev/null
   expect "go-worker and go-key are executable" test -x "$REPO_DIR/bin/go-worker" -a -x "$REPO_DIR/bin/go-key"
 
   expect "roster rows have four fields and unique aliases" python3 -B - "$REPO_DIR/claude/go-models.tsv" <<'PY'
@@ -93,7 +92,7 @@ raise SystemExit(0 if roles <= found else 1)
 PY
 
   expect "no retired OpenCode payload remains" bash -c \
-    '! test -e "$0/opencode" -o -e "$0/plugins" -o -e "$0/mcps" -o -e "$0/shell/opencode.bash"' "$REPO_DIR"
+    '! test -e "$0/opencode" -o -e "$0/plugins" -o -e "$0/mcps" -o -e "$0/shell/opencode.bash" -o -e "$0/skills.tsv"' "$REPO_DIR"
 }
 
 # --- Helper fixtures -------------------------------------------------------
@@ -345,8 +344,6 @@ machine_checks() {
   expect "RTK hook is in the worker profile" file_contains "$home/.claude-go/settings.json" 'rtk'
   expect "ai-memory hooks stay out of the worker profile" file_lacks "$home/.claude-go/settings.json" 'ai-memory'
   expect "go-worker is on PATH" bash -c 'command -v go-worker >/dev/null'
-  expect "required skills are installed" bash -c \
-    'for s in grill-me grill-with-docs grilling tdd; do test -f "$0/.claude/skills/$s/SKILL.md" || exit 1; done' "$home"
   expect "ai-memory service answers" bash -c 'ai-memory status --json >/dev/null 2>&1'
   expect "bash aliases carry the Claude block" file_contains "$home/.bash_aliases" 'Claude Code ai-memory wrapper >>>'
   printf '\nRun `go-worker doctor` (and `go-worker doctor --live`) to check the OpenCode Go side.\n'

@@ -5,19 +5,17 @@ set -Eeuo pipefail
 #
 # Deterministic Claude Code + pstack setup script.
 # Installs Claude Code, the pstack plugin, the OpenCode Go worker profile used
-# by pstack go/ roles, RTK, ai-memory, and the skills named by CLAUDE.md.
+# by pstack go/ roles, RTK, and ai-memory.
 # Re-running converges the same state.
 #
 # Usage:
 #   ./apply.sh
 #
-# Prerequisites: bash, curl, git, npm, npx, python3 3.11+, and systemctl on
-# Linux. AUR package installation also needs yay when ai-memory is absent.
+# Prerequisites: bash, curl, git, python3 3.11+, and systemctl on Linux. AUR package installation also needs yay when ai-memory is absent.
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$SCRIPT_DIR"
 AGENT_STACK_HELPER="$REPO_DIR/lib/agent_stack.py"
-SKILLS_MANIFEST="$REPO_DIR/skills.tsv"
 
 # The main profile is always ~/.claude. A CLAUDE_CONFIG_DIR exported by the
 # caller would redirect Claude Code, RTK, and ai-memory installers elsewhere.
@@ -99,7 +97,6 @@ main() {
   configure_go_worker_profile
   wire_rtk_to_claude_code "$CLAUDE_GO_HOME"
 
-  install_required_skills
   merge_claude_shell_block
   configure_bash_login_env
 

@@ -10,7 +10,6 @@ from pathlib import Path
 
 
 ENV_ASSIGNMENT = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$")
-MANIFEST_PROVIDERS = {"local", "upstream", "ai-memory"}
 
 
 def parse_env_assignment(line):
@@ -203,63 +202,6 @@ def merge_json_keys(target, patch_text, label):
     return True
 
 
-def read_skill_manifest(path):
-    path = Path(path)
-    rows = []
-    names = set()
-
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError as exc:
-        raise ValueError(f"Cannot read skill manifest {path}: {exc}") from exc
-
-    for line_number, line in enumerate(lines, start=1):
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-
-        fields = line.split("\t")
-        if len(fields) != 4:
-            raise ValueError(
-                f"Invalid skill manifest row at {path}:{line_number}; "
-                "expected four tab-separated fields"
-            )
-
-        provider, name, source, require_skill_file = fields
-        if provider not in MANIFEST_PROVIDERS:
-            raise ValueError(
-                f"Invalid skill manifest provider at {path}:{line_number}: {provider}"
-            )
-        if not name or name != name.strip() or any(char.isspace() for char in name):
-            raise ValueError(
-                f"Invalid skill manifest name at {path}:{line_number}: {name!r}"
-            )
-        if not source or source != source.strip():
-            raise ValueError(
-                f"Invalid skill manifest source at {path}:{line_number}: {source!r}"
-            )
-        if require_skill_file not in {"yes", "no"}:
-            raise ValueError(
-                f"Invalid skill manifest SKILL.md flag at {path}:{line_number}: "
-                f"{require_skill_file}"
-            )
-        if name in names:
-            raise ValueError(f"Duplicate skill manifest name at {path}:{line_number}: {name}")
-        if provider == "local":
-            source_path = Path(source)
-            if source_path.is_absolute() or ".." in source_path.parts:
-                raise ValueError(
-                    f"Local skill source must stay inside the repository at "
-                    f"{path}:{line_number}: {source}"
-                )
-
-        names.add(name)
-        rows.append((provider, name, source, require_skill_file))
-
-    if not rows:
-        raise ValueError(f"Skill manifest is empty: {path}")
-    return rows
-
-
 def _main(argv):
     if len(argv) < 2:
         print("usage: agent_stack.py <operation> ...", file=sys.stderr)
@@ -303,10 +245,6 @@ def _main(argv):
             merge_json_keys(argv[2], argv[3], argv[4])
             return 0
 
-        if operation == "manifest" and len(argv) == 3:
-            for row in read_skill_manifest(argv[2]):
-                print("\t".join(row))
-            return 0
     except (OSError, ValueError) as exc:  # json.JSONDecodeError is a ValueError
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1

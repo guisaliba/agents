@@ -64,7 +64,7 @@ prepare_platform_prerequisites() {
 check_prerequisites() {
   log "Checking prerequisites"
   local cmd platform missing=()
-  local commands=(bash curl git npm npx python3)
+  local commands=(bash curl git python3)
   platform="$(agent_stack_platform)"
   case "$platform" in
     Linux) commands+=(systemctl) ;;

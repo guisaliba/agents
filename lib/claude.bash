@@ -2,7 +2,7 @@
 # lib/claude.bash
 #
 # Claude Code installation, the main (Claude Pro) profile, the pstack plugin,
-# the OpenCode Go worker profile, skills, and the Bash entry points.
+# the OpenCode Go worker profile, and the Bash entry points.
 # Sourced by apply.sh. Do not execute directly.
 
 install_claude_code() {
@@ -114,26 +114,6 @@ configure_go_worker_profile() {
   if ! "$REPO_DIR/bin/go-key" >/dev/null 2>&1; then
     log "OpenCode Go key not found. Add OPENCODE_API_KEY to $AI_MEMORY_ENV_FILE before you use go/ roles."
   fi
-}
-
-install_skill() {
-  local source="$1" name="$2"
-  log "Installing/updating skill: $name"
-  npx -y skills add "$source" -g -a claude-code -s "$name" -y --copy </dev/null || \
-    die "Failed to install skill: $name"
-}
-
-install_required_skills() {
-  local manifest_rows provider name source_ref _require_skill_file
-
-  log "Installing/updating required skills"
-  manifest_rows="$(python3 "$AGENT_STACK_HELPER" manifest "$SKILLS_MANIFEST")" || \
-    die "Could not read the required skill manifest"
-  while IFS=$'\t' read -r provider name source_ref _require_skill_file; do
-    case "$provider" in
-      upstream) install_skill "$source_ref" "$name" ;;
-    esac
-  done <<<"$manifest_rows"
 }
 
 merge_claude_shell_block() {
