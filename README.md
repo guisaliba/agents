@@ -36,7 +36,9 @@ without routing the Pro login through a third-party tool:
                         claude -p   CLAUDE_CONFIG_DIR=~/.claude-worker
                         ANTHROPIC_BASE_URL = provider (claude/worker/provider.env)
                         apiKeyHelper = claude-worker-key
-                        own Git worktree, report.md back to Opus
+                        --dir: a worktree that Opus creates (write seat)
+                        or the checkout it reads (read-only seat);
+                        report.md back to Opus
 ```
 
 A **coordinator** is the main session that runs the pstack playbook. A

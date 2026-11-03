@@ -109,8 +109,12 @@ this branch to `main`.
    `worker/` seat (`--readonly`), not skipped.
 6. **Interrogate.** Run `/pstack:interrogate` on that branch. Expected: verified
    findings with commands, from more than one model family.
-7. **ai-memory.** Start `claude` in a repository, work for a few turns, quit,
-   and start again. Expected: a handoff appears.
+7. **ai-memory.** Start `claude` in a repository, work for a few turns, and
+   quit. Plain `claude` resumes that same managed session, and a managed session
+   ends without a handoff. Run `claude --fresh` to start a new session in the
+   same workstream. Expected: `AI_MEMORY_RUN_ID`, `AI_MEMORY_WORKSTREAM_ID`, and
+   `AI_MEMORY_PREVIOUS_SESSION_HISTORY` are set, and the new session can
+   summarize the previous one from that history file.
    `~/.claude-worker/settings.json` has no ai-memory hooks.
 8. **RTK.** In both profiles, a `git status` tool call is rewritten to
    `rtk git status` (see `rtk gain`). Neither `settings.json` has an RTK proxy
