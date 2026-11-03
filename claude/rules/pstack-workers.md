@@ -53,11 +53,12 @@ Do this in place of one Agent tool call.
      --brief <brief.md> --report <same-directory>/report.md [--readonly]
    ```
 
-   Add `--readonly` for a read-only seat.
+   Add `--readonly` for a read-only seat. Its brief says "do not edit files".
 4. **Collect.** Wait for every background command to finish. `claude-worker`
    exits 0 on success, 1 when the worker run failed, 2 on a usage error, and 3
    when the worker profile or the provider API key is not configured. Read `report.md` and
-   `report.md.meta.json` for each seat.
+   `report.md.meta.json` for each seat. A read-only seat keeps Bash, so run
+   `git status --short` in its checkout and confirm that it changed nothing.
 5. **Own the result.** Treat each report like a subagent result. Review the
    worktree diff yourself and write your own summary. Do not pass a report
    through.

@@ -228,8 +228,8 @@ assert m["usage"]["output_tokens"] == 40 and m["mode"] == "write"' "$work/report
   expect "an empty piped brief exits 2" test "$status" -eq 2
 
   run_worker run --model deepseek-v4.1-flash --dir "$work" --brief "$work/brief.md" --report "$work/judge.md" --readonly >/dev/null 2>&1 || true
-  expect "readonly run uses dontAsk with read-only tools" bash -c \
-    'grep -qx dontAsk "$0" && grep -q "^Read,Glob,Grep" "$0" && ! grep -qx acceptEdits "$0"' "$logs/argv"
+  expect "readonly run uses dontAsk and keeps Bash without edit tools" bash -c \
+    'grep -qx dontAsk "$0" && grep -qx "Read,Glob,Grep,Bash" "$0" && ! grep -qx acceptEdits "$0" && ! grep -qE "(^|,)(Edit|Write)(,|$)" "$0"' "$logs/argv"
 
   status=0
   echo error >"$dir/mode"; run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/err.md" >/dev/null 2>&1 || status=$?
