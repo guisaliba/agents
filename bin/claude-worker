@@ -286,10 +286,6 @@ command_run() {
     arguments+=(--permission-mode acceptEdits --allowedTools "$WRITE_TOOLS")
   fi
 
-  local -a timeout_prefix=()
-  if command -v timeout >/dev/null 2>&1; then
-    timeout_prefix=(timeout --kill-after=30 "$timeout_seconds")
-  fi
 
   [[ "$readonly" == true ]] || acquire_write_lock
   worker_environment
@@ -297,8 +293,8 @@ command_run() {
   started="$(date +%s)"
   (
     cd -- "$dir"
-    env -i "${WORKER_ENV[@]}" "${timeout_prefix[@]}" "$claude" "${arguments[@]}" \
-      <<<"$brief_text" >"$raw" 2>"$errors"
+    env -i "${WORKER_ENV[@]}" python3 "$HELPER" run-with-deadline "$timeout_seconds" \
+      "$claude" "${arguments[@]}" <<<"$brief_text" >"$raw" 2>"$errors"
   ) || status=$?
   ended="$(date +%s)"
 

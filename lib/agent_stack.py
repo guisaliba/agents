@@ -3,7 +3,9 @@
 import json
 import os
 import re
+import signal
 import stat
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -202,6 +204,45 @@ def merge_json_keys(target, patch_text, label):
     return True
 
 
+def run_with_deadline(seconds, command, kill_after=30):
+    """Run command with inherited stdio; stop its process group at the deadline.
+
+    Portable replacement for GNU timeout, which macOS does not ship. The
+    command gets its own session, so SIGTERM and then SIGKILL reach every
+    process it started. Returns the command status, or 124 at the deadline,
+    as GNU timeout does.
+    """
+    child = subprocess.Popen(command, start_new_session=True)
+
+    # The command left our process group, so a signal to the caller (the
+    # coordinator stops a background seat) must be passed on to it.
+    def forward(signum, _frame):
+        try:
+            os.killpg(child.pid, signum)
+        except ProcessLookupError:
+            pass
+
+    for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(signum, forward)
+    try:
+        return child.wait(timeout=seconds)
+    except subprocess.TimeoutExpired:
+        pass
+    for sig, grace in ((signal.SIGTERM, kill_after), (signal.SIGKILL, None)):
+        try:
+            os.killpg(child.pid, sig)
+        except ProcessLookupError:
+            break
+        try:
+            child.wait(timeout=grace)
+            break
+        except subprocess.TimeoutExpired:
+            continue
+    child.wait()
+    print(f"run-with-deadline: stopped after {seconds} seconds", file=sys.stderr)
+    return 124
+
+
 def _main(argv):
     if len(argv) < 2:
         print("usage: agent_stack.py <operation> ...", file=sys.stderr)
@@ -240,6 +281,9 @@ def _main(argv):
         if operation == "remove-block" and len(argv) == 5:
             remove_block(argv[2], argv[3], argv[4])
             return 0
+
+        if operation == "run-with-deadline" and len(argv) >= 4 and argv[2].isdigit():
+            return run_with_deadline(int(argv[2]), argv[3:])
 
         if operation == "merge-json" and len(argv) == 5:
             merge_json_keys(argv[2], argv[3], argv[4])

@@ -156,6 +156,18 @@ assert d["permissions"]["allow"] == ["Bash(npm test)", "Bash(claude-worker run *
   printf 'not json' >"$dir/bad.json"
   expect "merge-json refuses invalid JSON" bash -c \
     '! python3 -B "$0" merge-json "$1" "{}" settings 2>/dev/null' "$HELPER" "$dir/bad.json"
+
+  expect "run-with-deadline passes stdin and the exit status through" bash -c \
+    '[[ "$(printf "in\n" | python3 -B "$0" run-with-deadline 10 bash -c "cat; exit 3"; echo "/$?")" == "in"$'"'"'\n'"'"'"/3" ]]' "$HELPER"
+  expect "run-with-deadline exits 124 at the deadline" bash -c \
+    'python3 -B "$0" run-with-deadline 1 sleep 30 2>/dev/null; [[ $? == 124 ]]' "$HELPER"
+  python3 -B "$HELPER" run-with-deadline 60 bash -c \
+    'trap "echo stopped >\"$0\"; exit 0" TERM; sleep 300 & wait' "$dir/forwarded" &
+  local deadline_pid=$!
+  sleep 1
+  kill -TERM "$deadline_pid"
+  wait "$deadline_pid" 2>/dev/null || true
+  expect "run-with-deadline forwards SIGTERM to the command" grep -qx stopped "$dir/forwarded"
 }
 
 # --- claude-worker-key and claude-worker fixtures ---------------------------
@@ -175,10 +187,28 @@ case "$(cat "$mode_file" 2>/dev/null || echo ok)" in
   ok) printf '%s\n' '{"type":"result","is_error":false,"result":"**Result**: done.","num_turns":3,"session_id":"s1","usage":{"input_tokens":120,"output_tokens":40,"cache_read_input_tokens":800,"cache_creation_input_tokens":10}}' ;;
   error) printf '%s\n' '{"type":"result","is_error":true,"result":"model not found","num_turns":1,"usage":{}}' ;;
   crash) printf 'boom\n' >&2; exit 7 ;;
+  sleep) sleep 20; printf '%s\n' '{"type":"result","is_error":false,"result":"late","num_turns":1,"usage":{}}' ;;
 esac
 FAKE
   } >"$path"
   chmod +x "$path"
+}
+
+# Print a PATH whose directories hold every command on the current PATH
+# except timeout, as symlinks in the directory $1.
+timeout_free_path() {
+  local target="$1" entry command_path
+  mkdir -p "$target"
+  local IFS=:
+  for entry in $PATH; do
+    [[ -d "$entry" ]] || continue
+    for command_path in "$entry"/*; do
+      [[ -x "$command_path" && ! -d "$command_path" ]] || continue
+      [[ "${command_path##*/}" == timeout || -e "$target/${command_path##*/}" ]] && continue
+      ln -s "$command_path" "$target/${command_path##*/}"
+    done
+  done
+  printf '%s\n' "$target"
 }
 
 worker_fixtures() {
@@ -329,6 +359,16 @@ assert os.path.realpath(sys.argv[2]) in deny and os.path.realpath(sys.argv[3] + 
   KEY_FILE_OVERRIDE="$home/.config/ai-memory/env" run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/keyfile.md" >/dev/null 2>&1 || status=$?
   expect "the key-file override reaches the worker, so apiKeyHelper reads the same file" bash -c \
     '[[ "$0" == 0 ]] && grep -qx "CLAUDE_WORKER_KEY_ENV_FILE=$1" "$2"' "$status" "$home/.config/ai-memory/env" "$logs/env"
+
+  local started elapsed
+  status=0
+  echo sleep >"$dir/mode"
+  started="$(date +%s)"
+  PATH="$(timeout_free_path "$dir/notimeout")" run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/slow.md" --timeout 1 >/dev/null 2>&1 || status=$?
+  elapsed=$(( $(date +%s) - started ))
+  echo ok >"$dir/mode"
+  expect "--timeout stops a stalled worker without a timeout executable on PATH" bash -c \
+    '[[ "$0" == 1 && "$1" -lt 10 ]]' "$status" "$elapsed"
 
   local ledger_home="$dir/ledger-home" n
   mkdir -p "$ledger_home"
