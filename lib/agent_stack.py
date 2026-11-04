@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 
+import json
 import os
 import re
+import signal
+import stat
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 
 ENV_ASSIGNMENT = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$")
-MANIFEST_PROVIDERS = {"local", "upstream", "ai-memory", "plannotator", "cloudflare"}
 
 
 def parse_env_assignment(line):
@@ -78,61 +81,166 @@ def ensure_private_file(path, label):
     path.chmod(0o600)
 
 
-def read_skill_manifest(path):
+def _locate_block(lines, start_marker, end_marker, path, allow_absent):
+    starts = [index for index, line in enumerate(lines) if line == start_marker]
+    ends = [index for index, line in enumerate(lines) if line == end_marker]
+    if not starts and not ends and allow_absent:
+        return None
+    if len(starts) != 1 or len(ends) != 1 or ends[0] <= starts[0]:
+        raise ValueError(
+            f"Expected one balanced block {start_marker!r} in {path}; file was not changed"
+        )
+    return starts[0], ends[0]
+
+
+def _read_managed_text_target(path, label):
     path = Path(path)
-    rows = []
-    names = set()
+    if path.is_symlink():
+        raise ValueError(f"{label} must not be a symlink: {path}")
+    if path.exists() and not path.is_file():
+        raise ValueError(f"{label} must be a regular file: {path}")
+    if not path.exists():
+        return "", 0o644
+    return path.read_text(encoding="utf-8"), stat.S_IMODE(path.stat().st_mode)
 
+
+def merge_block(source, target, start_marker, end_marker):
+    """Replace or append the marked block from source inside target.
+
+    Unrelated target content is preserved. Return True when target changed.
+    """
+    source_lines = Path(source).read_text(encoding="utf-8").splitlines()
+    bounds = _locate_block(source_lines, start_marker, end_marker, source, False)
+    block = source_lines[bounds[0] : bounds[1] + 1]
+
+    text, mode = _read_managed_text_target(target, "Block target")
+    lines = text.splitlines()
+    target_bounds = _locate_block(lines, start_marker, end_marker, target, True)
+    if target_bounds is not None:
+        lines = lines[: target_bounds[0]] + lines[target_bounds[1] + 1 :]
+    while lines and not lines[-1].strip():
+        lines.pop()
+    if lines:
+        lines.append("")
+    lines.extend(block)
+    content = "\n".join(lines) + "\n"
+    if content == text:
+        return False
+    Path(target).parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    atomic_write_text(target, content, mode, ".block.")
+    return True
+
+
+def remove_block(target, start_marker, end_marker):
+    """Remove one marked block from target. Return True when target changed."""
+    target = Path(target)
+    if not target.exists() and not target.is_symlink():
+        return False
+    text, mode = _read_managed_text_target(target, "Block target")
+    lines = text.splitlines()
+    bounds = _locate_block(lines, start_marker, end_marker, target, True)
+    if bounds is None:
+        return False
+    lines = lines[: bounds[0]] + lines[bounds[1] + 1 :]
+    # Do not leave the separator blank line that belonged to the removed block.
+    start = bounds[0]
+    if start < len(lines) and not lines[start].strip() and (start == 0 or not lines[start - 1].strip()):
+        del lines[start]
+    while lines and not lines[-1].strip():
+        lines.pop()
+    content = ("\n".join(lines) + "\n") if lines else ""
+    atomic_write_text(target, content, mode, ".block.")
+    return True
+
+
+def _deep_merge(base, patch):
+    """Merge patch into base: objects recurse, lists gain missing items, scalars replace.
+
+    Lists are unioned, never replaced, so a managed permission rule joins the
+    user's own rules instead of erasing them.
+    """
+    for key, value in patch.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            _deep_merge(base[key], value)
+        elif isinstance(value, list) and isinstance(base.get(key), list):
+            for item in value:
+                if item not in base[key]:
+                    base[key].append(item)
+        else:
+            base[key] = value
+    return base
+
+
+def merge_json_keys(target, patch_text, label):
+    """Deep-merge a JSON object into a JSON object file.
+
+    Keys absent from the patch are preserved, so other installers (ai-memory,
+    RTK, the plugin manager) keep their own entries. Return True on change.
+    """
+    patch = json.loads(patch_text)
+    if not isinstance(patch, dict):
+        raise ValueError(f"{label} patch must be a JSON object")
+    target = Path(target)
+    if target.is_symlink():
+        raise ValueError(f"{label} must not be a symlink: {target}")
+    if target.exists() and not target.is_file():
+        raise ValueError(f"{label} must be a regular file: {target}")
+    if target.exists():
+        text = target.read_text(encoding="utf-8")
+        mode = stat.S_IMODE(target.stat().st_mode)
+        try:
+            data = json.loads(text) if text.strip() else {}
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{label} is not valid JSON: {target}: {exc}") from exc
+        if not isinstance(data, dict):
+            raise ValueError(f"{label} must contain a JSON object: {target}")
+    else:
+        text, mode, data = "", 0o600, {}
+    content = json.dumps(_deep_merge(data, patch), indent=2) + "\n"
+    if content == text:
+        return False
+    target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    atomic_write_text(target, content, mode, ".json.")
+    return True
+
+
+def run_with_deadline(seconds, command, kill_after=30):
+    """Run command with inherited stdio; stop its process group at the deadline.
+
+    Portable replacement for GNU timeout, which macOS does not ship. The
+    command gets its own session, so SIGTERM and then SIGKILL reach every
+    process it started. Returns the command status, or 124 at the deadline,
+    as GNU timeout does.
+    """
+    child = subprocess.Popen(command, start_new_session=True)
+
+    # The command left our process group, so a signal to the caller (the
+    # coordinator stops a background seat) must be passed on to it.
+    def forward(signum, _frame):
+        try:
+            os.killpg(child.pid, signum)
+        except ProcessLookupError:
+            pass
+
+    for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(signum, forward)
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError as exc:
-        raise ValueError(f"Cannot read skill manifest {path}: {exc}") from exc
-
-    for line_number, line in enumerate(lines, start=1):
-        if not line.strip() or line.lstrip().startswith("#"):
+        return child.wait(timeout=seconds)
+    except subprocess.TimeoutExpired:
+        pass
+    for sig, grace in ((signal.SIGTERM, kill_after), (signal.SIGKILL, None)):
+        try:
+            os.killpg(child.pid, sig)
+        except ProcessLookupError:
+            break
+        try:
+            child.wait(timeout=grace)
+            break
+        except subprocess.TimeoutExpired:
             continue
-
-        fields = line.split("\t")
-        if len(fields) != 4:
-            raise ValueError(
-                f"Invalid skill manifest row at {path}:{line_number}; "
-                "expected four tab-separated fields"
-            )
-
-        provider, name, source, require_skill_file = fields
-        if provider not in MANIFEST_PROVIDERS:
-            raise ValueError(
-                f"Invalid skill manifest provider at {path}:{line_number}: {provider}"
-            )
-        if not name or name != name.strip() or any(char.isspace() for char in name):
-            raise ValueError(
-                f"Invalid skill manifest name at {path}:{line_number}: {name!r}"
-            )
-        if not source or source != source.strip():
-            raise ValueError(
-                f"Invalid skill manifest source at {path}:{line_number}: {source!r}"
-            )
-        if require_skill_file not in {"yes", "no"}:
-            raise ValueError(
-                f"Invalid skill manifest SKILL.md flag at {path}:{line_number}: "
-                f"{require_skill_file}"
-            )
-        if name in names:
-            raise ValueError(f"Duplicate skill manifest name at {path}:{line_number}: {name}")
-        if provider == "local":
-            source_path = Path(source)
-            if source_path.is_absolute() or ".." in source_path.parts:
-                raise ValueError(
-                    f"Local skill source must stay inside the repository at "
-                    f"{path}:{line_number}: {source}"
-                )
-
-        names.add(name)
-        rows.append((provider, name, source, require_skill_file))
-
-    if not rows:
-        raise ValueError(f"Skill manifest is empty: {path}")
-    return rows
+    child.wait()
+    print(f"run-with-deadline: stopped after {seconds} seconds", file=sys.stderr)
+    return 124
 
 
 def _main(argv):
@@ -166,11 +274,22 @@ def _main(argv):
             guard_regular_file(argv[2], argv[3])
             return 0
 
-        if operation == "manifest" and len(argv) == 3:
-            for row in read_skill_manifest(argv[2]):
-                print("\t".join(row))
+        if operation == "merge-block" and len(argv) == 6:
+            merge_block(argv[2], argv[3], argv[4], argv[5])
             return 0
-    except (OSError, ValueError) as exc:
+
+        if operation == "remove-block" and len(argv) == 5:
+            remove_block(argv[2], argv[3], argv[4])
+            return 0
+
+        if operation == "run-with-deadline" and len(argv) >= 4 and argv[2].isdigit():
+            return run_with_deadline(int(argv[2]), argv[3:])
+
+        if operation == "merge-json" and len(argv) == 5:
+            merge_json_keys(argv[2], argv[3], argv[4])
+            return 0
+
+    except (OSError, ValueError) as exc:  # json.JSONDecodeError is a ValueError
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 

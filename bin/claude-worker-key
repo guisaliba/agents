@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# claude-worker-key
+#
+# Claude Code apiKeyHelper for the pstack worker profile.
+# Prints the worker provider API key and nothing else, as apiKeyHelper requires.
+# claude/worker/provider.env names the file and the variable that hold the key.
+set -Eeuo pipefail
+
+script_path="$(readlink -f -- "${BASH_SOURCE[0]}" 2>/dev/null || python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "${BASH_SOURCE[0]}")"
+repo_dir="$(cd -- "$(dirname -- "$script_path")/.." && pwd)"
+helper="$repo_dir/lib/agent_stack.py"
+provider="${CLAUDE_WORKER_PROVIDER_FILE:-$repo_dir/claude/worker/provider.env}"
+
+setting() {
+  python3 "$helper" env-value "$provider" "$1" 2>/dev/null
+}
+
+variable="$(setting WORKER_API_KEY_VARIABLE)" || {
+  printf 'claude-worker-key: WORKER_API_KEY_VARIABLE is missing in %s.\n' "$provider" >&2
+  exit 1
+}
+env_file="${CLAUDE_WORKER_KEY_ENV_FILE:-$(setting WORKER_API_KEY_ENV_FILE || true)}"
+env_file="${env_file/#\~/$HOME}"
+
+if [[ -z "$env_file" || ! -f "$env_file" ]]; then
+  printf 'claude-worker-key: missing key file %s. Add %s there, then retry.\n' "${env_file:-<unset>}" "$variable" >&2
+  exit 1
+fi
+
+if ! key="$(python3 "$helper" env-value "$env_file" "$variable" 2>/dev/null)" || [[ -z "$key" ]]; then
+  printf 'claude-worker-key: %s is not set in %s.\n' "$variable" "$env_file" >&2
+  exit 1
+fi
+
+printf '%s\n' "$key"
