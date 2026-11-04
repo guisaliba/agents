@@ -213,13 +213,17 @@ PY
 worker_environment() {
   local name
   local -a pass=(HOME USER LOGNAME PATH SHELL LANG LC_ALL LC_CTYPE TERM TMPDIR
-    XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME XDG_RUNTIME_DIR)
+    XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME XDG_RUNTIME_DIR
+    CLAUDE_WORKER_KEY_ENV_FILE CLAUDE_WORKER_PROVIDER_FILE)
   WORKER_ENV=()
   for name in "${pass[@]}"; do
     if [[ -n "${!name:-}" ]]; then
       WORKER_ENV+=("$name=${!name}")
     fi
   done
+  # The apiKeyHelper (claude-worker-key) runs inside the worker. The two
+  # CLAUDE_WORKER_*_FILE paths go with it, so it reads the same key file as
+  # the preflight require_key. They are paths; the key value never passes.
   WORKER_ENV+=("CLAUDE_CONFIG_DIR=$WORKER_CONFIG_DIR")
 }
 

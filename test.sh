@@ -325,6 +325,11 @@ assert os.path.realpath(sys.argv[2]) in deny and os.path.realpath(sys.argv[3] + 
   expect "a relative --report resolves from the caller directory, not from --dir" bash -c \
     '[[ "$0" == 0 ]] && grep -qF "**Result**: done." "$1/relative.md" && [[ -s "$1/relative.md.raw.json" ]]' "$status" "$dir/caller"
 
+  status=0
+  KEY_FILE_OVERRIDE="$home/.config/ai-memory/env" run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/keyfile.md" >/dev/null 2>&1 || status=$?
+  expect "the key-file override reaches the worker, so apiKeyHelper reads the same file" bash -c \
+    '[[ "$0" == 0 ]] && grep -qx "CLAUDE_WORKER_KEY_ENV_FILE=$1" "$2"' "$status" "$home/.config/ai-memory/env" "$logs/env"
+
   expect "usage aggregates the ledger" bash -c \
     'env HOME="$0" XDG_STATE_HOME="$0/.local/state" "$1/bin/claude-worker" usage | grep -q "^worker/glm-5.3"' "$home" "$REPO_DIR"
   expect "models names the provider and lists the roster with the worker/ prefix" bash -c \
