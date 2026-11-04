@@ -318,6 +318,13 @@ assert os.path.realpath(sys.argv[2]) in deny and os.path.realpath(sys.argv[3] + 
   KEY_FILE_OVERRIDE=/nonexistent run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/x.md" >/dev/null 2>&1 || status=$?
   expect "a missing provider key exits 3" test "$status" -eq 3
 
+  echo ok >"$dir/mode"
+  status=0
+  mkdir -p "$dir/caller"
+  (cd "$dir/caller" && run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report relative.md >/dev/null 2>&1) || status=$?
+  expect "a relative --report resolves from the caller directory, not from --dir" bash -c \
+    '[[ "$0" == 0 ]] && grep -qF "**Result**: done." "$1/relative.md" && [[ -s "$1/relative.md.raw.json" ]]' "$status" "$dir/caller"
+
   expect "usage aggregates the ledger" bash -c \
     'env HOME="$0" XDG_STATE_HOME="$0/.local/state" "$1/bin/claude-worker" usage | grep -q "^worker/glm-5.3"' "$home" "$REPO_DIR"
   expect "models names the provider and lists the roster with the worker/ prefix" bash -c \

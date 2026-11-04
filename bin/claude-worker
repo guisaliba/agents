@@ -249,6 +249,9 @@ command_run() {
   [[ -r "$brief" ]] && brief_text="$(cat -- "$brief")"
   [[ -n "${brief_text//[[:space:]]/}" ]] || fail_usage "--brief is missing or empty: $brief"
   [[ -d "$(dirname -- "$report")" ]] || fail_usage "--report directory does not exist: $(dirname -- "$report")"
+  # The worker runs in --dir, so a relative report path must not be read
+  # from one directory and written from another.
+  report="$(cd -- "$(dirname -- "$report")" && pwd -P)/$(basename -- "$report")"
 
   [[ "$readonly" == true ]] || require_write_worktree "$dir"
 
