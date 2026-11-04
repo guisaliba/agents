@@ -306,7 +306,9 @@ command_run() {
   python3 - "$raw" "$report" "$alias" "$model_id" "$family" "$mode" "$sandbox" "$status" \
     "$started" "$ended" "$dir" "$LEDGER" <<'PY'
 import json
+import os
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -357,20 +359,33 @@ Path(report + ".meta.json").write_text(json.dumps(meta, indent=2) + "\n", encodi
 
 ledger_path = Path(ledger)
 header = "utc\talias\tmodel_id\tmode\tsucceeded\tduration_s\tturns\tinput_tokens\toutput_tokens\tcache_read_tokens\tcache_creation_tokens\tdirectory\n"
-new_file = not ledger_path.exists()
-with ledger_path.open("a", encoding="utf-8") as handle:
-    if new_file:
-        handle.write(header)
-    row = [
-        datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        alias, model_id, mode, "yes" if succeeded else "no",
-        str(meta["duration_seconds"]), str(meta["num_turns"] or 0),
-        str(usage.get("input_tokens", 0)), str(usage.get("output_tokens", 0)),
-        str(usage.get("cache_read_input_tokens", 0)),
-        str(usage.get("cache_creation_input_tokens", 0)),
-        directory.replace("\t", " "),
-    ]
-    handle.write("\t".join(row) + "\n")
+# Seats of one panel finish in parallel. Create the ledger with its header
+# in one atomic step (os.link fails when the file exists), so exactly one
+# header is written. Each row is then one O_APPEND write.
+if not ledger_path.exists():
+    fd, temporary = tempfile.mkstemp(dir=ledger_path.parent, prefix=".runs.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(header)
+        os.link(temporary, ledger_path)
+    except FileExistsError:
+        pass
+    finally:
+        os.unlink(temporary)
+row = [
+    datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    alias, model_id, mode, "yes" if succeeded else "no",
+    str(meta["duration_seconds"]), str(meta["num_turns"] or 0),
+    str(usage.get("input_tokens", 0)), str(usage.get("output_tokens", 0)),
+    str(usage.get("cache_read_input_tokens", 0)),
+    str(usage.get("cache_creation_input_tokens", 0)),
+    directory.replace("\t", " "),
+]
+fd = os.open(ledger_path, os.O_WRONLY | os.O_APPEND)
+try:
+    os.write(fd, ("\t".join(row) + "\n").encode("utf-8"))
+finally:
+    os.close(fd)
 
 raise SystemExit(0 if succeeded else 1)
 PY

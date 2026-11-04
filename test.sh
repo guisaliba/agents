@@ -330,6 +330,20 @@ assert os.path.realpath(sys.argv[2]) in deny and os.path.realpath(sys.argv[3] + 
   expect "the key-file override reaches the worker, so apiKeyHelper reads the same file" bash -c \
     '[[ "$0" == 0 ]] && grep -qx "CLAUDE_WORKER_KEY_ENV_FILE=$1" "$2"' "$status" "$home/.config/ai-memory/env" "$logs/env"
 
+  local ledger_home="$dir/ledger-home" n
+  mkdir -p "$ledger_home"
+  # A stress check: the header race window is small, so this guards the
+  # invariant but may pass by chance against a racy writer.
+  for n in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    env HOME="$home" CLAUDE_WORKER_CONFIG_DIR="$profile" XDG_STATE_HOME="$ledger_home" \
+      CLAUDE_WORKER_CLAUDE_BIN="$dir/claude" CLAUDE_WORKER_SANDBOX_COMMANDS=bash \
+      "$REPO_DIR/bin/claude-worker" run --model worker/glm-5.3 --dir "$repo" --brief "$work/brief.md" \
+      --report "$work/parallel-$n.md" --readonly >/dev/null 2>&1 &
+  done
+  wait
+  expect "parallel completions write one ledger header and twelve rows" bash -c \
+    '[[ "$(grep -c "^utc	" "$0")" == 1 && "$(grep -vc "^utc	" "$0")" == 12 ]]' "$ledger_home/claude-worker/runs.tsv"
+
   expect "usage aggregates the ledger" bash -c \
     'env HOME="$0" XDG_STATE_HOME="$0/.local/state" "$1/bin/claude-worker" usage | grep -q "^worker/glm-5.3"' "$home" "$REPO_DIR"
   expect "models names the provider and lists the roster with the worker/ prefix" bash -c \
