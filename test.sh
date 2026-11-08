@@ -194,21 +194,28 @@ FAKE
   chmod +x "$path"
 }
 
-# Print a PATH whose directories hold every command on the current PATH
-# except timeout, as symlinks in the directory $1.
+# Print the current PATH with timeout removed. A directory that holds a
+# timeout executable is replaced by a copy of its links without it, in a
+# new directory under $1; every other directory stays as it is, so a long
+# PATH (WSL2 adds the Windows directories) is not copied.
 timeout_free_path() {
-  local target="$1" entry command_path
-  mkdir -p "$target"
+  local target="$1" entry command_path copy n=0 result=""
   local IFS=:
   for entry in $PATH; do
-    [[ -d "$entry" ]] || continue
-    for command_path in "$entry"/*; do
-      [[ -x "$command_path" && ! -d "$command_path" ]] || continue
-      [[ "${command_path##*/}" == timeout || -e "$target/${command_path##*/}" ]] && continue
-      ln -s "$command_path" "$target/${command_path##*/}"
-    done
+    [[ -n "$entry" ]] || continue
+    if [[ -x "$entry/timeout" && ! -d "$entry/timeout" ]]; then
+      n=$((n + 1))
+      copy="$target/$n"
+      mkdir -p "$copy"
+      for command_path in "$entry"/*; do
+        [[ "${command_path##*/}" == timeout ]] && continue
+        ln -s "$command_path" "$copy/${command_path##*/}"
+      done
+      entry="$copy"
+    fi
+    result="${result:+$result:}$entry"
   done
-  printf '%s\n' "$target"
+  printf '%s\n' "$result"
 }
 
 worker_fixtures() {
@@ -360,14 +367,16 @@ assert os.path.realpath(sys.argv[2]) in deny and os.path.realpath(sys.argv[3] + 
   expect "the key-file override reaches the worker, so apiKeyHelper reads the same file" bash -c \
     '[[ "$0" == 0 ]] && grep -qx "CLAUDE_WORKER_KEY_ENV_FILE=$1" "$2"' "$status" "$home/.config/ai-memory/env" "$logs/env"
 
-  local started elapsed
+  local started elapsed no_timeout_path
   status=0
   echo sleep >"$dir/mode"
+  no_timeout_path="$(timeout_free_path "$dir/notimeout")"
   started="$(date +%s)"
-  PATH="$(timeout_free_path "$dir/notimeout")" run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/slow.md" --timeout 1 >/dev/null 2>&1 || status=$?
+  PATH="$no_timeout_path" run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/slow.md" --timeout 1 >/dev/null 2>&1 || status=$?
   elapsed=$(( $(date +%s) - started ))
   echo ok >"$dir/mode"
-  expect "--timeout stops a stalled worker without a timeout executable on PATH" bash -c \
+  expect "the fixture PATH has no timeout executable" bash -c '! PATH="$0" type -P timeout >/dev/null' "$no_timeout_path"
+  expect "--timeout stops a stalled worker without a timeout executable on PATH (exit $status, ${elapsed}s)" bash -c \
     '[[ "$0" == 1 && "$1" -lt 10 ]]' "$status" "$elapsed"
 
   local ledger_home="$dir/ledger-home" n
