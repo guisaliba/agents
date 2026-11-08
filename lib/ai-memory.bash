@@ -7,25 +7,38 @@
 # wire_ai_memory_to_claude_code is the only harness-specific function.
 # Sourced by apply.sh. Do not execute directly.
 
-ai_memory_macos_release_spec() {
-  case "$(uname -m)" in
-    arm64|aarch64)
-      printf '%s\t%s\n' "ai-memory-macos-aarch64.tar.gz" "$AI_MEMORY_MACOS_AARCH64_SHA256"
-      ;;
-    x86_64)
-      printf '%s\t%s\n' "ai-memory-macos-x86_64.tar.gz" "$AI_MEMORY_MACOS_X86_64_SHA256"
-      ;;
+# Print the operating system and machine of this host, tab-separated.
+ai_memory_platform() {
+  printf '%s\t%s\n' "$(agent_stack_platform)" "$(uname -m)"
+}
+
+# Print the release asset and its pinned SHA256 for this host.
+ai_memory_release_spec() {
+  local platform machine
+  IFS=$'\t' read -r platform machine <<<"$(ai_memory_platform)"
+  case "$platform/$machine" in
+    Darwin/arm64|Darwin/aarch64)
+      printf '%s\t%s\n' "ai-memory-macos-aarch64.tar.gz" "$AI_MEMORY_MACOS_AARCH64_SHA256" ;;
+    Darwin/x86_64)
+      printf '%s\t%s\n' "ai-memory-macos-x86_64.tar.gz" "$AI_MEMORY_MACOS_X86_64_SHA256" ;;
+    Linux/aarch64|Linux/arm64)
+      printf '%s\t%s\n' "ai-memory-linux-aarch64.tar.gz" "$AI_MEMORY_LINUX_AARCH64_SHA256" ;;
+    Linux/x86_64)
+      printf '%s\t%s\n' "ai-memory-linux-x86_64.tar.gz" "$AI_MEMORY_LINUX_X86_64_SHA256" ;;
     *)
-      die "ai-memory $AI_MEMORY_RELEASE_VERSION does not support macOS architecture $(uname -m)"
-      ;;
+      die "ai-memory $AI_MEMORY_RELEASE_VERSION has no release for $platform $machine" ;;
   esac
 }
 
-install_ai_memory_macos() {
+# Install the pinned upstream release bundle under $AI_MEMORY_INSTALL_ROOT and
+# link $AI_MEMORY_BINARY to it. The bundle keeps hooks/claude-code next to
+# the binary, where `ai-memory install-hooks` finds it through the symlink.
+# Used on macOS, and on Linux hosts without an AUR helper (Ubuntu, WSL2).
+install_ai_memory_release() {
   local release_spec asset expected_sha download_url archive temporary_dir actual_sha
   local existing_command installed_version managed_release_root temporary_link
 
-  release_spec="$(ai_memory_macos_release_spec)"
+  release_spec="$(ai_memory_release_spec)"
   IFS=$'\t' read -r asset expected_sha <<<"$release_spec"
   download_url="$AI_MEMORY_RELEASE_BASE_URL/$asset"
 
@@ -34,7 +47,7 @@ install_ai_memory_macos() {
     die "ai-memory already resolves to an unmanaged executable at $existing_command; $AI_MEMORY_BINARY was not installed."
   fi
   if [[ -e "$AI_MEMORY_BINARY" && ! -L "$AI_MEMORY_BINARY" ]]; then
-    die "Managed macOS ai-memory path must be a symlink: $AI_MEMORY_BINARY"
+    die "Managed ai-memory path must be a symlink to the release bundle: $AI_MEMORY_BINARY. Remove it and run apply again."
   fi
   managed_release_root="${AI_MEMORY_INSTALL_ROOT%/*}"
   if [[ -L "$AI_MEMORY_BINARY" ]] && ! python3 - \
@@ -52,7 +65,7 @@ except (OSError, ValueError):
 raise SystemExit(0 if len(relative.parts) == 2 and relative.name == "ai-memory" else 1)
 PY
   then
-    die "Managed macOS ai-memory symlink must target a versioned release under $managed_release_root"
+    die "Managed ai-memory symlink must target a versioned release under $managed_release_root"
   fi
 
   if [[ -d "$AI_MEMORY_INSTALL_ROOT" ]]; then
@@ -148,12 +161,20 @@ PY
 install_ai_memory() {
   case "$(agent_stack_platform)" in
     Linux)
-      if have ai-memory; then
-        verify_native_ai_memory
+      # Arch (yay) and package-managed installs keep the AUR path. Other
+      # Linux hosts get the release bundle, which carries the hooks.
+      local existing
+      existing="$(type -P ai-memory 2>/dev/null || true)"
+      if have yay || [[ -n "$existing" && "$existing" != "$AI_MEMORY_BINARY" ]]; then
+        if [[ -n "$existing" ]]; then
+          verify_native_ai_memory
+        fi
+        install_aur_command ai-memory "$AI_MEMORY_AUR_PACKAGE" "$AI_MEMORY_MIN_VERSION"
+      else
+        install_ai_memory_release
       fi
-      install_aur_command ai-memory "$AI_MEMORY_AUR_PACKAGE" "$AI_MEMORY_MIN_VERSION"
       ;;
-    Darwin) install_ai_memory_macos ;;
+    Darwin) install_ai_memory_release ;;
     *) die "Unsupported operating system: $(agent_stack_platform)" ;;
   esac
   verify_native_ai_memory

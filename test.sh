@@ -557,6 +557,68 @@ wrapper_fixtures() {
 # --- RTK install fixtures ----------------------------------------------------
 
 # A fake rtk that passes the rewrite compatibility check and reports a version.
+ai_memory_release_fixtures() {
+  printf '\n== ai-memory release bundle fixtures\n'
+  local dir="$FIXTURE_ROOT/ai-memory-release" bundle archive sha output
+  bundle="$dir/bundle"
+  mkdir -p "$bundle/hooks/claude-code" "$dir/bin" "$dir/home"
+  printf '%s\n' '#!/usr/bin/env bash' 'printf "ai-memory 3.3.1\n"' >"$bundle/ai-memory"
+  chmod +x "$bundle/ai-memory"
+  : >"$bundle/hooks/claude-code/session-start.sh"
+  archive="$dir/ai-memory.tar.gz"
+  tar -czf "$archive" -C "$bundle" .
+  sha="$(sha256sum "$archive" | cut -d' ' -f1)"
+  # The fake curl writes the fixture archive to the --output path.
+  cat >"$dir/bin/curl" <<FAKE
+#!/usr/bin/env bash
+while [[ \$# -gt 0 ]]; do
+  if [[ "\$1" == --output ]]; then cp "$archive" "\$2"; exit 0; fi
+  shift
+done
+exit 1
+FAKE
+  chmod +x "$dir/bin/curl"
+
+  run_release() {
+    env -i HOME="$dir/home" PATH="$dir/home/.local/bin:$dir/bin:/usr/bin:/bin" bash -c '
+      set -Eeuo pipefail
+      source "$0/apply.sh"
+      ai_memory_platform() { printf "Linux\tx86_64\n"; }
+      AI_MEMORY_LINUX_X86_64_SHA256="$1"
+      install_ai_memory_release
+      ai-memory --version
+    ' "$REPO_DIR" "$1" 2>&1
+  }
+
+  output="$(run_release "$sha" || printf 'release install failed\n')"
+  expect "Linux installs the verified release bundle and links ai-memory" grep -qx "ai-memory 3.3.1" <<<"$output"
+  expect "the bundle keeps the Claude Code hooks next to the linked binary" bash -c \
+    '[[ -L "$0/.local/bin/ai-memory" && -d "$(dirname "$(readlink -f "$0/.local/bin/ai-memory")")/hooks/claude-code" ]]' "$dir/home"
+  rm -rf "$dir/home"; mkdir -p "$dir/home"
+  output="$(run_release 0000000000000000000000000000000000000000000000000000000000000000 || true)"
+  expect "a release archive with the wrong digest is refused" bash -c \
+    'grep -qF "digest did not match" <<<"$0" && [[ ! -e "$1/.local/bin/ai-memory" ]]' "$output" "$dir/home"
+
+  # Source selection on Linux: the AUR with yay, the release bundle without.
+  select_source() {
+    env -i HOME="$dir/home" PATH="$1:/usr/bin:/bin" bash -c '
+      set -Eeuo pipefail
+      source "$0/apply.sh"
+      agent_stack_platform() { printf "Linux\n"; }
+      have() { [[ "$1" == yay ]] && type -P yay >/dev/null; }
+      install_aur_command() { printf "AUR\n"; }
+      install_ai_memory_release() { printf "RELEASE\n"; }
+      verify_native_ai_memory() { :; }
+      require_minimum_version() { :; }
+      install_ai_memory
+    ' "$REPO_DIR" 2>&1
+  }
+  mkdir -p "$dir/yay"
+  printf '%s\n' '#!/usr/bin/env bash' >"$dir/yay/yay"; chmod +x "$dir/yay/yay"
+  expect "Linux with yay uses the AUR package" grep -qx AUR <<<"$(select_source "$dir/yay")"
+  expect "Linux without yay uses the release bundle" grep -qx RELEASE <<<"$(select_source "$dir/bin")"
+}
+
 make_fake_rtk() {
   local path="$1" version="$2"
   {
@@ -665,6 +727,7 @@ helper_fixtures
 worker_fixtures
 apply_fixtures
 ai_memory_env_fixtures
+ai_memory_release_fixtures
 wrapper_fixtures
 rtk_fixtures
 if [[ "$repo_only" == false ]]; then

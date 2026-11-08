@@ -63,8 +63,11 @@ Edit both, update the `worker/<alias>` values in
 
 Prerequisites: Bash, curl, Git, and Python 3.11+. Linux also needs a systemd
 user manager and `bwrap` and `socat` (the Claude Code sandbox for read-only
-worker seats; Arch: `sudo pacman -S bubblewrap socat`); Arch systems need
-`yay` when `ai-memory` is absent. macOS needs Homebrew.
+worker seats; Arch: `sudo pacman -S bubblewrap socat`; Ubuntu:
+`sudo apt install bubblewrap socat`). With `yay` (Arch), apply installs
+`ai-memory` from the AUR; without it (Ubuntu, WSL2), apply installs the
+pinned upstream release bundle, verified by SHA256, as on macOS. WSL2 needs
+systemd (`[boot] systemd=true` in `/etc/wsl.conf`). macOS needs Homebrew.
 
 ```sh
 ./apply.sh

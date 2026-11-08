@@ -11,7 +11,9 @@ set -Eeuo pipefail
 # Usage:
 #   ./apply.sh
 #
-# Prerequisites: bash, curl, git, python3 3.11+, and systemctl on Linux. AUR package installation also needs yay when ai-memory is absent.
+# Prerequisites: bash, curl, git, python3 3.11+, and systemctl, bwrap, and socat
+# on Linux. With yay, ai-memory comes from the AUR; without it (Ubuntu, WSL2),
+# from the pinned upstream release bundle, as on macOS.
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$SCRIPT_DIR"
@@ -43,6 +45,8 @@ AI_MEMORY_RELEASE_VERSION="${AI_MEMORY_RELEASE_VERSION:-3.3.1}"
 AI_MEMORY_RELEASE_BASE_URL="https://github.com/akitaonrails/ai-memory/releases/download/v$AI_MEMORY_RELEASE_VERSION"
 AI_MEMORY_MACOS_AARCH64_SHA256="0289d5b6ed3d371216bf086addc65e5f1beedff76cf6e640ad9fe4ddba70a18a"
 AI_MEMORY_MACOS_X86_64_SHA256="991d6b1053bfe742f1a4e2de46627522b8a5bb4d4b48f50dfad73b122464e1ae"
+AI_MEMORY_LINUX_AARCH64_SHA256="6a3ba000bd675a45f42236b68ea7c9e5818562a68379cee407ae26650b77cd57"
+AI_MEMORY_LINUX_X86_64_SHA256="2045a115745a949d89cfc6a709da110a29b98fd6f2b63a928442ce949550fad4"
 AI_MEMORY_INSTALL_ROOT="${AI_MEMORY_INSTALL_ROOT:-$HOME/.local/opt/ai-memory/$AI_MEMORY_RELEASE_VERSION}"
 AI_MEMORY_BINARY="${AI_MEMORY_BINARY:-$HOME/.local/bin/ai-memory}"
 AI_MEMORY_DATA_DIR="$HOME/.local/share/ai-memory"
