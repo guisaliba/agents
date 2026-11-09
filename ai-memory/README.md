@@ -1,20 +1,24 @@
 # ai-memory
 
-Each host runs its own ai-memory service and keeps its own store. By default,
-the service listens on loopback at `127.0.0.1:49374`. A host that provides web
-or phone access can publish its own service to the tailnet with Tailscale Serve.
+Each host runs its own ai-memory service and keeps its own store. The service
+listens on loopback at `127.0.0.1:49374`, which is also the default URL of the
+ai-memory CLI. There is no remote mode: a host never uses another host's
+service.
 
-`AI_MEMORY_SERVER_URL` is a per-host override. Leave it unset, or set it to a
-loopback URL, to use the local service. Set a non-loopback URL only when this
-host must use a remote ai-memory service:
+## Version
 
-```sh
-grep '^AI_MEMORY_SERVER_URL=' ~/.config/ai-memory/env
-```
+`apply.sh` pins ai-memory 3.3.1. Linux installs it from the AUR package
+`ai-memory-bin`; macOS installs the checksum-verified release archive.
 
-For a remote service, use its base URL; the MCP endpoint is that URL plus
-`/mcp`. `apply.sh` starts the local service for loopback URLs and leaves the
-local service stopped for a non-loopback URL.
+ai-memory 3.0 changed one default. `ai-memory init` on a **new** data
+directory creates a root bearer token at `<data_dir>/auth-tokens/default` and
+turns authentication on. The hooks and the MCP registration read that token
+file, so no token goes into a harness configuration or the environment. An
+**existing** 2.x data directory keeps its unauthenticated loopback service after
+the upgrade. See the upstream
+[3.0 upgrade notes](https://github.com/akitaonrails/ai-memory/blob/v3.3.1/docs/upgrading-to-3.0.md).
+Take `ai-memory backup --to ~/ai-memory-pre-3.0.tar.gz` before the first apply
+on a host that runs 2.x.
 
 ## Ownership
 
@@ -56,44 +60,38 @@ environment change. After the daemon is active, apply removes the retired
 LaunchAgent from `~/Library/LaunchAgents/`. Linux continues to use the systemd
 user service.
 
-The ai-memory binary owns the generated OpenCode plugin, instructions, and
-five ai-memory skills. Do not edit generated files by hand.
+The ai-memory binary owns the generated Claude Code hooks in
+`~/.claude/settings.json`, the MCP registration in `~/.claude.json`, the routing
+instructions in `~/.claude/rules/ai-memory.md`, and five ai-memory skills in
+`~/.claude/skills/`. Do not edit generated files by hand. The pstack worker
+profile (`~/.claude-worker`) never receives these hooks, so worker runs do not
+write into the coordinator's workstream.
 
-`DOTFILES_AI_MEMORY_LLM_PROFILE` is the single profile for a local service. It
-sets that service's LLM provider and model **and** the local OpenCode `general`,
-`explore` and `title` agents, so the values cannot drift apart. Set it on each
-host that runs a local service. In remote mode, the remote service owns the
-profile; the local host carries no copy. See
-[../opencode/README.md](../opencode/README.md) for the ownership rule and change
-procedure.
+## LLM
 
-The default profile is `opencode-go-deepseek-v4.1-flash`, which uses
-`opencode-go/deepseek-v4.1-flash`. The alternative profile is
-`opencode-go-muse-spark-1.3-contributor`, which uses
-`opencode-go/muse-spark-1.3-contributor`. Both profiles stay in zero-LLM mode
-until `OPENCODE_API_KEY` is present in the environment file.
+You own `~/.config/ai-memory/env`. `apply.sh` creates it empty with mode `0600`
+when it is absent, and never rewrites it. The service loads it through the
+`EnvironmentFile=` line of its unit. To turn on the LLM jobs, write three lines:
 
-Set `DOTFILES_AI_MEMORY_LLM_PROFILE` in `~/.config/ai-memory/env` to select
-a profile. Apply preserves an explicit valid selection; remove the assignment
-to use the default.
+```sh
+AI_MEMORY_LLM_PROVIDER=opencode
+AI_MEMORY_LLM_MODEL=deepseek-v4.1-flash
+OPENCODE_API_KEY=sk-...
+```
 
-Set `AGENTS_AI_MEMORY_LLM_ENABLED=false` in the same file to pause LLM jobs
-without removing `OPENCODE_API_KEY`. After usage is restored, remove that
-assignment, run `source ./apply.sh && configure_ai_memory_env_file`, and
-restart the service with `systemctl --user restart ai-memory` on Linux.
-Subagent selection is independent; see
-[`../opencode/README.md`](../opencode/README.md).
+The `opencode` provider uses the OpenCode Go catalogue by default and reads its
+key from `OPENCODE_API_KEY`. The same key feeds the pstack workers through
+`bin/claude-worker-key` while `claude/worker/provider.env` names OpenCode Go as
+the worker provider. After a change, restart the service with
+`systemctl --user restart ai-memory` on Linux.
 
-The `DOTFILES_AI_MEMORY_LLM_ENABLED` name is retired; `apply.sh` migrates its
-value once to the new name and removes the old line.
-
-## Remote service override
-
-Use remote mode only when this host must share another host's service. Set
-`AI_MEMORY_SERVER_URL` to that service's base URL and keep its bearer token in
-`~/.config/ai-memory/client-token`, mode `0600`. Apply stops the local service
-while the URL is non-loopback. The local data directory is retained; automatic
-bidirectional store merge is out of scope.
+On every run, `apply.sh` reports the LLM state (`enabled`, or the names that are
+not set) and warns about names that earlier versions wrote and that nothing
+reads now: `AGENTS_AI_MEMORY_LLM_ENABLED`, `AGENTS_AI_MEMORY_REMOTE_MODE`,
+`AI_MEMORY_SERVER_URL`, `DOTFILES_AI_MEMORY_LLM_ENABLED`,
+`DOTFILES_AI_MEMORY_LLM_PROFILE`, and `DOTFILES_OPENCODE_SUBAGENT_PROFILE`.
+Remove them by hand. Login shells do not load this file, so the key is not
+exported to shell processes.
 
 Captured content can be sent to the selected provider during explicit
 consolidation, review, or reranking. Keep credentials, memory data, and the
@@ -103,8 +101,7 @@ ai-memory token pepper outside Git.
 
 ```sh
 ai-memory status --json
-opencode mcp list
-opencode mcp debug ai-memory
+claude mcp list
 ```
 
 On macOS, also verify the system service:
