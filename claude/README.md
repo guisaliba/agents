@@ -40,16 +40,20 @@ format.
 | Role | Model | Plan |
 | --- | --- | --- |
 | Main session, judgment, prose, hardest tasks | Opus | Claude Pro |
-| Feature, refactoring, bug fix | `worker/kimi-k2.7-code` | worker provider |
-| Perf issue | `worker/glm-5.3` | worker provider |
+| Feature, refactoring, bug fix, perf issue | `worker/kimi-k2.7-code` | worker provider |
 | Hillclimb, `how` explorer, `why` investigators, swarm workers | `worker/deepseek-v4.1-flash` | worker provider |
-| Arena and architect runners | Opus (`inherit-parent`), `worker/kimi-k3.1`, `worker/glm-5.3` | both |
-| Arena cross-judge | `worker/kimi-k3.1`, `worker/glm-5.3` | worker provider |
+| Arena and architect runners | Opus (`inherit-parent`), `worker/kimi-k3.1`, `worker/minimax-m3` | both |
+| Arena cross-judge (one judge, first entry that runs) | `worker/glm-5.3`, then `worker/kimi-k3.1` | worker provider |
+| Reflect tooling reviewer | `worker/glm-5.3` | worker provider |
 | Interrogate reviewers | `worker/kimi-k3.1`, `worker/glm-5.3`, `worker/gpt-6-luna`, `worker/deepseek-v4.1-flash` | worker provider |
 
+GLM-5.3 holds the review and QA seats (judge, adversary, tooling reviewer)
+and no implementation seat. Those seats run once per skill, which fits its
+small Go allowance (about 220 requests per 5 hours on Go).
+
 With OpenCode Go, the bulk work goes to the large allowances (DeepSeek V4.1
-Flash $100, Kimi K2.7 Code $60). The frontier models (Kimi K3.1, GLM-5.3, GPT 6
-Luna, $15 each on Go) only take panel seats.
+Flash $100, Kimi K2.7 Code and MiniMax M3 $60). The scarce models (Kimi K3.1
+Pro, GLM-5.3, GPT 6 Luna) only take one seat per skill run.
 
 ## claude-worker
 

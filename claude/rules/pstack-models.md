@@ -2,9 +2,10 @@
 # Managed by guisaliba/agents apply.sh. Edit claude/rules/pstack-models.md there. Do not run /pstack:setup-pstack.
 # `<model> <effort>` runs a Claude subagent on the Claude Pro plan. `worker/<alias>` runs claude-worker (rules/pstack-workers.md).
 # budget: large (xhigh)
+# glm-5.3 holds the review and QA seats: arena cross-judge, interrogate, reflect tooling.
 feature, refactoring: worker/kimi-k2.7-code
 bug-fix: worker/kimi-k2.7-code
-perf-issue: worker/glm-5.3
+perf-issue: worker/kimi-k2.7-code
 hillclimb: worker/deepseek-v4.1-flash
 judgment and prose: opus xhigh
 hardest tasks: opus xhigh
@@ -12,10 +13,10 @@ how explorer: worker/deepseek-v4.1-flash
 how explainer: opus high
 why investigators: worker/deepseek-v4.1-flash
 why synthesizer: opus high
-reflect tooling: worker/deepseek-v4.1-flash
+reflect tooling: worker/glm-5.3
 reflect judgment, divergent, synthesizer: opus high
-arena runners: inherit-parent, worker/kimi-k3.1, worker/glm-5.3
-arena cross-judge pool: worker/kimi-k3.1, worker/glm-5.3
+arena runners: inherit-parent, worker/kimi-k3.1, worker/minimax-m3
+arena cross-judge pool: worker/glm-5.3, worker/kimi-k3.1
 swarm workers: worker/deepseek-v4.1-flash
-architect runners: inherit-parent, worker/kimi-k3.1, worker/glm-5.3
+architect runners: inherit-parent, worker/kimi-k3.1, worker/minimax-m3
 interrogate reviewers: worker/kimi-k3.1, worker/glm-5.3, worker/gpt-6-luna, worker/deepseek-v4.1-flash
