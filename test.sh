@@ -367,6 +367,20 @@ assert os.path.realpath(sys.argv[2]) in deny and os.path.realpath(sys.argv[3] + 
   expect "the key-file override reaches the worker, so apiKeyHelper reads the same file" bash -c \
     '[[ "$0" == 0 ]] && grep -qx "CLAUDE_WORKER_KEY_ENV_FILE=$1" "$2"' "$status" "$home/.config/ai-memory/env" "$logs/env"
 
+  status=0
+  KEY_FILE_OVERRIDE=/nonexistent OPENCODE_API_KEY=sk-env-fixture run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/envkey.md" >/dev/null 2>&1 || status=$?
+  expect "a key in the environment reaches the worker, so apiKeyHelper reads it there too" bash -c \
+    '[[ "$0" == 0 ]] && grep -qx "OPENCODE_API_KEY=sk-env-fixture" "$1"' "$status" "$logs/env"
+  expect "the worker gets the worker profile path for the network-secret marker" grep -qx "CLAUDE_WORKER_CONFIG_DIR=$profile" "$logs/env"
+  status=0
+  run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/nokeyvar.md" >/dev/null 2>&1 || status=$?
+  expect "without a key variable, none is passed to the worker" bash -c '[[ "$0" == 0 ]] && ! grep -q "^OPENCODE_API_KEY=" "$1"' "$status" "$logs/env"
+  status=0
+  : >"$profile/network-secret"
+  KEY_FILE_OVERRIDE=/nonexistent run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/netsecret.md" >/dev/null 2>&1 || status=$?
+  rm -f "$profile/network-secret"
+  expect "network-secret mode passes the key preflight without a key file" test "$status" -eq 0
+
   local started elapsed no_timeout_path
   status=0
   echo sleep >"$dir/mode"
@@ -513,6 +527,29 @@ ai_memory_env_fixtures() {
   expect "retired names are reported" bash -c \
     'for n in AGENTS_AI_MEMORY_LLM_ENABLED DOTFILES_AI_MEMORY_LLM_PROFILE AGENTS_AI_MEMORY_REMOTE_MODE AI_MEMORY_SERVER_URL; do grep -qF "$n" <<<"$0" || exit 1; done' "$output"
   expect "retired names are reported, not removed" test "$before" == "$(sha256sum "$env_file")"
+}
+
+# --- worker key source fixtures ---------------------------------------------
+
+key_source_fixtures() {
+  printf '\n== worker key source fixtures\n'
+  local dir="$FIXTURE_ROOT/key-sources" home secret="sk-key-source-fixture-0123456789"
+  home="$dir/home"
+  mkdir -p "$home/.claude-worker"
+  : >"$home/.claude-worker/network-secret"
+  # Key resolution: key file, then the environment variable, then the
+  # network-secret placeholder.
+  printf '%s\n' '#!/usr/bin/env bash' "env -i HOME=\"$home\" PATH=\"\$PATH\" \"\$@\" \"$REPO_DIR/bin/claude-worker-key\"" >"$dir/key.sh"
+  chmod +x "$dir/key.sh"
+  expect "without a key file, the key comes from OPENCODE_API_KEY" bash -c '[[ "$("$0" OPENCODE_API_KEY="$1" 2>/dev/null)" == "$1" ]]' "$dir/key.sh" "$secret"
+  expect "without a key file or variable, network-secret mode prints a placeholder" bash -c \
+    '[[ "$("$0" 2>/dev/null)" == network-secret-placeholder ]]' "$dir/key.sh"
+  mkdir -p "$home/.config/ai-memory"
+  printf 'OPENCODE_API_KEY=%s-file\n' "$secret" >"$home/.config/ai-memory/env"
+  expect "the key file wins over the variable and the placeholder" bash -c \
+    '[[ "$("$0" OPENCODE_API_KEY="$1" 2>/dev/null)" == "$1-file" ]]' "$dir/key.sh" "$secret"
+  rm -f "$home/.config/ai-memory/env" "$home/.claude-worker/network-secret"
+  expect "with no source at all, the key helper exits 1" bash -c '! "$0" >/dev/null 2>&1' "$dir/key.sh"
 }
 
 # --- Bash wrapper fixtures -------------------------------------------------
@@ -735,6 +772,7 @@ static_checks
 helper_fixtures
 worker_fixtures
 apply_fixtures
+key_source_fixtures
 ai_memory_env_fixtures
 ai_memory_release_fixtures
 wrapper_fixtures

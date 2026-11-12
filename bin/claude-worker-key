@@ -4,6 +4,7 @@
 # Claude Code apiKeyHelper for the pstack worker profile.
 # Prints the worker provider API key and nothing else, as apiKeyHelper requires.
 # claude/worker/provider.env names the file and the variable that hold the key.
+# In a cloud session it can print a placeholder instead (network-secret mode).
 set -Eeuo pipefail
 
 script_path="$(readlink -f -- "${BASH_SOURCE[0]}" 2>/dev/null || python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "${BASH_SOURCE[0]}")"
@@ -21,15 +22,29 @@ variable="$(setting WORKER_API_KEY_VARIABLE)" || {
 }
 env_file="${CLAUDE_WORKER_KEY_ENV_FILE:-$(setting WORKER_API_KEY_ENV_FILE || true)}"
 env_file="${env_file/#\~/$HOME}"
+network_secret_marker="${CLAUDE_WORKER_CONFIG_DIR:-$HOME/.claude-worker}/network-secret"
 
-if [[ -z "$env_file" || ! -f "$env_file" ]]; then
-  printf 'claude-worker-key: missing key file %s. Add %s there, then retry.\n' "${env_file:-<unset>}" "$variable" >&2
-  exit 1
+# Key sources, in this order:
+# 1. the key file (workstations: ~/.config/ai-memory/env);
+# 2. the variable itself in the environment (a cloud environment variable);
+# 3. network-secret mode (cloud): a placeholder, which the claude.ai agent
+#    proxy replaces with the stored network secret outside the VM.
+if [[ -n "$env_file" && -f "$env_file" ]] && \
+  key="$(python3 "$helper" env-value "$env_file" "$variable" 2>/dev/null)" && [[ -n "$key" ]]; then
+  printf '%s\n' "$key"
+  exit 0
 fi
 
-if ! key="$(python3 "$helper" env-value "$env_file" "$variable" 2>/dev/null)" || [[ -z "$key" ]]; then
-  printf 'claude-worker-key: %s is not set in %s.\n' "$variable" "$env_file" >&2
-  exit 1
+if [[ -n "${!variable:-}" ]]; then
+  printf '%s\n' "${!variable}"
+  exit 0
 fi
 
-printf '%s\n' "$key"
+if [[ -f "$network_secret_marker" ]]; then
+  printf '%s\n' network-secret-placeholder
+  exit 0
+fi
+
+printf 'claude-worker-key: no %s in %s, in the environment, or a network-secret marker (%s).\n' \
+  "$variable" "${env_file:-<unset>}" "$network_secret_marker" >&2
+exit 1

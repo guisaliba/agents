@@ -222,9 +222,17 @@ worker_environment() {
     fi
   done
   # The apiKeyHelper (claude-worker-key) runs inside the worker. The two
-  # CLAUDE_WORKER_*_FILE paths go with it, so it reads the same key file as
-  # the preflight require_key. They are paths; the key value never passes.
-  WORKER_ENV+=("CLAUDE_CONFIG_DIR=$WORKER_CONFIG_DIR")
+  # CLAUDE_WORKER_*_FILE paths and the worker profile path (for the
+  # network-secret marker) go with it, so it finds the same key source as the
+  # preflight require_key. They are paths. The key variable itself passes
+  # only when it is already in this environment (a cloud environment
+  # variable), where every process of the session can read it anyway.
+  local key_variable
+  key_variable="$(provider_setting WORKER_API_KEY_VARIABLE || true)"
+  if [[ -n "$key_variable" && -n "${!key_variable:-}" ]]; then
+    WORKER_ENV+=("$key_variable=${!key_variable}")
+  fi
+  WORKER_ENV+=("CLAUDE_WORKER_CONFIG_DIR=$WORKER_CONFIG_DIR" "CLAUDE_CONFIG_DIR=$WORKER_CONFIG_DIR")
 }
 
 command_run() {
