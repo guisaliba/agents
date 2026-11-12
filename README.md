@@ -86,6 +86,14 @@ the file also sets `AI_MEMORY_LLM_PROVIDER=opencode` and `AI_MEMORY_LLM_MODEL`
 The full validation checklist and daily usage are in
 [`claude/README.md`](claude/README.md).
 
+### Claude Code cloud sessions
+
+`./apply.sh --cloud` installs the stack without ai-memory and the Bash
+wrapper, for a claude.ai cloud environment. Paste
+[`cloud/setup.sh`](cloud/setup.sh) into the environment's setup script and
+store the OpenCode Go key as a network secret. The steps are in
+[`cloud/README.md`](cloud/README.md).
+
 ## Components
 
 | Component | Version | Documentation |

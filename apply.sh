@@ -27,6 +27,11 @@ CLAUDE_INSTALL_URL="https://claude.ai/install.sh"
 # The built-in you-should-know mod requires 2.1.287. claude-worker needs only
 # 2.1.259 (--permission-prompts), so the mod sets the floor.
 CLAUDE_MIN_VERSION="${CLAUDE_MIN_VERSION:-2.1.287}"
+CLAUDE_WORKER_MIN_VERSION="2.1.259"
+CLAUDE_ENABLE_YOU_SHOULD_KNOW="${CLAUDE_ENABLE_YOU_SHOULD_KNOW:-true}"
+# The cloud profile links the worker commands here, a directory on PATH in
+# every cloud session shell.
+CLOUD_BIN_DIR="${CLOUD_BIN_DIR:-/usr/local/bin}"
 CLAUDE_HOME="$HOME/.claude"
 CLAUDE_RULES_DIR="$CLAUDE_HOME/rules"
 CLAUDE_MAIN_MODEL="opus"
@@ -82,7 +87,27 @@ source "$REPO_DIR/lib/rtk.bash"
 # shellcheck source=lib/claude.bash
 source "$REPO_DIR/lib/claude.bash"
 
+usage() {
+  cat <<'USAGE'
+Usage: ./apply.sh [--cloud]
+
+  (no option)  Workstation profile: Claude Code, pstack, the worker profile,
+               ai-memory, RTK, and the Bash wrapper.
+  --cloud      Claude Code cloud session profile (claude.ai cloud environment
+               setup script): Claude Code, pstack, the worker profile, and
+               RTK. No ai-memory, no Bash wrapper.
+USAGE
+}
+
 main() {
+  case "${1:-}" in
+    "") ;;
+    --cloud) main_cloud; return ;;
+    -h|--help) usage; return ;;
+    *) usage >&2; die "Unknown option: $1" ;;
+  esac
+  [[ $# -le 1 ]] || { usage >&2; die "Unknown option: $2"; }
+
   log "Starting Claude Code + pstack agent stack setup"
 
   prepare_platform_prerequisites
@@ -106,6 +131,34 @@ main() {
   configure_bash_login_env
 
   log "Setup complete. Open a new Bash shell, run claude once to log in with the Claude Pro plan, then run ./test.sh and claude-worker doctor."
+}
+
+# Cloud sessions run in a fresh Ubuntu VM as root, with no systemd and no
+# process that outlives the session, so ai-memory has nowhere to run and no
+# data that stays. The setup script of the claude.ai cloud environment runs
+# this profile once per environment snapshot (cloud/setup.sh).
+main_cloud() {
+  log "Starting the Claude Code cloud session profile"
+
+  check_cloud_prerequisites
+  prepend_path "$HOME/.local/bin"
+  # The you-should-know mod is a terminal interface mod, so the cloud profile
+  # does not need its 2.1.287 minimum; claude-worker needs 2.1.259.
+  CLAUDE_MIN_VERSION="$CLAUDE_WORKER_MIN_VERSION"
+  CLAUDE_ENABLE_YOU_SHOULD_KNOW=false
+  install_claude_code
+  install_rtk
+
+  configure_claude_main_profile
+  wire_rtk_to_claude_code "$CLAUDE_HOME"
+  install_pstack_plugin
+
+  configure_worker_profile
+  link_worker_commands "$CLOUD_BIN_DIR"
+  enable_worker_network_secret
+  wire_rtk_to_claude_code "$CLAUDE_WORKER_HOME"
+
+  log "Cloud profile complete. In a cloud session, run claude-worker doctor --live."
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

@@ -552,6 +552,51 @@ key_source_fixtures() {
   expect "with no source at all, the key helper exits 1" bash -c '! "$0" >/dev/null 2>&1' "$dir/key.sh"
 }
 
+# --- cloud profile fixtures -------------------------------------------------
+
+cloud_fixtures() {
+  printf '\n== cloud profile fixtures\n'
+  local dir="$FIXTURE_ROOT/cloud" home bin output
+  home="$dir/home"; bin="$dir/usr-local-bin"
+  mkdir -p "$home" "$bin"
+
+  run_cloud() {
+    env -i HOME="$home" PATH="$PATH" CLOUD_BIN_DIR="$bin" bash -c '
+      set -Eeuo pipefail
+      source "$0/apply.sh"
+      calls=()
+      check_cloud_prerequisites() { calls+=(prerequisites); }
+      install_claude_code() { calls+=("claude-code min $CLAUDE_MIN_VERSION"); }
+      install_rtk() { calls+=(rtk); }
+      wire_rtk_to_claude_code() { calls+=("rtk-wire $1"); }
+      install_pstack_plugin() { calls+=(pstack); }
+      install_ai_memory() { calls+=(AI-MEMORY); }
+      setup_ai_memory() { calls+=(AI-MEMORY); }
+      merge_claude_shell_block() { calls+=(SHELL-BLOCK); }
+      main --cloud >/dev/null
+      printf "%s\n" "${calls[@]}"
+    ' "$REPO_DIR" 2>&1
+  }
+  output="$(run_cloud || printf "apply.sh --cloud failed\n")"
+  expect "apply.sh --cloud succeeds" bash -c '! grep -qF "apply.sh --cloud failed" <<<"$0"' "$output"
+  expect "the cloud profile installs Claude Code, RTK, pstack, and wires RTK to both profiles" bash -c \
+    'for c in prerequisites "claude-code min 2.1.259" rtk pstack "rtk-wire $1/.claude" "rtk-wire $1/.claude-worker"; do grep -qxF "$c" <<<"$0" || exit 1; done' "$output" "$home"
+  expect "the cloud profile skips ai-memory and the Bash wrapper" bash -c \
+    '! grep -qE "AI-MEMORY|SHELL-BLOCK" <<<"$0"' "$output"
+  expect "the cloud profile installs the instructions and rules" bash -c \
+    'equals() { cmp -s <(cat "$1"; printf "\n@RTK.md\n") "$2"; }; equals "$0/CLAUDE.md" "$1/.claude/CLAUDE.md" && cmp -s "$0/claude/rules/pstack-models.md" "$1/.claude/rules/pstack-models.md"' "$REPO_DIR" "$home"
+  expect "the cloud profile does not enable the you-should-know mod" file_lacks "$home/.claude/settings.json" 'you-should-know'
+  expect "the cloud profile allows claude-worker runs" grep -qF 'Bash(claude-worker run *)' "$home/.claude/settings.json"
+  expect "the cloud profile links claude-worker into the cloud bin directory" bash -c \
+    '[[ "$(readlink "$0/claude-worker")" == "$1/claude-worker" && "$(readlink "$0/claude-worker-key")" == "$1/claude-worker-key" ]]' "$bin" "$REPO_DIR/bin"
+  expect "the cloud profile turns on the network-secret key mode" test -f "$home/.claude-worker/network-secret"
+  expect "cloud/setup.sh is valid Bash and runs apply.sh --cloud" bash -c \
+    'bash -n "$0/cloud/setup.sh" && grep -qF "apply.sh\" --cloud" "$0/cloud/setup.sh"' "$REPO_DIR"
+  expect "apply.sh rejects an unknown option before it changes anything" bash -c \
+    'out="$(env -i HOME="$1" PATH="$PATH" bash "$0/apply.sh" --bogus 2>&1)"; [[ $? -ne 0 ]] && grep -qF "Unknown option: --bogus" <<<"$out"' "$REPO_DIR" "$dir/bogus-home"
+
+}
+
 # --- Bash wrapper fixtures -------------------------------------------------
 
 wrapper_fixtures() {
@@ -773,6 +818,7 @@ helper_fixtures
 worker_fixtures
 apply_fixtures
 key_source_fixtures
+cloud_fixtures
 ai_memory_env_fixtures
 ai_memory_release_fixtures
 wrapper_fixtures

@@ -85,6 +85,22 @@ check_prerequisites() {
   log "All prerequisites present"
 }
 
+# The cloud profile runs in a claude.ai cloud session VM (Ubuntu, root, no
+# systemd). The setup script installs bwrap and socat before apply.sh runs.
+check_cloud_prerequisites() {
+  log "Checking cloud prerequisites"
+  local cmd missing=()
+  [[ "$(agent_stack_platform)" == Linux ]] || die "The cloud profile runs only on Linux"
+  for cmd in bash curl git python3 bwrap socat; do
+    have "$cmd" || missing+=("$cmd")
+  done
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    die "Missing prerequisites: ${missing[*]}. The cloud setup script installs bwrap and socat with apt."
+  fi
+  python3 -c 'import tomllib' >/dev/null 2>&1 || die "Python 3.11 or newer is required."
+  log "All cloud prerequisites present"
+}
+
 install_aur_command() {
   local command_name="$1"
   local package_name="$2"
