@@ -373,6 +373,12 @@ assert os.path.realpath(sys.argv[2]) in deny and os.path.realpath(sys.argv[3] + 
     '[[ "$0" == 0 ]] && grep -qx "OPENCODE_API_KEY=sk-env-fixture" "$1"' "$status" "$logs/env"
   expect "the worker gets the worker profile path for the network-secret marker" grep -qx "CLAUDE_WORKER_CONFIG_DIR=$profile" "$logs/env"
   status=0
+  HTTPS_PROXY=http://127.0.0.1:3128 no_proxy=localhost NODE_EXTRA_CA_CERTS=/etc/proxy-ca.crt \
+    run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/proxy.md" >/dev/null 2>&1 || status=$?
+  expect "the proxy and CA variables reach the worker, so a network secret is injected" bash -c \
+    '[[ "$0" == 0 ]] && grep -qx "HTTPS_PROXY=http://127.0.0.1:3128" "$1" && grep -qx "no_proxy=localhost" "$1" &&
+      grep -qx "NODE_EXTRA_CA_CERTS=/etc/proxy-ca.crt" "$1"' "$status" "$logs/env"
+  status=0
   run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/nokeyvar.md" >/dev/null 2>&1 || status=$?
   expect "without a key variable, none is passed to the worker" bash -c '[[ "$0" == 0 ]] && ! grep -q "^OPENCODE_API_KEY=" "$1"' "$status" "$logs/env"
   status=0
