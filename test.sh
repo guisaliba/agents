@@ -573,9 +573,9 @@ cloud_fixtures() {
       install_ai_memory() { calls+=(AI-MEMORY); }
       setup_ai_memory() { calls+=(AI-MEMORY); }
       merge_claude_shell_block() { calls+=(SHELL-BLOCK); }
-      main --cloud >/dev/null
+      main --cloud >"$1/cloud.log"
       printf "%s\n" "${calls[@]}"
-    ' "$REPO_DIR" 2>&1
+    ' "$REPO_DIR" "$dir" 2>&1
   }
   output="$(run_cloud || printf "apply.sh --cloud failed\n")"
   expect "apply.sh --cloud succeeds" bash -c '! grep -qF "apply.sh --cloud failed" <<<"$0"' "$output"
@@ -590,6 +590,7 @@ cloud_fixtures() {
   expect "the cloud profile links claude-worker into the cloud bin directory" bash -c \
     '[[ "$(readlink "$0/claude-worker")" == "$1/claude-worker" && "$(readlink "$0/claude-worker-key")" == "$1/claude-worker-key" ]]' "$bin" "$REPO_DIR/bin"
   expect "the cloud profile turns on the network-secret key mode" test -f "$home/.claude-worker/network-secret"
+  expect "the cloud profile does not report a missing key" file_lacks "$dir/cloud.log" 'API key not found'
   expect "cloud/setup.sh is valid Bash and runs apply.sh --cloud" bash -c \
     'bash -n "$0/cloud/setup.sh" && grep -qF "apply.sh\" --cloud" "$0/cloud/setup.sh"' "$REPO_DIR"
   expect "apply.sh rejects an unknown option before it changes anything" bash -c \

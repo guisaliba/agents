@@ -153,9 +153,11 @@ main_cloud() {
   wire_rtk_to_claude_code "$CLAUDE_HOME"
   install_pstack_plugin
 
+  # The marker comes first, so the key check in configure_worker_profile
+  # sees the network-secret mode.
+  enable_worker_network_secret
   configure_worker_profile
   link_worker_commands "$CLOUD_BIN_DIR"
-  enable_worker_network_secret
   wire_rtk_to_claude_code "$CLAUDE_WORKER_HOME"
 
   log "Cloud profile complete. In a cloud session, run claude-worker doctor --live."
