@@ -410,12 +410,15 @@ command_doctor() {
   local live=false failures=0 claude version
   [[ "${1:-}" == "--live" ]] && live=true
 
+  # A check prints one status line on standard output. The output of the
+  # checked command stays hidden, because a check must not print the value
+  # that it verifies (the provider API key).
   check() {
-    if "$@"; then printf 'ok    %s\n' "$DOCTOR_LABEL"; else printf 'FAIL  %s\n' "$DOCTOR_LABEL"; failures=$((failures + 1)); fi
+    if "$@" >/dev/null; then printf 'ok    %s\n' "$DOCTOR_LABEL"; else printf 'FAIL  %s\n' "$DOCTOR_LABEL"; failures=$((failures + 1)); fi
   }
 
   DOCTOR_LABEL="claude executable on PATH"
-  check claude_binary >/dev/null
+  check claude_binary
   if claude="$(claude_binary)"; then
     version="$("$claude" --version 2>/dev/null || true)"
     DOCTOR_LABEL="claude version $version is $CLAUDE_MIN_VERSION or newer"
@@ -434,7 +437,9 @@ PY
   DOCTOR_LABEL="worker profile $WORKER_CONFIG_DIR/settings.json"
   check bash -c '"$0" __profile' "$script_path"
   DOCTOR_LABEL="provider API key available through claude-worker-key (value not shown)"
-  check "$KEY_HELPER" >/dev/null 2>&1
+  # The helper prints the key on standard output and its reason on standard
+  # error. Both stay hidden, because the key must never reach the doctor.
+  check "$KEY_HELPER" 2>/dev/null
 
   DOCTOR_LABEL="every roster model id is in the provider model list"
   check models_in_live_list
