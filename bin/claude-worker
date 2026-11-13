@@ -214,7 +214,12 @@ worker_environment() {
   local name
   local -a pass=(HOME USER LOGNAME PATH SHELL LANG LC_ALL LC_CTYPE TERM TMPDIR
     XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME XDG_RUNTIME_DIR
-    CLAUDE_WORKER_KEY_ENV_FILE CLAUDE_WORKER_PROVIDER_FILE)
+    CLAUDE_WORKER_KEY_ENV_FILE CLAUDE_WORKER_PROVIDER_FILE
+    # Outbound network path. A network secret (cloud/README.md) is injected only
+    # into requests that go through the egress proxy, so without these the
+    # provider answers 401 and Claude Code retries until the run deadline.
+    HTTPS_PROXY https_proxy HTTP_PROXY http_proxy ALL_PROXY all_proxy NO_PROXY no_proxy
+    NODE_EXTRA_CA_CERTS SSL_CERT_FILE SSL_CERT_DIR)
   WORKER_ENV=()
   for name in "${pass[@]}"; do
     if [[ -n "${!name:-}" ]]; then
@@ -222,9 +227,17 @@ worker_environment() {
     fi
   done
   # The apiKeyHelper (claude-worker-key) runs inside the worker. The two
-  # CLAUDE_WORKER_*_FILE paths go with it, so it reads the same key file as
-  # the preflight require_key. They are paths; the key value never passes.
-  WORKER_ENV+=("CLAUDE_CONFIG_DIR=$WORKER_CONFIG_DIR")
+  # CLAUDE_WORKER_*_FILE paths and the worker profile path (for the
+  # network-secret marker) go with it, so it finds the same key source as the
+  # preflight require_key. They are paths. The key variable itself passes
+  # only when it is already in this environment (a cloud environment
+  # variable), where every process of the session can read it anyway.
+  local key_variable
+  key_variable="$(provider_setting WORKER_API_KEY_VARIABLE || true)"
+  if [[ -n "$key_variable" && -n "${!key_variable:-}" ]]; then
+    WORKER_ENV+=("$key_variable=${!key_variable}")
+  fi
+  WORKER_ENV+=("CLAUDE_WORKER_CONFIG_DIR=$WORKER_CONFIG_DIR" "CLAUDE_CONFIG_DIR=$WORKER_CONFIG_DIR")
 }
 
 command_run() {
@@ -397,12 +410,15 @@ command_doctor() {
   local live=false failures=0 claude version
   [[ "${1:-}" == "--live" ]] && live=true
 
+  # A check prints one status line on standard output. The output of the
+  # checked command stays hidden, because a check must not print the value
+  # that it verifies (the provider API key).
   check() {
-    if "$@"; then printf 'ok    %s\n' "$DOCTOR_LABEL"; else printf 'FAIL  %s\n' "$DOCTOR_LABEL"; failures=$((failures + 1)); fi
+    if "$@" >/dev/null; then printf 'ok    %s\n' "$DOCTOR_LABEL"; else printf 'FAIL  %s\n' "$DOCTOR_LABEL"; failures=$((failures + 1)); fi
   }
 
   DOCTOR_LABEL="claude executable on PATH"
-  check claude_binary >/dev/null
+  check claude_binary
   if claude="$(claude_binary)"; then
     version="$("$claude" --version 2>/dev/null || true)"
     DOCTOR_LABEL="claude version $version is $CLAUDE_MIN_VERSION or newer"
@@ -421,7 +437,9 @@ PY
   DOCTOR_LABEL="worker profile $WORKER_CONFIG_DIR/settings.json"
   check bash -c '"$0" __profile' "$script_path"
   DOCTOR_LABEL="provider API key available through claude-worker-key (value not shown)"
-  check "$KEY_HELPER" >/dev/null 2>&1
+  # The helper prints the key on standard output and its reason on standard
+  # error. Both stay hidden, because the key must never reach the doctor.
+  check "$KEY_HELPER" 2>/dev/null
 
   DOCTOR_LABEL="every roster model id is in the provider model list"
   check models_in_live_list

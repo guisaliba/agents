@@ -72,10 +72,16 @@ configure_claude_main_profile() {
   # worker seats without one permission prompt per seat. The built-in
   # you-should-know mod is off by default; it needs a direct claude.ai login,
   # so it is enabled in the main profile only.
-  log "Selecting Opus as the main Claude Code model, allowing claude-worker, and enabling you-should-know"
+  local patch
+  patch="{\"model\": \"$CLAUDE_MAIN_MODEL\", \"permissions\": {\"allow\": [\"Bash(claude-worker run *)\", \"Bash(claude-worker usage)\", \"Bash(claude-worker models)\"]}"
+  if [[ "$CLAUDE_ENABLE_YOU_SHOULD_KNOW" == true ]]; then
+    log "Selecting Opus as the main Claude Code model, allowing claude-worker, and enabling you-should-know"
+    patch+=", \"enabledPlugins\": {\"$CLAUDE_YOU_SHOULD_KNOW_PLUGIN\": true}"
+  else
+    log "Selecting Opus as the main Claude Code model and allowing claude-worker"
+  fi
   python3 "$AGENT_STACK_HELPER" merge-json \
-    "$CLAUDE_HOME/settings.json" \
-    "{\"model\": \"$CLAUDE_MAIN_MODEL\", \"permissions\": {\"allow\": [\"Bash(claude-worker run *)\", \"Bash(claude-worker usage)\", \"Bash(claude-worker models)\"]}, \"enabledPlugins\": {\"$CLAUDE_YOU_SHOULD_KNOW_PLUGIN\": true}}" \
+    "$CLAUDE_HOME/settings.json" "$patch}" \
     "Claude Code user settings" || die "Could not update $CLAUDE_HOME/settings.json"
 }
 
@@ -129,9 +135,30 @@ print(json.dumps({
 PY
 }
 
+# Link claude-worker and claude-worker-key into the directory $1.
+link_worker_commands() {
+  local target="$1" link
+  log "Linking claude-worker and claude-worker-key into $target"
+  mkdir -p "$target"
+  for link in claude-worker claude-worker-key; do
+    if [[ -e "$target/$link" && ! -L "$target/$link" ]]; then
+      die "Refusing to replace a file that is not a symlink: $target/$link"
+    fi
+    ln -sfn "$REPO_DIR/bin/$link" "$target/$link"
+  done
+}
+
+# Cloud sessions keep the provider key outside the VM as a claude.ai network
+# secret, which the agent proxy adds to requests for the provider host. This
+# marker makes claude-worker-key print a placeholder when no key file and no
+# key variable exist, so Claude Code sends a request for the proxy to fill.
+enable_worker_network_secret() {
+  log "Turning on the network-secret key mode for the worker profile"
+  mkdir -p "$CLAUDE_WORKER_HOME"
+  : >"$CLAUDE_WORKER_HOME/network-secret"
+}
+
 configure_worker_profile() {
-  local link
-  local -a commands=(claude-worker claude-worker-key)
 
   log "Configuring the pstack worker profile in $CLAUDE_WORKER_HOME ($(worker_provider_setting WORKER_PROVIDER))"
   mkdir -p "$CLAUDE_WORKER_HOME"
@@ -142,14 +169,7 @@ configure_worker_profile() {
     "$(worker_settings_patch)" \
     "worker settings" || die "Could not update $CLAUDE_WORKER_HOME/settings.json"
 
-  log "Linking claude-worker and claude-worker-key into ~/.local/bin"
-  mkdir -p "$HOME/.local/bin"
-  for link in "${commands[@]}"; do
-    if [[ -e "$HOME/.local/bin/$link" && ! -L "$HOME/.local/bin/$link" ]]; then
-      die "Refusing to replace a file that is not a symlink: $HOME/.local/bin/$link"
-    fi
-    ln -sfn "$REPO_DIR/bin/$link" "$HOME/.local/bin/$link"
-  done
+  link_worker_commands "$HOME/.local/bin"
 
   if ! "$REPO_DIR/bin/claude-worker-key" >/dev/null 2>&1; then
     log "Worker provider API key not found. Run claude-worker-key for the reason before you use worker/ roles."

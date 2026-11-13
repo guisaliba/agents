@@ -222,6 +222,7 @@ worker_fixtures() {
   printf '\n== claude-worker-key and claude-worker fixtures\n'
   local dir="$FIXTURE_ROOT/worker"
   local home="$dir/home" profile="$dir/home/.claude-worker" logs="$dir/logs" work="$dir/work"
+  local doctor="$dir/doctor"
   local secret="sk-fixture-$$-do-not-leak"
   local repo="$dir/repo"
   mkdir -p "$home/.config/ai-memory" "$profile" "$logs" "$repo"
@@ -235,6 +236,21 @@ worker_fixtures() {
   make_fake_claude "$dir/claude" "$logs" "$dir/mode"
   printf 'Do the fixture task.\n' >"$work/brief.md"
 
+  # A version-only claude, newer than any minimum, so the doctor expectations
+  # follow CLAUDE_MIN_VERSION instead of a copied value.
+  local doctor_min
+  doctor_min="$(sed -n 's/^CLAUDE_MIN_VERSION="\(.*\)"$/\1/p' "$REPO_DIR/bin/claude-worker")"
+  mkdir -p "$doctor"
+  printf '%s\n' '#!/usr/bin/env bash' 'printf "99.0.0 (Claude Code)\\n"' >"$doctor/claude"
+  chmod +x "$doctor/claude"
+  printf 'fixture\tfixture-model\tfixture\t1\n' >"$doctor/roster.tsv"
+  printf '{"data":[{"id":"fixture-model"}]}\n' >"$doctor/models.json"
+  cat >"$doctor/provider.env" <<EOF
+WORKER_MODELS_URL=file://$doctor/models.json
+WORKER_API_KEY_ENV_FILE=$home/.config/ai-memory/env
+WORKER_API_KEY_VARIABLE=OPENCODE_API_KEY
+EOF
+
   run_worker() {
     env HOME="$home" CLAUDE_WORKER_CONFIG_DIR="${PROFILE_OVERRIDE:-$profile}" XDG_STATE_HOME="$home/.local/state" \
       CLAUDE_WORKER_CLAUDE_BIN="$dir/claude" ${KEY_FILE_OVERRIDE:+CLAUDE_WORKER_KEY_ENV_FILE="$KEY_FILE_OVERRIDE"} \
@@ -242,10 +258,48 @@ worker_fixtures() {
       "$REPO_DIR/bin/claude-worker" "$@"
   }
 
+  run_doctor() {
+    env -u OPENCODE_API_KEY HOME="$home" CLAUDE_WORKER_CONFIG_DIR="$profile" \
+      CLAUDE_WORKER_CLAUDE_BIN="$doctor/claude" CLAUDE_WORKER_ROSTER="$doctor/roster.tsv" \
+      CLAUDE_WORKER_PROVIDER_FILE="$doctor/provider.env" CLAUDE_WORKER_SANDBOX_COMMANDS=bash \
+      "$REPO_DIR/bin/claude-worker" doctor
+  }
+
   expect "claude-worker-key prints the key that provider.env names" bash -c \
     '[[ "$(HOME="$0" "$1/bin/claude-worker-key")" == "$2" ]]' "$home" "$REPO_DIR" "$secret"
   expect "claude-worker-key fails without a key file" bash -c \
     '! HOME="$0" CLAUDE_WORKER_KEY_ENV_FILE=/nonexistent "$1/bin/claude-worker-key" 2>/dev/null' "$home" "$REPO_DIR"
+
+  run_doctor >"$doctor/pass.out" 2>&1
+  cat >"$doctor/pass.expected" <<EOF
+ok    claude executable on PATH
+ok    claude version 99.0.0 (Claude Code) is $doctor_min or newer
+ok    Claude Code sandbox commands for read-only seats (bash)
+ok    worker profile $profile/settings.json
+ok    provider API key available through claude-worker-key (value not shown)
+ok    every roster model id is in the provider model list
+All checks passed.
+EOF
+  expect "doctor prints every passing check and hides the provider key" bash -c \
+    'cmp -s "$0" "$1" && ! grep -qF "$2" "$1"' "$doctor/pass.expected" "$doctor/pass.out" "$secret"
+
+  local doctor_status=0
+  CLAUDE_WORKER_KEY_ENV_FILE=/nonexistent run_doctor >"$doctor/fail.out" 2>&1 || doctor_status=$?
+  cat >"$doctor/fail.expected" <<EOF
+ok    claude executable on PATH
+ok    claude version 99.0.0 (Claude Code) is $doctor_min or newer
+ok    Claude Code sandbox commands for read-only seats (bash)
+ok    worker profile $profile/settings.json
+FAIL  provider API key available through claude-worker-key (value not shown)
+FAIL  every roster model id is in the provider model list
+2 check(s) failed.
+EOF
+  expect "doctor names a failed key check and preserves the failure count" bash -c \
+    '[[ "$0" == 1 ]] && cmp -s "$1" "$2"' "$doctor_status" "$doctor/fail.expected" "$doctor/fail.out"
+  printf 'absent\tabsent-model\tfixture\t1\n' >>"$doctor/roster.tsv"
+  run_doctor >"$doctor/missing.out" 2>&1 || true
+  expect "doctor keeps the diagnostics that a check prints on stderr" \
+    grep -qx "  missing ids: absent-model" "$doctor/missing.out"
 
   local status=0
   run_worker run --model worker/kimi-k3.1 --dir "$work" --brief "$work/brief.md" --report "$work/report.md" >/dev/null 2>&1 || status=$?
@@ -366,6 +420,26 @@ assert os.path.realpath(sys.argv[2]) in deny and os.path.realpath(sys.argv[3] + 
   KEY_FILE_OVERRIDE="$home/.config/ai-memory/env" run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/keyfile.md" >/dev/null 2>&1 || status=$?
   expect "the key-file override reaches the worker, so apiKeyHelper reads the same file" bash -c \
     '[[ "$0" == 0 ]] && grep -qx "CLAUDE_WORKER_KEY_ENV_FILE=$1" "$2"' "$status" "$home/.config/ai-memory/env" "$logs/env"
+
+  status=0
+  KEY_FILE_OVERRIDE=/nonexistent OPENCODE_API_KEY=sk-env-fixture run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/envkey.md" >/dev/null 2>&1 || status=$?
+  expect "a key in the environment reaches the worker, so apiKeyHelper reads it there too" bash -c \
+    '[[ "$0" == 0 ]] && grep -qx "OPENCODE_API_KEY=sk-env-fixture" "$1"' "$status" "$logs/env"
+  expect "the worker gets the worker profile path for the network-secret marker" grep -qx "CLAUDE_WORKER_CONFIG_DIR=$profile" "$logs/env"
+  status=0
+  HTTPS_PROXY=http://127.0.0.1:3128 no_proxy=localhost NODE_EXTRA_CA_CERTS=/etc/proxy-ca.crt \
+    run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/proxy.md" >/dev/null 2>&1 || status=$?
+  expect "the proxy and CA variables reach the worker, so a network secret is injected" bash -c \
+    '[[ "$0" == 0 ]] && grep -qx "HTTPS_PROXY=http://127.0.0.1:3128" "$1" && grep -qx "no_proxy=localhost" "$1" &&
+      grep -qx "NODE_EXTRA_CA_CERTS=/etc/proxy-ca.crt" "$1"' "$status" "$logs/env"
+  status=0
+  run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/nokeyvar.md" >/dev/null 2>&1 || status=$?
+  expect "without a key variable, none is passed to the worker" bash -c '[[ "$0" == 0 ]] && ! grep -q "^OPENCODE_API_KEY=" "$1"' "$status" "$logs/env"
+  status=0
+  : >"$profile/network-secret"
+  KEY_FILE_OVERRIDE=/nonexistent run_worker run --model worker/glm-5.3 --dir "$work" --brief "$work/brief.md" --report "$work/netsecret.md" >/dev/null 2>&1 || status=$?
+  rm -f "$profile/network-secret"
+  expect "network-secret mode passes the key preflight without a key file" test "$status" -eq 0
 
   local started elapsed no_timeout_path
   status=0
@@ -513,6 +587,75 @@ ai_memory_env_fixtures() {
   expect "retired names are reported" bash -c \
     'for n in AGENTS_AI_MEMORY_LLM_ENABLED DOTFILES_AI_MEMORY_LLM_PROFILE AGENTS_AI_MEMORY_REMOTE_MODE AI_MEMORY_SERVER_URL; do grep -qF "$n" <<<"$0" || exit 1; done' "$output"
   expect "retired names are reported, not removed" test "$before" == "$(sha256sum "$env_file")"
+}
+
+# --- worker key source fixtures ---------------------------------------------
+
+key_source_fixtures() {
+  printf '\n== worker key source fixtures\n'
+  local dir="$FIXTURE_ROOT/key-sources" home secret="sk-key-source-fixture-0123456789"
+  home="$dir/home"
+  mkdir -p "$home/.claude-worker"
+  : >"$home/.claude-worker/network-secret"
+  # Key resolution: key file, then the environment variable, then the
+  # network-secret placeholder.
+  printf '%s\n' '#!/usr/bin/env bash' "env -i HOME=\"$home\" PATH=\"\$PATH\" \"\$@\" \"$REPO_DIR/bin/claude-worker-key\"" >"$dir/key.sh"
+  chmod +x "$dir/key.sh"
+  expect "without a key file, the key comes from OPENCODE_API_KEY" bash -c '[[ "$("$0" OPENCODE_API_KEY="$1" 2>/dev/null)" == "$1" ]]' "$dir/key.sh" "$secret"
+  expect "without a key file or variable, network-secret mode prints a placeholder" bash -c \
+    '[[ "$("$0" 2>/dev/null)" == network-secret-placeholder ]]' "$dir/key.sh"
+  mkdir -p "$home/.config/ai-memory"
+  printf 'OPENCODE_API_KEY=%s-file\n' "$secret" >"$home/.config/ai-memory/env"
+  expect "the key file wins over the variable and the placeholder" bash -c \
+    '[[ "$("$0" OPENCODE_API_KEY="$1" 2>/dev/null)" == "$1-file" ]]' "$dir/key.sh" "$secret"
+  rm -f "$home/.config/ai-memory/env" "$home/.claude-worker/network-secret"
+  expect "with no source at all, the key helper exits 1" bash -c '! "$0" >/dev/null 2>&1' "$dir/key.sh"
+}
+
+# --- cloud profile fixtures -------------------------------------------------
+
+cloud_fixtures() {
+  printf '\n== cloud profile fixtures\n'
+  local dir="$FIXTURE_ROOT/cloud" home bin output
+  home="$dir/home"; bin="$dir/usr-local-bin"
+  mkdir -p "$home" "$bin"
+
+  run_cloud() {
+    env -i HOME="$home" PATH="$PATH" CLOUD_BIN_DIR="$bin" bash -c '
+      set -Eeuo pipefail
+      source "$0/apply.sh"
+      calls=()
+      check_cloud_prerequisites() { calls+=(prerequisites); }
+      install_claude_code() { calls+=("claude-code min $CLAUDE_MIN_VERSION"); }
+      install_rtk() { calls+=(rtk); }
+      wire_rtk_to_claude_code() { calls+=("rtk-wire $1"); }
+      install_pstack_plugin() { calls+=(pstack); }
+      install_ai_memory() { calls+=(AI-MEMORY); }
+      setup_ai_memory() { calls+=(AI-MEMORY); }
+      merge_claude_shell_block() { calls+=(SHELL-BLOCK); }
+      main --cloud >"$1/cloud.log"
+      printf "%s\n" "${calls[@]}"
+    ' "$REPO_DIR" "$dir" 2>&1
+  }
+  output="$(run_cloud || printf "apply.sh --cloud failed\n")"
+  expect "apply.sh --cloud succeeds" bash -c '! grep -qF "apply.sh --cloud failed" <<<"$0"' "$output"
+  expect "the cloud profile installs Claude Code, RTK, pstack, and wires RTK to both profiles" bash -c \
+    'for c in prerequisites "claude-code min 2.1.259" rtk pstack "rtk-wire $1/.claude" "rtk-wire $1/.claude-worker"; do grep -qxF "$c" <<<"$0" || exit 1; done' "$output" "$home"
+  expect "the cloud profile skips ai-memory and the Bash wrapper" bash -c \
+    '! grep -qE "AI-MEMORY|SHELL-BLOCK" <<<"$0"' "$output"
+  expect "the cloud profile installs the instructions and rules" bash -c \
+    'equals() { cmp -s <(cat "$1"; printf "\n@RTK.md\n") "$2"; }; equals "$0/CLAUDE.md" "$1/.claude/CLAUDE.md" && cmp -s "$0/claude/rules/pstack-models.md" "$1/.claude/rules/pstack-models.md"' "$REPO_DIR" "$home"
+  expect "the cloud profile does not enable the you-should-know mod" file_lacks "$home/.claude/settings.json" 'you-should-know'
+  expect "the cloud profile allows claude-worker runs" grep -qF 'Bash(claude-worker run *)' "$home/.claude/settings.json"
+  expect "the cloud profile links claude-worker into the cloud bin directory" bash -c \
+    '[[ "$(readlink "$0/claude-worker")" == "$1/claude-worker" && "$(readlink "$0/claude-worker-key")" == "$1/claude-worker-key" ]]' "$bin" "$REPO_DIR/bin"
+  expect "the cloud profile turns on the network-secret key mode" test -f "$home/.claude-worker/network-secret"
+  expect "the cloud profile does not report a missing key" file_lacks "$dir/cloud.log" 'API key not found'
+  expect "cloud/setup.sh is valid Bash and runs apply.sh --cloud" bash -c \
+    'bash -n "$0/cloud/setup.sh" && grep -qF "apply.sh\" --cloud" "$0/cloud/setup.sh"' "$REPO_DIR"
+  expect "apply.sh rejects an unknown option before it changes anything" bash -c \
+    'out="$(env -i HOME="$1" PATH="$PATH" bash "$0/apply.sh" --bogus 2>&1)"; [[ $? -ne 0 ]] && grep -qF "Unknown option: --bogus" <<<"$out"' "$REPO_DIR" "$dir/bogus-home"
+
 }
 
 # --- Bash wrapper fixtures -------------------------------------------------
@@ -735,6 +878,8 @@ static_checks
 helper_fixtures
 worker_fixtures
 apply_fixtures
+key_source_fixtures
+cloud_fixtures
 ai_memory_env_fixtures
 ai_memory_release_fixtures
 wrapper_fixtures
