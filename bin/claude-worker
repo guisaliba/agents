@@ -215,7 +215,7 @@ worker_environment() {
   local -a pass=(HOME USER LOGNAME PATH SHELL LANG LC_ALL LC_CTYPE TERM TMPDIR
     XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME XDG_RUNTIME_DIR
     CLAUDE_WORKER_KEY_ENV_FILE CLAUDE_WORKER_PROVIDER_FILE
-    # Outbound network path. A network secret (claude/cloud) is injected only
+    # Outbound network path. A network secret (cloud/README.md) is injected only
     # into requests that go through the egress proxy, so without these the
     # provider answers 401 and Claude Code retries until the run deadline.
     HTTPS_PROXY https_proxy HTTP_PROXY http_proxy ALL_PROXY all_proxy NO_PROXY no_proxy
