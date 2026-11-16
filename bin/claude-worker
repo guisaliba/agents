@@ -19,7 +19,12 @@
 #   claude-worker usage
 #
 # Exit status: 0 success, 1 worker run failed, 2 usage error,
-#              3 worker profile or provider API key not configured.
+#              3 worker profile, provider API key, or required isolation not configured.
+#
+# Write-seat isolation (CLAUDE_WORKER_ISOLATION): auto (default) runs each
+# write seat in its own Docker Sandboxes microVM (sbx, clone mode) when sbx
+# works on this host, else on the host with a warning; sbx requires the
+# microVM (exit 3 without it); none always runs on the host.
 set -Eeuo pipefail
 
 script_path="$(readlink -f -- "${BASH_SOURCE[0]}" 2>/dev/null || python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "${BASH_SOURCE[0]}")"
@@ -40,9 +45,18 @@ DEFAULT_TIMEOUT=3600
 READONLY_TOOLS="Read,Glob,Grep,Bash"
 WRITE_TOOLS="Read,Edit,Write,Glob,Grep,Bash"
 DISALLOWED_TOOLS="Agent,WebSearch"
+# Docker Sandboxes (https://docs.docker.com/ai/sandboxes/) for write seats.
+ISOLATION_SETTING="${CLAUDE_WORKER_ISOLATION:-auto}"
+SBX_BIN="${CLAUDE_WORKER_SBX_BIN:-sbx}"
+SBX_CPUS="${CLAUDE_WORKER_SBX_CPUS:-2}"
+SBX_MEMORY="${CLAUDE_WORKER_SBX_MEMORY:-4g}"
+# Clone mode mounts the host repository read-only at this path in the sandbox.
+SBX_SOURCE="${CLAUDE_WORKER_SBX_SOURCE:-/run/sandbox/source}"
+SBX_RESULT_BRANCH="claude-worker-result"
+SBX_AUTOCOMMIT_MARKER="[claude-worker-autocommit]"
 
 usage() {
-  sed -n '14,22p' "$script_path" | sed 's/^# \{0,1\}//' >&2
+  sed -n '14,28p' "$script_path" | sed 's/^# \{0,1\}//' >&2
 }
 
 fail_usage() {
@@ -141,7 +155,13 @@ acquire_write_lock() {
       fail_usage "another write seat took the lock first ($WRITE_LOCK)"
   fi
   printf '%s\n' "$$" >"$WRITE_LOCK/pid"
-  trap 'rm -rf -- "$WRITE_LOCK"' EXIT
+  WRITE_LOCK_HELD=true
+}
+
+# EXIT trap of a run: remove the sandbox (unless kept) and release the lock.
+run_cleanup() {
+  sbx_cleanup
+  [[ "${WRITE_LOCK_HELD:-false}" != true ]] || rm -rf -- "$WRITE_LOCK"
 }
 
 # A read-only seat keeps Bash, so the Claude Code sandbox (bubblewrap on
@@ -207,6 +227,189 @@ print(json.dumps({"disableAllHooks": True, "sandbox": {
 PY
 }
 
+# --- Write-seat isolation in Docker Sandboxes --------------------------------
+#
+# A write seat in a microVM (https://docs.docker.com/ai/sandboxes/workflows/git/):
+#   1. sbx create --clone from the main checkout (clone mode refuses a linked
+#      worktree). The host repository is read-only at $SBX_SOURCE inside.
+#   2. The clone checks out the HEAD commit of the seat's linked worktree,
+#      fetched from $SBX_SOURCE, so the seat starts where the worktree is.
+#   3. claude -p runs in the clone, with the provider settings and key passed
+#      for this one command. The host ~/.claude-worker is not in the sandbox.
+#   4. Uncommitted edits become one marked commit. The host fetches the result
+#      from the sandbox-<name> remote and fast-forwards the worktree, then
+#      undoes the marked commit, so the worktree holds the same commits and
+#      uncommitted edits that a host run leaves.
+#   5. sbx rm. A failed fetch keeps the sandbox for inspection.
+
+# Print why sbx cannot run write seats on this host, or nothing when it can.
+sbx_unavailable_reason() {
+  if ! type -P "$SBX_BIN" >/dev/null 2>&1; then
+    printf 'the sbx CLI is not installed (see https://docs.docker.com/ai/sandboxes/install/)'
+    return 0
+  fi
+  if ! "$SBX_BIN" ls >/dev/null 2>&1; then
+    printf 'sbx ls failed: the sbx daemon does not run, you are not signed in (sbx login), or this host has no hardware virtualization (KVM)'
+    return 0
+  fi
+}
+
+# Set ISOLATION to sbx or none for a write seat, from CLAUDE_WORKER_ISOLATION.
+select_write_isolation() {
+  local reason
+  case "$ISOLATION_SETTING" in
+    none) ISOLATION=none ;;
+    sbx|auto)
+      reason="$(sbx_unavailable_reason)"
+      if [[ -z "$reason" ]]; then
+        ISOLATION=sbx
+      elif [[ "$ISOLATION_SETTING" == sbx ]]; then
+        fail_config "CLAUDE_WORKER_ISOLATION=sbx, but $reason"
+      else
+        ISOLATION=none
+        printf 'claude-worker: warning: isolation none: %s. This write seat runs on the host without a microVM.\n' "$reason" >&2
+      fi
+      ;;
+    *) fail_usage "CLAUDE_WORKER_ISOLATION must be auto, sbx, or none, not: $ISOLATION_SETTING" ;;
+  esac
+}
+
+# Clone mode copies only commits, so a write seat in a sandbox needs a clean
+# worktree: the coordinator commits the changes it copies into the worktree.
+require_clean_worktree() {
+  local dir="$1"
+  [[ -z "$(git -C "$dir" status --porcelain --untracked-files=normal)" ]] || \
+    fail_usage "a write seat in a sandbox needs a clean worktree, because clone mode copies only commits. Commit the changes in $dir first, or set CLAUDE_WORKER_ISOLATION=none."
+}
+
+# Print the main working tree of the repository that holds $1.
+main_worktree() {
+  git -C "$1" worktree list --porcelain | sed -n '1s/^worktree //p'
+}
+
+# Print KEY=VALUE lines for the worker inside a sandbox: the env block of the
+# host worker profile (base URL, background model, beta switches), a private
+# config directory, and the key for the in-sandbox apiKeyHelper. The file is
+# passed with --env-file, so the key is not in argv.
+sbx_worker_env_file() {
+  local target="$1" key
+  key="$("$KEY_HELPER" 2>/dev/null)" || fail_config "the worker provider API key is not available. Run claude-worker-key to see why."
+  ( umask 077
+    python3 - "$WORKER_CONFIG_DIR/settings.json" >"$target" <<'PY'
+import json
+import sys
+
+env = json.load(open(sys.argv[1], encoding="utf-8")).get("env", {})
+for name, value in env.items():
+    value = str(value)
+    if "\n" in value:
+        raise SystemExit(f"multi-line value for {name} in worker settings")
+    print(f"{name}={value}")
+print("CLAUDE_CONFIG_DIR=/tmp/claude-worker-profile")
+PY
+    printf 'CLAUDE_WORKER_KEY=%s\n' "$key" >>"$target"
+  )
+  unset key
+}
+
+# Print the host name of the provider base URL, for the sandbox network rule.
+provider_host() {
+  python3 -c 'import sys, urllib.parse; print(urllib.parse.urlsplit(sys.argv[1]).hostname or "")' \
+    "$(provider_setting WORKER_ANTHROPIC_BASE_URL)"
+}
+
+sbx_quiet() {
+  "$SBX_BIN" "$@" >>"$SBX_LOG" 2>&1
+}
+
+# Remove the sandbox unless SBX_KEEP is set. Runs from the EXIT trap.
+sbx_cleanup() {
+  [[ -n "${SBX_ENV_FILE:-}" ]] && rm -f -- "$SBX_ENV_FILE"
+  [[ -n "${SBX_NAME:-}" ]] || return 0
+  if [[ "${SBX_KEEP:-false}" == true ]]; then
+    printf 'claude-worker: sandbox %s kept for inspection: sbx exec -it %s bash; remove it with sbx rm --force %s\n' \
+      "$SBX_NAME" "$SBX_NAME" "$SBX_NAME" >&2
+  else
+    sbx_quiet rm --force "$SBX_NAME" || true
+  fi
+}
+
+# Create the sandbox and put the clone at the worktree HEAD. Sets SBX_NAME
+# and SBX_CLONE. Returns non-zero when a step fails (see $SBX_LOG).
+sbx_prepare() {
+  local dir="$1" base="$2" main host
+  main="$(main_worktree "$dir")"
+  SBX_NAME="cw-$(date +%s)-$$-$RANDOM"
+  sbx_quiet create --clone --name "$SBX_NAME" --pull missing --no-progress \
+    --cpus "$SBX_CPUS" --memory "$SBX_MEMORY" claude "$main" || return 1
+  host="$(provider_host)"
+  [[ -z "$host" ]] || sbx_quiet policy allow network "$SBX_NAME" "$host" || return 1
+  SBX_CLONE="$("$SBX_BIN" exec "$SBX_NAME" pwd 2>>"$SBX_LOG")" || return 1
+  [[ -n "$SBX_CLONE" ]] || return 1
+  sbx_quiet exec -w "$SBX_CLONE" "$SBX_NAME" \
+    git -c safe.directory='*' fetch --quiet --no-tags "$SBX_SOURCE" "$base" || return 1
+  sbx_quiet exec -w "$SBX_CLONE" "$SBX_NAME" git checkout --quiet -B claude-worker-seat "$base"
+}
+
+# Commit leftover edits in the clone, fetch the result into the worktree,
+# fast-forward it, and undo the marked commit. Returns non-zero on failure.
+sbx_collect() {
+  local dir="$1" base="$2" fetched
+  sbx_quiet exec -w "$SBX_CLONE" "$SBX_NAME" bash -c '
+    git add -A &&
+    { git diff --cached --quiet ||
+      git -c user.name=claude-worker -c user.email=claude-worker@localhost \
+        commit --quiet --no-verify -m "claude-worker: uncommitted edits $1"; } &&
+    git branch --force "$2" HEAD' _ "$SBX_AUTOCOMMIT_MARKER" "$SBX_RESULT_BRANCH" || return 1
+  git -C "$dir" fetch --quiet --no-tags "sandbox-$SBX_NAME" "$SBX_RESULT_BRANCH" >>"$SBX_LOG" 2>&1 || return 1
+  fetched="$(git -C "$dir" rev-parse FETCH_HEAD)"
+  if ! git -C "$dir" merge-base --is-ancestor "$base" "$fetched"; then
+    printf 'claude-worker: the sandbox result %s does not descend from the seat base %s\n' "$fetched" "$base" >>"$SBX_LOG"
+    return 1
+  fi
+  git -C "$dir" merge --quiet --ff-only "$fetched" >>"$SBX_LOG" 2>&1 || return 1
+  if [[ "$fetched" != "$base" ]] && \
+    [[ "$(git -C "$dir" log -1 --format=%s HEAD)" == *"$SBX_AUTOCOMMIT_MARKER" ]]; then
+    git -C "$dir" reset --quiet --mixed HEAD~1 >>"$SBX_LOG" 2>&1 || return 1
+  fi
+}
+
+# Run one write seat in a new sandbox. Arguments: worktree, brief text,
+# timeout, raw output file, stderr file, report path, then the claude
+# arguments. Returns the worker status, or 1 when the sandbox fails.
+run_in_sandbox() {
+  local dir="$1" brief_text="$2" timeout_seconds="$3" raw="$4" errors="$5" report="$6"
+  shift 6
+  local base status=0
+  base="$(git -C "$dir" rev-parse HEAD)"
+  SBX_LOG="$report.sbx.log"
+  : >"$SBX_LOG"
+  : >"$raw"
+  SBX_ENV_FILE="$(mktemp)"
+  sbx_worker_env_file "$SBX_ENV_FILE"
+  if ! sbx_prepare "$dir" "$base"; then
+    printf 'claude-worker: could not prepare sandbox %s. See %s.\n' "${SBX_NAME:-}" "$SBX_LOG" >"$errors"
+    return 1
+  fi
+  # The host profile (~/.claude-worker) is not in the sandbox, so the
+  # contract goes in as an appended system prompt and the key through an
+  # apiKeyHelper that reads the variable from the env file.
+  local -a command=(claude "$@"
+    --settings '{"apiKeyHelper": "printenv CLAUDE_WORKER_KEY"}'
+    --append-system-prompt "$(cat -- "$REPO_DIR/claude/worker/contract.md")")
+  python3 "$HELPER" run-with-deadline "$timeout_seconds" \
+    "$SBX_BIN" exec -i -w "$SBX_CLONE" --env-file "$SBX_ENV_FILE" "$SBX_NAME" "${command[@]}" \
+    <<<"$brief_text" >"$raw" 2>"$errors" || status=$?
+  rm -f -- "$SBX_ENV_FILE"
+  if ! sbx_collect "$dir" "$base"; then
+    SBX_KEEP=true
+    printf 'claude-worker: could not bring the result of sandbox %s back to %s. See %s.\n' \
+      "$SBX_NAME" "$dir" "$SBX_LOG" >>"$errors"
+    [[ "$status" -ne 0 ]] || status=1
+  fi
+  return "$status"
+}
+
 # The worker gets a small, explicit environment. This keeps the coordinator's
 # session variables (CLAUDECODE, ANTHROPIC_*, the Pro OAuth state) out of the
 # worker, so the worker cannot fall back to the Pro plan or detect nesting.
@@ -241,6 +444,7 @@ worker_environment() {
 }
 
 command_run() {
+  trap run_cleanup EXIT
   local alias="" dir="" brief="" report="" readonly=false
   local max_turns="$DEFAULT_MAX_TURNS" timeout_seconds="$DEFAULT_TIMEOUT"
   while [[ $# -gt 0 ]]; do
@@ -300,20 +504,30 @@ command_run() {
   fi
 
 
-  [[ "$readonly" == true ]] || acquire_write_lock
-  worker_environment
+  ISOLATION="claude-code-sandbox"
+  if [[ "$readonly" != true ]]; then
+    select_write_isolation
+    [[ "$ISOLATION" != sbx ]] || require_clean_worktree "$dir"
+    acquire_write_lock
+  fi
   local raw="$report.raw.json" errors="$report.stderr.log" started ended status=0
   started="$(date +%s)"
-  (
-    cd -- "$dir"
-    env -i "${WORKER_ENV[@]}" python3 "$HELPER" run-with-deadline "$timeout_seconds" \
-      "$claude" "${arguments[@]}" <<<"$brief_text" >"$raw" 2>"$errors"
-  ) || status=$?
+  if [[ "$ISOLATION" == sbx ]]; then
+    run_in_sandbox "$dir" "$brief_text" "$timeout_seconds" "$raw" "$errors" "$report" \
+      "${arguments[@]}" || status=$?
+  else
+    worker_environment
+    (
+      cd -- "$dir"
+      env -i "${WORKER_ENV[@]}" python3 "$HELPER" run-with-deadline "$timeout_seconds" \
+        "$claude" "${arguments[@]}" <<<"$brief_text" >"$raw" 2>"$errors"
+    ) || status=$?
+  fi
   ended="$(date +%s)"
 
   mkdir -p "$STATE_DIR"
   python3 - "$raw" "$report" "$alias" "$model_id" "$family" "$mode" "$sandbox" "$status" \
-    "$started" "$ended" "$dir" "$LEDGER" <<'PY'
+    "$started" "$ended" "$dir" "$LEDGER" "$ISOLATION" "${SBX_NAME:-}" <<'PY'
 import json
 import os
 import sys
@@ -322,7 +536,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 (raw, report, alias, model_id, family, mode, sandbox, status,
- started, ended, directory, ledger) = sys.argv[1:]
+ started, ended, directory, ledger, isolation, sandbox_name) = sys.argv[1:]
 status = int(status)
 payload = {}
 try:
@@ -355,6 +569,10 @@ meta = {
     "family": family,
     "mode": mode,
     "sandbox": sandbox == "true",
+    # claude-code-sandbox (read-only seat), sbx (write seat in a Docker
+    # Sandboxes microVM), or none (write seat on the host).
+    "isolation": isolation,
+    "sandbox_name": sandbox_name or None,
     "exit_status": status,
     "succeeded": succeeded,
     "is_error": is_error,
@@ -434,6 +652,26 @@ PY
   DOCTOR_LABEL="Claude Code sandbox commands for read-only seats ($(sandbox_commands | tr -s ' \n' ' ' | sed 's/ *$//;s/^$/built in/'))"
   check test -z "$(missing_sandbox_commands)"
 
+  # Write-seat isolation. Without sbx, auto is a warning and not a failure:
+  # the seat still runs, on the host (CLAUDE_WORKER_ISOLATION=sbx makes it one).
+  local isolation_reason=""
+  case "$ISOLATION_SETTING" in
+    none) printf 'ok    write-seat isolation: none (CLAUDE_WORKER_ISOLATION=none)\n' ;;
+    sbx|auto)
+      isolation_reason="$(sbx_unavailable_reason)"
+      if [[ -z "$isolation_reason" ]]; then
+        printf 'ok    write-seat isolation: Docker Sandboxes microVM (sbx)\n'
+      elif [[ "$ISOLATION_SETTING" == sbx ]]; then
+        printf 'FAIL  write-seat isolation: CLAUDE_WORKER_ISOLATION=sbx, but %s\n' "$isolation_reason"
+        failures=$((failures + 1))
+      else
+        printf 'warn  write-seat isolation: none, because %s\n' "$isolation_reason"
+      fi
+      ;;
+    *) printf 'FAIL  write-seat isolation: CLAUDE_WORKER_ISOLATION must be auto, sbx, or none\n'
+       failures=$((failures + 1)) ;;
+  esac
+
   DOCTOR_LABEL="worker profile $WORKER_CONFIG_DIR/settings.json"
   check bash -c '"$0" __profile' "$script_path"
   DOCTOR_LABEL="provider API key available through claude-worker-key (value not shown)"
@@ -447,6 +685,10 @@ PY
   if [[ "$live" == true ]]; then
     DOCTOR_LABEL="one live worker run on worker/$(provider_setting WORKER_SMOKE_ALIAS || printf unset)"
     check live_smoke_run
+    if [[ "$ISOLATION_SETTING" != none && -z "$isolation_reason" ]]; then
+      DOCTOR_LABEL="one live write seat in a Docker Sandboxes microVM, result back in the worktree"
+      check live_sandbox_write_run
+    fi
   fi
 
   if [[ "$failures" -gt 0 ]]; then
@@ -497,6 +739,28 @@ live_smoke_run() {
     return 0
   fi
   printf '  smoke run artifacts kept in %s\n' "$work" >&2
+  return 1
+}
+
+# A write seat in a sandbox creates READY.txt in a scratch worktree. Proves
+# sandbox creation, the clone sync, the provider key and network rule inside
+# the microVM, and the fetch back into the worktree.
+live_sandbox_write_run() {
+  local work smoke_alias
+  smoke_alias="$(provider_setting WORKER_SMOKE_ALIAS)" || return 1
+  work="$(mktemp -d)" || return 1
+  git -C "$work" init --quiet main &&
+    git -C "$work/main" -c user.name=doctor -c user.email=doctor@localhost \
+      commit --quiet --allow-empty -m init &&
+    git -C "$work/main" worktree add --quiet --detach "$work/seat" || return 1
+  printf '%s\n' 'Create a file named READY.txt in the current directory that contains the single word READY. Then reply with the single word READY.' >"$work/brief.md"
+  if CLAUDE_WORKER_ISOLATION=sbx "$script_path" run --model "worker/$smoke_alias" --dir "$work/seat" \
+    --brief "$work/brief.md" --report "$work/report.md" --max-turns 6 --timeout 600 \
+    && grep -q 'READY' "$work/seat/READY.txt" 2>/dev/null; then
+    rm -rf "$work"
+    return 0
+  fi
+  printf '  sandbox smoke run artifacts kept in %s\n' "$work" >&2
   return 1
 }
 

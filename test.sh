@@ -254,6 +254,7 @@ EOF
   run_worker() {
     env HOME="$home" CLAUDE_WORKER_CONFIG_DIR="${PROFILE_OVERRIDE:-$profile}" XDG_STATE_HOME="$home/.local/state" \
       CLAUDE_WORKER_CLAUDE_BIN="$dir/claude" ${KEY_FILE_OVERRIDE:+CLAUDE_WORKER_KEY_ENV_FILE="$KEY_FILE_OVERRIDE"} \
+      CLAUDE_WORKER_SBX_BIN="${SBX_OVERRIDE:-claude-worker-fixture-no-sbx}" \
       CLAUDECODE=1 ANTHROPIC_API_KEY=sk-coordinator ANTHROPIC_MODEL=opus \
       "$REPO_DIR/bin/claude-worker" "$@"
   }
@@ -262,6 +263,7 @@ EOF
     env -u OPENCODE_API_KEY HOME="$home" CLAUDE_WORKER_CONFIG_DIR="$profile" \
       CLAUDE_WORKER_CLAUDE_BIN="$doctor/claude" CLAUDE_WORKER_ROSTER="$doctor/roster.tsv" \
       CLAUDE_WORKER_PROVIDER_FILE="$doctor/provider.env" CLAUDE_WORKER_SANDBOX_COMMANDS=bash \
+      CLAUDE_WORKER_SBX_BIN=claude-worker-fixture-no-sbx \
       "$REPO_DIR/bin/claude-worker" doctor
   }
 
@@ -275,6 +277,7 @@ EOF
 ok    claude executable on PATH
 ok    claude version 99.0.0 (Claude Code) is $doctor_min or newer
 ok    Claude Code sandbox commands for read-only seats (bash)
+warn  write-seat isolation: none, because the sbx CLI is not installed (see https://docs.docker.com/ai/sandboxes/install/)
 ok    worker profile $profile/settings.json
 ok    provider API key available through claude-worker-key (value not shown)
 ok    every roster model id is in the provider model list
@@ -289,6 +292,7 @@ EOF
 ok    claude executable on PATH
 ok    claude version 99.0.0 (Claude Code) is $doctor_min or newer
 ok    Claude Code sandbox commands for read-only seats (bash)
+warn  write-seat isolation: none, because the sbx CLI is not installed (see https://docs.docker.com/ai/sandboxes/install/)
 ok    worker profile $profile/settings.json
 FAIL  provider API key available through claude-worker-key (value not shown)
 FAIL  every roster model id is in the provider model list
@@ -471,6 +475,212 @@ assert os.path.realpath(sys.argv[2]) in deny and os.path.realpath(sys.argv[3] + 
     'env HOME="$0" XDG_STATE_HOME="$0/.local/state" "$1/bin/claude-worker" usage | grep -q "^worker/glm-5.3"' "$home" "$REPO_DIR"
   expect "models names the provider and lists the roster with the worker/ prefix" bash -c \
     'out="$("$0/bin/claude-worker" models)"; grep -q "^provider: opencode-go" <<<"$out" && grep -q "^worker/kimi-k3.1	kimi-k3.1-pro	kimi" <<<"$out"' "$REPO_DIR"
+}
+
+# --- Write seats in Docker Sandboxes (fake sbx) -----------------------------
+
+# A fake sbx that models the clone-mode contract from
+# https://docs.docker.com/ai/sandboxes/workflows/git/: create --clone makes a
+# private clone of the main checkout and a sandbox-<name> remote on the host;
+# exec runs a command in the clone with an env file; rm deletes both. It
+# cannot model the microVM itself, so a real run (doctor --live) proves that.
+make_fake_sbx() {
+  local path="$1" state="$2" claude="$3"
+  {
+    printf '%s\n' '#!/usr/bin/env bash' "state='$state'" "fake_claude='$claude'"
+    cat <<'FAKE'
+set -euo pipefail
+printf '%s\n' "$*" >>"$state/calls"
+command_name="$1"; shift
+case "$command_name" in
+  ls) [[ "$(cat "$state/ls" 2>/dev/null || echo ok)" == ok ]] ;;
+  create)
+    [[ "$(cat "$state/create" 2>/dev/null || echo ok)" == ok ]] || { echo 'create failed' >&2; exit 1; }
+    clone=false name="" positional=()
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --clone) clone=true; shift ;;
+        --no-progress) shift ;;
+        --name) name="$2"; shift 2 ;;
+        --pull|--cpus|--memory) shift 2 ;;
+        *) positional+=("$1"); shift ;;
+      esac
+    done
+    [[ "$clone" == true && -n "$name" && "${positional[0]}" == claude ]] || exit 2
+    main="${positional[1]}"
+    # Clone mode refuses a linked worktree (Docker docs, Clone mode).
+    [[ "$(git -C "$main" rev-parse --absolute-git-dir)" == "$(git -C "$main" rev-parse --path-format=absolute --git-common-dir)" ]] || exit 3
+    git clone --quiet "$main" "$state/$name"
+    printf '%s\n' "$main" >"$state/$name.main"
+    git -C "$main" remote add "sandbox-$name" "$state/$name"
+    ;;
+  policy) [[ "$1 $2" == "allow network" ]] ;;
+  exec)
+    workdir="" env_file=""
+    while [[ "$1" == -* ]]; do
+      case "$1" in
+        -i|-t|-it) shift ;;
+        -w) workdir="$2"; shift 2 ;;
+        --env-file) env_file="$2"; shift 2 ;;
+        *) exit 2 ;;
+      esac
+    done
+    name="$1"; shift
+    [[ -d "$state/$name" ]] || exit 125
+    if [[ -n "$env_file" ]]; then
+      cp -- "$env_file" "$state/last-env-file"
+      while IFS= read -r line; do export "${line?}"; done <"$env_file"
+    fi
+    [[ "$1" != claude ]] || set -- "$fake_claude" "${@:2}"
+    cd -- "${workdir:-$state/$name}"
+    exec "$@"
+    ;;
+  rm)
+    [[ "$1" == --force ]] && shift
+    git -C "$(cat "$state/$1.main")" remote remove "sandbox-$1" 2>/dev/null || true
+    rm -rf -- "${state:?}/$1" "$state/$1.main"
+    ;;
+  *) exit 2 ;;
+esac
+FAKE
+  } >"$path"
+  chmod +x "$path"
+}
+
+sbx_fixtures() {
+  printf '\n== Write seats in Docker Sandboxes (fake sbx)\n'
+  local dir="$FIXTURE_ROOT/sbx"
+  local home="$dir/home" profile="$dir/home/.claude-worker" logs="$dir/logs" state="$dir/state"
+  local repo="$dir/repo" seat="$dir/seat" secret="sk-sbx-fixture-$$-do-not-leak"
+  mkdir -p "$home/.config/ai-memory" "$profile" "$logs" "$state" "$repo" "$dir/briefs"
+  printf 'OPENCODE_API_KEY=%s\n' "$secret" >"$home/.config/ai-memory/env"
+  printf '%s\n' "{\"apiKeyHelper\": \"$REPO_DIR/bin/claude-worker-key\", \"env\": {\"ANTHROPIC_BASE_URL\": \"https://opencode.ai/inference/go/anthropic\", \"CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS\": \"1\"}}" >"$profile/settings.json"
+  make_fake_claude "$dir/claude-base" "$logs" "$dir/mode"
+  # The in-sandbox claude edits the clone as $dir/edit says, then answers.
+  cat >"$dir/claude" <<EOF
+#!/usr/bin/env bash
+case "\$(cat '$dir/edit' 2>/dev/null || echo none)" in
+  edit) printf 'edited\n' >worker-edit.txt ;;
+  commit-and-edit)
+    printf 'committed\n' >worker-commit.txt
+    git add worker-commit.txt
+    git -c user.name=w -c user.email=w@localhost commit -q -m "worker: own commit"
+    printf 'left\n' >worker-edit.txt ;;
+esac
+exec '$dir/claude-base' "\$@"
+EOF
+  chmod +x "$dir/claude"
+  make_fake_sbx "$dir/sbx" "$state" "$dir/claude"
+
+  git -C "$repo" init -q
+  git -C "$repo" -c user.email=f@example.com -c user.name=f commit -q --allow-empty -m init
+  # The seat base is a detached commit that only the linked worktree has, so
+  # the clone must fetch it from the read-only source by its id.
+  git -C "$repo" worktree add -q --detach "$seat"
+  git -C "$seat" -c user.email=f@example.com -c user.name=f commit -q --allow-empty -m "seat base"
+  printf 'Sandbox fixture task.\n' >"$dir/briefs/brief.md"
+
+  run_sbx_worker() {
+    env HOME="$home" CLAUDE_WORKER_CONFIG_DIR="$profile" XDG_STATE_HOME="$home/.local/state" \
+      CLAUDE_WORKER_SBX_BIN="$dir/sbx" CLAUDE_WORKER_SBX_SOURCE="$repo" TMPDIR="$dir/tmp" \
+      CLAUDE_WORKER_CLAUDE_BIN="$dir/claude" \
+      "$REPO_DIR/bin/claude-worker" "$@"
+  }
+  mkdir -p "$dir/tmp"
+
+  local status=0 base
+  base="$(git -C "$seat" rev-parse HEAD)"
+  echo ok >"$dir/mode"; echo edit >"$dir/edit"
+  run_sbx_worker run --model worker/kimi-k2.7-code --dir "$seat" --brief "$dir/briefs/brief.md" \
+    --report "$dir/briefs/edit.md" >/dev/null 2>"$dir/edit.err" || status=$?
+  expect "a sandboxed write seat exits 0" test "$status" -eq 0
+  expect "auto isolation with a working sbx prints no warning" bash -c '! grep -q "isolation none" "$0"' "$dir/edit.err"
+  expect "the sandbox is created in clone mode from the main checkout, not the worktree" \
+    grep -qE "^create --clone --name cw-[0-9]+-[0-9]+-[0-9]+ .* claude $repo\$" "$state/calls"
+  expect "the sandbox may reach only the provider host that the profile names" \
+    grep -qE "^policy allow network cw-[^ ]+ opencode.ai\$" "$state/calls"
+  expect "the clone starts at the worktree HEAD, fetched by id from the read-only source" \
+    grep -qF "fetch --quiet --no-tags $repo $base" "$state/calls"
+  expect "the worker edit is back in the worktree as an uncommitted file, HEAD unchanged" bash -c \
+    'grep -qx edited "$0/worker-edit.txt" && [[ "$(git -C "$0" rev-parse HEAD)" == "$1" ]] && git -C "$0" status --porcelain | grep -qx "?? worker-edit.txt"' "$seat" "$base"
+  expect "the sandbox and its sandbox-<name> remote are removed" bash -c \
+    '! ls -d "$0"/cw-* >/dev/null 2>&1 && [[ -z "$(git -C "$1" remote)" ]]' "$state" "$repo"
+  expect "the worker gets the provider settings and the key only through the env file" bash -c \
+    'grep -qx "ANTHROPIC_BASE_URL=https://opencode.ai/inference/go/anthropic" "$0" && grep -qx "CLAUDE_WORKER_KEY=$1" "$0" &&
+      grep -qx "CLAUDE_CONFIG_DIR=/tmp/claude-worker-profile" "$0"' "$state/last-env-file" "$secret"
+  expect "the key never reaches an sbx or claude argv" bash -c '! grep -qF "$0" "$1" "$2"' "$secret" "$state/calls" "$logs/argv"
+  expect "the env file with the key is deleted after the run" bash -c \
+    'f="$(grep -o -- "--env-file [^ ]*" "$0" | tail -1 | cut -d" " -f2)"; [[ -n "$f" && ! -e "$f" ]]' "$state/calls"
+  expect "the in-sandbox claude reads the key through an apiKeyHelper and gets the worker contract" bash -c \
+    'grep -qF "printenv CLAUDE_WORKER_KEY" "$0" && grep -qF "You are a worker process" "$0" && grep -qx acceptEdits "$0"' "$logs/argv"
+  expect "sandbox meta records the isolation and the sandbox name" python3 -B -c '
+import json, sys
+m = json.load(open(sys.argv[1]))
+assert m["succeeded"] and m["isolation"] == "sbx" and m["sandbox_name"].startswith("cw-"), m' "$dir/briefs/edit.md.meta.json"
+
+  git -C "$seat" clean -qfd
+  status=0
+  echo commit-and-edit >"$dir/edit"
+  run_sbx_worker run --model worker/kimi-k2.7-code --dir "$seat" --brief "$dir/briefs/brief.md" \
+    --report "$dir/briefs/commit.md" >/dev/null 2>&1 || status=$?
+  expect "a worker commit becomes a worktree commit, and its leftover edit stays uncommitted" bash -c \
+    '[[ "$0" == 0 ]] && [[ "$(git -C "$1" log -1 --format=%s)" == "worker: own commit" ]] &&
+      [[ "$(git -C "$1" rev-parse HEAD~1)" == "$2" ]] && git -C "$1" status --porcelain | grep -qx "?? worker-edit.txt"' "$status" "$seat" "$base"
+
+  status=0
+  echo none >"$dir/edit"
+  run_sbx_worker run --model worker/kimi-k2.7-code --dir "$seat" --brief "$dir/briefs/brief.md" \
+    --report "$dir/briefs/dirty.md" >/dev/null 2>&1 || status=$?
+  expect "a sandboxed write seat in a dirty worktree exits 2 (clone mode copies only commits)" test "$status" -eq 2
+  git -C "$seat" clean -qfd
+
+  status=0
+  echo fail >"$state/ls"
+  run_sbx_worker run --model worker/kimi-k2.7-code --dir "$seat" --brief "$dir/briefs/brief.md" \
+    --report "$dir/briefs/fallback.md" >/dev/null 2>"$dir/fallback.err" || status=$?
+  expect "auto isolation without a working sbx warns and runs the seat on the host" bash -c \
+    '[[ "$0" == 0 ]] && grep -q "warning: isolation none" "$1"' "$status" "$dir/fallback.err"
+  expect "fallback meta records isolation none" python3 -B -c '
+import json, sys
+m = json.load(open(sys.argv[1]))
+assert m["isolation"] == "none" and m["sandbox_name"] is None, m' "$dir/briefs/fallback.md.meta.json"
+  status=0
+  CLAUDE_WORKER_ISOLATION=sbx run_sbx_worker run --model worker/kimi-k2.7-code --dir "$seat" --brief "$dir/briefs/brief.md" \
+    --report "$dir/briefs/required.md" >/dev/null 2>&1 || status=$?
+  expect "CLAUDE_WORKER_ISOLATION=sbx without a working sbx exits 3" test "$status" -eq 3
+  rm -f "$state/ls"
+
+  status=0
+  echo fail >"$state/create"
+  run_sbx_worker run --model worker/kimi-k2.7-code --dir "$seat" --brief "$dir/briefs/brief.md" \
+    --report "$dir/briefs/nocreate.md" >/dev/null 2>&1 || status=$?
+  expect "a sandbox that cannot be created exits 1 with a placeholder report" bash -c \
+    '[[ "$0" == 1 ]] && grep -q "worker produced no report" "$1"' "$status" "$dir/briefs/nocreate.md"
+  rm -f "$state/create"
+
+  status=0
+  CLAUDE_WORKER_ISOLATION=bogus run_sbx_worker run --model worker/kimi-k2.7-code --dir "$seat" --brief "$dir/briefs/brief.md" \
+    --report "$dir/briefs/bogus.md" >/dev/null 2>&1 || status=$?
+  expect "an unknown CLAUDE_WORKER_ISOLATION exits 2" test "$status" -eq 2
+
+  CLAUDE_WORKER_SANDBOX_COMMANDS=bash CLAUDE_WORKER_PROVIDER_FILE=/nonexistent \
+    run_sbx_worker doctor >"$dir/doctor.out" 2>&1 </dev/null || true
+  expect "doctor reports microVM isolation when sbx works" \
+    grep -qx "ok    write-seat isolation: Docker Sandboxes microVM (sbx)" "$dir/doctor.out"
+  echo fail >"$state/ls"
+  CLAUDE_WORKER_ISOLATION=sbx CLAUDE_WORKER_SANDBOX_COMMANDS=bash CLAUDE_WORKER_PROVIDER_FILE=/nonexistent \
+    run_sbx_worker doctor >"$dir/doctor-required.out" 2>&1 </dev/null || true
+  rm -f "$state/ls"
+  expect "doctor fails the isolation check when CLAUDE_WORKER_ISOLATION=sbx and sbx does not work" \
+    grep -q "^FAIL  write-seat isolation: CLAUDE_WORKER_ISOLATION=sbx, but sbx ls failed" "$dir/doctor-required.out"
+
+  local creates_before
+  creates_before="$(grep -c '^create' "$state/calls")"
+  status=0
+  CLAUDE_WORKER_SANDBOX_COMMANDS=bash run_sbx_worker run --model worker/glm-5.3 --dir "$repo" --brief "$dir/briefs/brief.md" \
+    --report "$dir/briefs/readonly.md" --readonly >/dev/null 2>&1 || status=$?
+  expect "a read-only seat keeps the Claude Code sandbox and creates no microVM" bash -c \
+    '[[ "$0" == 0 ]] && [[ "$(grep -c "^create" "$1")" == "$2" ]]' "$status" "$state/calls" "$creates_before"
 }
 
 # --- apply.sh fixtures (offline functions only) ---------------------------
@@ -877,6 +1087,7 @@ assert json.load(open(sys.argv[1]))["enabledPlugins"]["cc-plugin-you-should-know
 static_checks
 helper_fixtures
 worker_fixtures
+sbx_fixtures
 apply_fixtures
 key_source_fixtures
 cloud_fixtures
