@@ -39,6 +39,8 @@ without routing the Pro login through a third-party tool:
                         --dir: a worktree that Opus creates (write seat)
                         or the checkout it reads (read-only seat);
                         report.md back to Opus
+                        write seat: in its own Docker Sandboxes microVM
+                        when sbx works on the host (claude/sandboxes.md)
 ```
 
 A **coordinator** is the main session that runs the pstack playbook. A
@@ -85,6 +87,14 @@ the file also sets `AI_MEMORY_LLM_PROVIDER=opencode` and `AI_MEMORY_LLM_MODEL`
 
 The full validation checklist and daily usage are in
 [`claude/README.md`](claude/README.md).
+
+### Optional: write seats in microVMs
+
+On a Mac with Apple silicon or on Ubuntu 24.04+ with KVM, install Docker
+Sandboxes (`sbx`) and sign in. `claude-worker` then runs each write seat in
+its own microVM. Other hosts (Arch, a WSL2 without nested virtualization,
+Claude Code cloud sessions) run write seats on the host with a warning. See
+[`claude/sandboxes.md`](claude/sandboxes.md).
 
 ### Claude Code cloud sessions
 
