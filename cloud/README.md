@@ -28,7 +28,10 @@ table, and the OpenCode Go workers.
 - RTK, wired to both profiles;
 - `bubblewrap` and `socat`, for the read-only worker sandbox.
 
-Not in the cloud profile: ai-memory (a cloud VM has no systemd, and nothing in
+Not in the cloud profile: microVM isolation of write seats (a cloud VM has no
+KVM, so `claude-worker` runs write seats on the VM and prints
+`warning: isolation none`; see [`../claude/sandboxes.md`](../claude/sandboxes.md)),
+ai-memory (a cloud VM has no systemd, and nothing in
 it stays after the session) and the Bash `claude` wrapper.
 
 ## Set up the environment (once)
