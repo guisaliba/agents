@@ -5,6 +5,10 @@
 unalias claude claude-raw 2>/dev/null || true
 unset -f claude claude-raw 2>/dev/null || true
 export PATH="$HOME/.local/bin:$PATH"
+# The ai-memory CLI reads its root token from the data directory. Its macOS
+# default is ~/Library/Application Support/ai-memory, not the store that
+# apply.sh creates, so name that store here. The token stays in its file.
+export AI_MEMORY_DATA_DIR="$HOME/.local/share/ai-memory"
 # One behavior only: a local, always-managed ai-memory workstream in the current
 # directory. `claude --new` first creates a fresh Git worktree, so two sessions
 # in one repository never share a working tree.
