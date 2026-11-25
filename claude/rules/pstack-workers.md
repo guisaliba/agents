@@ -34,11 +34,20 @@ Do this in place of one Agent tool call.
    interrogate adversary, swarm worker that edits) gets its own linked Git
    worktree, for example
    `git worktree add <repository>-worktrees/<role>-<n> <base-ref>`. Copy
-   uncommitted changes into it when the skill says so. The name is free.
+   uncommitted changes into it when the skill says so, then commit them in the
+   worktree before the launch. The name is free.
    `claude-worker run` enforces the isolation: without `--readonly` it exits 2
    when `--dir` is the main working tree, is outside Git, or is a worktree in
    which another write seat runs. A read-only seat (arena
    cross-judge, how explorer, why investigator) runs in the checkout it reads.
+
+   **MicroVM isolation of write seats.** When Docker Sandboxes (`sbx`) works on
+   the host, `claude-worker run` puts each write seat in its own microVM in
+   clone mode, and brings the result back into the worktree: the commits that
+   the worker made stay commits, and its other edits are uncommitted, as in a
+   host run. You launch the seat the same way. The worktree must be clean
+   before the launch, because clone mode copies only commits; a dirty worktree
+   exits 2.
 2. **Brief.** Write the brief to a file under
    `$(git rev-parse --path-format=absolute --git-common-dir)/claude-worker/<utc-timestamp>-<role>-<n>/brief.md`.
    That directory is inside `.git`, so a brief is never committed. The brief
@@ -48,7 +57,10 @@ Do this in place of one Agent tool call.
    read. A worker has no access to this conversation. Where pstack says to pass
    a file (for example the arena `references/runner-prompt.md`, or the
    `poteto-mode` SKILL.md that a `poteto-agent` reads first), give its absolute
-   path. Never put a secret in a brief.
+   path. For a write seat, paste the content of each such file outside the
+   repository into the brief as well: a write seat in a microVM sees only its
+   repository clone, not the absolute paths of the host. Never put a secret in
+   a brief.
 3. **Launch.** Run one Bash command per seat with `run_in_background: true`, all
    seats of one panel in the same message:
 
@@ -67,13 +79,20 @@ Do this in place of one Agent tool call.
 4. **Collect.** Wait for every background command to finish. `claude-worker`
    exits 0 on success, 1 when the worker run failed, 2 on a usage error, and 3
    when the worker profile, the provider API key, or the sandbox commands
-   (`bwrap` and `socat` on Linux) are missing. Read `report.md` and
-   `report.md.meta.json` for each seat.
+   (`bwrap` and `socat` on Linux) are missing, or when
+   `CLAUDE_WORKER_ISOLATION=sbx` and `sbx` does not work. Read `report.md` and
+   `report.md.meta.json` for each seat. The `isolation` field of the meta file
+   is `sbx` (microVM), `none` (write seat on the host), or
+   `claude-code-sandbox` (read-only seat).
 5. **Own the result.** Treat each report like a subagent result. Review the
    worktree diff yourself and write your own summary. Do not pass a report
    through.
 
 ## Failures
+
+- Standard error `warning: isolation none`: `sbx` does not work on this host,
+  so the write seat ran on the host without a microVM. The run is valid. Tell
+  the user once per task, with the reason that the warning gives.
 
 - Exit 1: count the seat as a dropout and apply the calling skill's dropout rule
   (for example arena continues with N-1). Say which seat dropped and why.

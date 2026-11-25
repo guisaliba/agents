@@ -78,12 +78,17 @@ claude-worker-key             # the apiKeyHelper; prints the key, or why it is m
   no hooks and no MCP servers, because those run outside the sandbox. Bash can
   write only to `$TMPDIR` and has no network. On Linux the sandbox needs
   `bwrap` and `socat`; without them a read-only run exits 3.
+- A write seat runs in its own Docker Sandboxes microVM (clone mode) when
+  `sbx` works on the host, and `claude-worker` brings the result back into the
+  worktree. Without `sbx`, the seat runs on the host and prints
+  `warning: isolation none`. The design, the hosts that support it, and the
+  install steps are in [`sandboxes.md`](sandboxes.md).
 - Every seat runs with `--permission-prompts none` and without the `Agent` and
   `WebSearch` tools, so a worker cannot fan out further.
 - The worker gets an explicit, small environment. The coordinator's
   `CLAUDECODE` and `ANTHROPIC_*` variables do not reach it.
 - Outputs per seat: `report.md`, `report.md.meta.json`, `report.md.raw.json`,
-  `report.md.stderr.log`. The ledger is
+  `report.md.stderr.log`, and `report.md.sbx.log` for a seat in a microVM. The ledger is
   `~/.local/state/claude-worker/runs.tsv`.
 
 ## Daily use
@@ -142,3 +147,10 @@ this branch to `main`.
     background request to the session model. Disable it in `/plugin` for one
     session, or remove it from `configure_claude_main_profile` to stop it on
     every host.
+11. **Write seats in microVMs.** On a host with `sbx` (the Mac), run
+    `claude-worker doctor --live`. Expected: `ok    write-seat isolation:
+    Docker Sandboxes microVM (sbx)`, and the live sandbox write seat is `ok`.
+    Then repeat item 4. Expected: each write seat's meta file has
+    `"isolation": "sbx"`, and `sbx ls` is empty after the run. On a host
+    without `sbx`, expected: a `warn` line, and write seats still succeed.
+    Details: [`sandboxes.md`](sandboxes.md#validation).
